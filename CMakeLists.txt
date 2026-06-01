@@ -66,7 +66,8 @@ add_library(adc_cases_solver STATIC
   src/diocotron_solver.cpp
   src/diocotron_amr_solver.cpp
   src/euler_poisson_solver.cpp
-  src/two_fluid_ap_solver.cpp)
+  src/two_fluid_ap_solver.cpp
+  src/multispecies_solver.cpp)
 target_link_libraries(adc_cases_solver PUBLIC adc_cases)
 set_target_properties(adc_cases_solver PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(adc_cases::solver ALIAS adc_cases_solver)

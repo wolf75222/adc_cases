@@ -11,6 +11,7 @@
 #include <adc/solver/diocotron_amr_solver.hpp>
 #include <adc/solver/diocotron_solver.hpp>
 #include <adc/solver/euler_poisson_solver.hpp>
+#include <adc/solver/multispecies_solver.hpp>
 #include <adc/solver/two_fluid_ap_solver.hpp>
 
 #include <cstring>
@@ -157,4 +158,35 @@ PYBIND11_MODULE(adc, m) {
       .def("n_patches", &DiocotronAmrSolver::n_patches)
       .def("density",
            [](const DiocotronAmrSolver& s) { return to_2d(s.density(), s.nx()); });
+
+  // --- Multi-especes : electrons Euler + ions Euler isothermes + Poisson de systeme.
+  // Composition pilotee depuis Python (config), physique en C++ compile (CoupledSystem
+  // + SystemCoupler), aucun callback Python dans le hot path.
+  py::class_<MultiSpeciesConfig>(m, "MultiSpeciesConfig")
+      .def(py::init<>())
+      .def_readwrite("n", &MultiSpeciesConfig::n)
+      .def_readwrite("L", &MultiSpeciesConfig::L)
+      .def_readwrite("gamma", &MultiSpeciesConfig::gamma)
+      .def_readwrite("cs2_i", &MultiSpeciesConfig::cs2_i)
+      .def_readwrite("qom_e", &MultiSpeciesConfig::qom_e)
+      .def_readwrite("qom_i", &MultiSpeciesConfig::qom_i)
+      .def_readwrite("q_e", &MultiSpeciesConfig::q_e)
+      .def_readwrite("q_i", &MultiSpeciesConfig::q_i)
+      .def_readwrite("eps", &MultiSpeciesConfig::eps);
+
+  py::class_<MultiSpeciesSolver>(m, "MultiSpeciesSolver")
+      .def(py::init<const MultiSpeciesConfig&>())
+      .def("step", &MultiSpeciesSolver::step, py::arg("dt"))
+      .def("advance", &MultiSpeciesSolver::advance, py::arg("dt"), py::arg("nsteps"))
+      .def("nx", &MultiSpeciesSolver::nx)
+      .def("time", &MultiSpeciesSolver::time)
+      .def("mass_e", &MultiSpeciesSolver::mass_e)
+      .def("mass_i", &MultiSpeciesSolver::mass_i)
+      .def("max_charge", &MultiSpeciesSolver::max_charge)
+      .def("density_e",
+           [](const MultiSpeciesSolver& s) { return to_2d(s.density_e(), s.nx()); })
+      .def("density_i",
+           [](const MultiSpeciesSolver& s) { return to_2d(s.density_i(), s.nx()); })
+      .def("potential",
+           [](const MultiSpeciesSolver& s) { return to_2d(s.potential(), s.nx()); });
 }

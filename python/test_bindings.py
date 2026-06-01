@@ -127,6 +127,23 @@ ms.advance(0.01, 100)
 print(f"TwoFluidAPSolver(magnetise) : max|dne|={ms.max_dev():.3e} dmasse_e={abs(ms.mass_e() - mm0):.2e}")
 chk(abs(ms.mass_e() - mm0) < 1e-7, "tfap_magnetise_masse_conservee")
 
+# --- MultiSpeciesSolver : composition deux fluides (electrons Euler + ions
+# isothermes + Poisson) pilotee depuis Python (CoupledSystem + SystemCoupler en C++) ---
+msc = adc.MultiSpeciesConfig()
+msc.n = 32
+msc.eps = 0.02
+mss = adc.MultiSpeciesSolver(msc)
+mse0, msi0 = mss.mass_e(), mss.mass_i()
+chk(mss.max_charge() > 0.0, "multispecies_charge_nonzero")
+mss.advance(0.001, 8)
+ne, phi = mss.density_e(), mss.potential()
+print(f"MultiSpeciesSolver : ne.shape={ne.shape} max|charge|={mss.max_charge():.3e} "
+      f"dmasse_e={abs(mss.mass_e() - mse0):.2e} dmasse_i={abs(mss.mass_i() - msi0):.2e}")
+chk(ne.shape == (32, 32) and phi.shape == (32, 32), "multispecies_arrays_numpy")
+chk(np.isfinite(ne).all() and np.isfinite(phi).all(), "multispecies_finite")
+chk(abs(mss.mass_e() - mse0) < 1e-9, "multispecies_masse_e_conservee")
+chk(abs(mss.mass_i() - msi0) < 1e-9, "multispecies_masse_i_conservee")
+
 if fails == 0:
     print("OK test_bindings")
 sys.exit(0 if fails == 0 else 1)
