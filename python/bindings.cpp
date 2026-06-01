@@ -202,7 +202,8 @@ PYBIND11_MODULE(adc, m) {
 
   py::class_<Simulation>(m, "Simulation")
       .def(py::init<const SimulationConfig&>())
-      .def("add_species", &Simulation::add_species, py::arg("name"), py::arg("charge"))
+      .def("add_species", &Simulation::add_species, py::arg("name"), py::arg("model"),
+           py::arg("charge"))
       .def("set_density",
            [](Simulation& s, const std::string& name,
               py::array_t<double, py::array::c_style | py::array::forcecast> arr) {

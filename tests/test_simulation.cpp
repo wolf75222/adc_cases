@@ -1,8 +1,10 @@
-// Composition multi-especes a l'EXECUTION (TODO 3) : Simulation.add_species(...).
-// Version runtime de "diocotron a ions mobiles", composee espece par espece (et non
-// figee a la compilation). On ajoute electrons + ions, on fixe leurs densites, on
-// avance, et on verifie la conservation de la masse PAR espece et un potentiel
-// exploitable (Poisson de systeme Sum_s q_s n_s sur des especes ajoutees a la volee).
+// Composition multi-especes a l'EXECUTION (TODO 3) : Simulation.add_species(model,...).
+//
+// Partie A : deux especes de DERIVE (diocotron) ajoutees a la volee -> version runtime
+//   de "diocotron a ions mobiles". Masse conservee par espece, Poisson de systeme non nul.
+// Partie B : especes HETEROGENES ajoutees au runtime - electrons Euler (4 var) + ions
+//   isothermes (3 var) - partageant un meme Poisson. C'est le cas canonique compose
+//   espece par espece (et non fige a la compilation comme MultiSpeciesSolver).
 
 #include <adc/solver/simulation.hpp>
 
@@ -18,42 +20,62 @@ int main() {
     if (!c) { std::printf("FAIL %s\n", w); ++fails; }
   };
 
-  SimulationConfig cfg;
-  cfg.n = 32;
-  cfg.L = 1.0;
-  cfg.B0 = 1.0;
-  Simulation sim(cfg);
+  const int n = 32;
+  const double L = 1.0, k = 2 * M_PI / L, dx = L / n;
 
-  sim.add_species("electrons", -1.0);  // charge -1
-  sim.add_species("ions", +1.0);       // charge +1
-  chk(sim.n_species() == 2, "two_species_added");
+  // --- Partie A : deux especes de derive (diocotron) ---
+  {
+    SimulationConfig cfg;
+    cfg.n = n; cfg.L = L; cfg.B0 = 1.0;
+    Simulation sim(cfg);
+    sim.add_species("electrons", "diocotron", -1.0);
+    sim.add_species("ions", "diocotron", +1.0);
+    chk(sim.n_species() == 2, "drift_two_species");
 
-  // CI : n_e = 1 + eps cos(k x), n_i = 1 -> charge a moyenne nulle.
-  const int n = cfg.n;
-  const double eps = 0.1, k = 2 * M_PI / cfg.L, dx = cfg.L / n;
-  std::vector<double> ne(n * n), ni(n * n, 1.0);
-  for (int j = 0; j < n; ++j)
-    for (int i = 0; i < n; ++i)
-      ne[j * n + i] = 1.0 + eps * std::cos(k * (i + 0.5) * dx);
-  sim.set_density("electrons", ne);
-  sim.set_density("ions", ni);
+    std::vector<double> ne(n * n), ni(n * n, 1.0);
+    for (int j = 0; j < n; ++j)
+      for (int i = 0; i < n; ++i)
+        ne[j * n + i] = 1.0 + 0.1 * std::cos(k * (i + 0.5) * dx);
+    sim.set_density("electrons", ne);
+    sim.set_density("ions", ni);
 
-  sim.solve_fields();
-  // potentiel non trivial (separation de charge -> Poisson non nul).
-  const auto phi = sim.potential();
-  double phimax = 0;
-  for (double v : phi) phimax = std::fmax(phimax, std::fabs(v));
-  chk(static_cast<int>(phi.size()) == n * n, "potential_size");
-  chk(phimax > 1e-6, "potential_nonzero");
+    sim.solve_fields();
+    const auto phi = sim.potential();
+    double phimax = 0;
+    for (double v : phi) phimax = std::fmax(phimax, std::fabs(v));
+    chk(phimax > 1e-6, "drift_potential_nonzero");
 
-  const double me0 = sim.mass("electrons"), mi0 = sim.mass("ions");
-  sim.advance(0.002, 10);
+    const double me0 = sim.mass("electrons"), mi0 = sim.mass("ions");
+    sim.advance(0.002, 10);
+    chk(std::fabs(sim.mass("electrons") - me0) < 1e-10, "drift_electron_mass");
+    chk(std::fabs(sim.mass("ions") - mi0) < 1e-10, "drift_ion_mass");
+  }
 
-  // masse conservee par espece (advection E x B incompressible, composee au runtime).
-  chk(std::fabs(sim.mass("electrons") - me0) < 1e-10, "electron_mass_conserved");
-  chk(std::fabs(sim.mass("ions") - mi0) < 1e-10, "ion_mass_conserved");
-  chk(static_cast<int>(sim.density("electrons").size()) == n * n, "density_size");
-  chk(sim.time() > 0.0, "time_advanced");
+  // --- Partie B : especes heterogenes (Euler 4 var + isotherme 3 var) ---
+  {
+    SimulationConfig cfg;
+    cfg.n = n; cfg.L = L; cfg.gamma = 1.4; cfg.cs2 = 0.5;
+    Simulation sim(cfg);
+    sim.add_species("electrons", "electron_euler", -1.0);  // 4 variables
+    sim.add_species("ions", "ion_isothermal", +1.0);       // 3 variables
+    chk(sim.n_species() == 2, "hetero_two_species");
+
+    std::vector<double> ne(n * n), ni(n * n, 1.0);
+    for (int j = 0; j < n; ++j)
+      for (int i = 0; i < n; ++i)
+        ne[j * n + i] = 1.0 + 0.01 * std::cos(k * (i + 0.5) * dx);
+    sim.set_density("electrons", ne);  // pose aussi E (Euler) au repos
+    sim.set_density("ions", ni);       // pose aussi qte de mouvement nulle
+
+    const double me0 = sim.mass("electrons"), mi0 = sim.mass("ions");
+    sim.advance(0.001, 6);
+
+    // masse conservee par espece (continuite) malgre des tailles d'etat differentes.
+    chk(std::fabs(sim.mass("electrons") - me0) < 1e-10, "hetero_electron_mass");
+    chk(std::fabs(sim.mass("ions") - mi0) < 1e-10, "hetero_ion_mass");
+    chk(std::isfinite(sim.mass("electrons")) && sim.mass("electrons") > 0, "hetero_finite");
+    chk(static_cast<int>(sim.density("electrons").size()) == n * n, "hetero_density_size");
+  }
 
   if (fails == 0) std::printf("OK test_simulation\n");
   return fails == 0 ? 0 : 1;

@@ -148,8 +148,8 @@ chk(abs(mss.mass_i() - msi0) < 1e-9, "multispecies_masse_i_conservee")
 sc = adc.SimulationConfig()
 sc.n = 32
 sim = adc.Simulation(sc)
-sim.add_species("electrons", -1.0)
-sim.add_species("ions", 1.0)
+sim.add_species("electrons", "diocotron", -1.0)
+sim.add_species("ions", "diocotron", 1.0)
 chk(sim.n_species() == 2, "simulation_two_species")
 xs = (np.arange(32) + 0.5) / 32.0
 ne = 1.0 + 0.1 * np.cos(2 * np.pi * xs)[None, :] * np.ones((32, 1))
@@ -165,6 +165,21 @@ chk(np.abs(phi).max() > 1e-6, "simulation_potential_nonzero")
 chk(sim.density("electrons").shape == (32, 32), "simulation_density_numpy")
 chk(abs(sim.mass("electrons") - se0) < 1e-10, "simulation_masse_e_conservee")
 chk(abs(sim.mass("ions") - si0) < 1e-10, "simulation_masse_i_conservee")
+
+# Simulation HETEROGENE : electrons Euler (4 var) + ions isothermes (3 var) au runtime.
+hc = adc.SimulationConfig()
+hc.n = 32
+hs = adc.Simulation(hc)
+hs.add_species("electrons", "electron_euler", -1.0)
+hs.add_species("ions", "ion_isothermal", 1.0)
+hs.set_density("electrons", 1.0 + 0.01 * np.cos(2 * np.pi * xs)[None, :] * np.ones((32, 1)))
+hs.set_density("ions", np.ones((32, 32)))
+he0, hi0 = hs.mass("electrons"), hs.mass("ions")
+hs.advance(0.001, 6)
+print(f"Simulation(hetero) : 4var+3var dmasse_e={abs(hs.mass('electrons') - he0):.2e} "
+      f"dmasse_i={abs(hs.mass('ions') - hi0):.2e}")
+chk(abs(hs.mass("electrons") - he0) < 1e-10, "simulation_hetero_masse_e")
+chk(abs(hs.mass("ions") - hi0) < 1e-10, "simulation_hetero_masse_i")
 
 if fails == 0:
     print("OK test_bindings")
