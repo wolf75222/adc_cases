@@ -6,6 +6,9 @@ target_link_libraries(diocotron PRIVATE adc_cases::solver)
 add_executable(diocotron_column diocotron_column.cpp)
 target_link_libraries(diocotron_column PRIVATE adc_cases::solver)
 
+add_executable(multispecies multispecies.cpp)
+target_link_libraries(multispecies PRIVATE adc_cases::solver)
+
 # Demos du MOTEUR bas-niveau (AMR, MPI, theorie) : capacites hors perimetre de la
 # facade -> ils pilotent directement la pile generique (adc_cases::adc_cases).
 add_executable(diocotron_amr diocotron_amr.cpp)
