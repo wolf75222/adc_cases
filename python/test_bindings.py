@@ -181,6 +181,39 @@ print(f"Simulation(hetero) : 4var+3var dmasse_e={abs(hs.mass('electrons') - he0)
 chk(abs(hs.mass("electrons") - he0) < 1e-10, "simulation_hetero_masse_e")
 chk(abs(hs.mass("ions") - hi0) < 1e-10, "simulation_hetero_masse_i")
 
+# --- add_block : composition par BLOC (modele + spatial + temps + sous-pas) ---
+bc = adc.SimulationConfig()
+bc.n = 32
+bs = adc.Simulation(bc)
+bs.add_block(name="electrons", model="electron_euler", charge=-1.0,
+             limiter="vanleer", flux="hllc", time="imex", substeps=10)
+bs.add_block(name="ions", model="ion_isothermal", charge=1.0,
+             limiter="minmod", flux="rusanov", time="explicit", substeps=1)
+bs.set_density("electrons", 1.0 + 0.02 * np.cos(2 * np.pi * xs)[None, :] * np.ones((32, 1)))
+bs.set_density("ions", np.ones((32, 32)))
+be0, bi0 = bs.mass("electrons"), bs.mass("ions")
+bs.advance(0.001, 6)
+chk(abs(bs.mass("electrons") - be0) < 1e-10, "add_block_masse_e_hllc_imex")
+chk(abs(bs.mass("ions") - bi0) < 1e-10, "add_block_masse_i_rusanov")
+# add_species doit etre le raccourci EXACT de add_block(minmod, rusanov, explicit, 1).
+s1, s2 = adc.Simulation(bc), adc.Simulation(bc)
+rho0 = 1.0 + 0.1 * np.cos(2 * np.pi * xs)[None, :] * np.ones((32, 1))
+s1.add_species("e", "diocotron", -1.0); s1.set_density("e", rho0.copy()); s1.advance(0.002, 10)
+s2.add_block(name="e", model="diocotron", charge=-1.0, limiter="minmod",
+             flux="rusanov", time="explicit", substeps=1)
+s2.set_density("e", rho0.copy()); s2.advance(0.002, 10)
+chk(float(np.max(np.abs(s1.density("e") - s2.density("e")))) == 0.0,
+    "add_species_eq_add_block")
+# HLLC sur un modele non-Euler doit lever une erreur claire (garde-fou).
+_guard = False
+try:
+    adc.Simulation(bc).add_block(name="d", model="diocotron", charge=-1.0, flux="hllc")
+except Exception:
+    _guard = True
+chk(_guard, "add_block_hllc_rejette_diocotron")
+print(f"add_block : dmasse_e={abs(bs.mass('electrons') - be0):.2e} "
+      f"dmasse_i={abs(bs.mass('ions') - bi0):.2e}")
+
 if fails == 0:
     print("OK test_bindings")
 sys.exit(0 if fails == 0 else 1)

@@ -47,20 +47,32 @@ Poisson (`f = Σ_s q_s n_s`) et dans la source. Deux façades exposent ça :
 
 - **`MultiSpeciesSolver`** (compilée) : système deux fluides figé (électrons Euler + ions
   isothermes + Poisson de système).
-- **`Simulation`** (composition à l'exécution) : `add_species(name, model, charge)` ajoute
-  des espèces à la volée (`"diocotron"`, `"electron_euler"`, `"ion_isothermal"`), partageant
-  un même Poisson. La physique reste en C++ compilé — aucun callback Python dans le hot path.
+- **`Simulation`** (composition à l'exécution) : on assemble le système **bloc par bloc**
+  depuis Python, et pour **chaque** bloc on choisit indépendamment le modèle, la
+  reconstruction spatiale, le flux numérique, le traitement temporel et le nombre de
+  sous-pas. La physique reste en C++ compilé — aucun callback Python dans le hot path :
+  chaque bloc embarque une fermeture d'avancée compilée.
 
 ```python
 import adc
 sim = adc.Simulation(adc.SimulationConfig())
-sim.add_species("electrons", "electron_euler", -1.0)
-sim.add_species("ions",      "ion_isothermal", +1.0)
+# Python dit QUOI assembler ; le C++ compilé fait le calcul.
+sim.add_block(name="electrons", model="electron_euler", charge=-1.0,
+              limiter="vanleer", flux="hllc", time="imex", substeps=10)  # raide → sous-cyclé
+sim.add_block(name="ions", model="ion_isothermal", charge=+1.0,
+              limiter="minmod", flux="rusanov", time="explicit", substeps=1)
 sim.set_density("electrons", ne); sim.set_density("ions", ni)
-sim.advance(1e-3, 100)          # masse conservée par espèce, Poisson de système
+sim.advance(1e-3, 100)          # masse conservée par bloc, Poisson de système Σ q_s n_s
 ```
 
-**Démos Python** (`python/demos/`) : un script par capacité (diocotron, AMR, Euler-Poisson
-gravité/plasma, two-fluide AP raide/magnétisé, multi-espèces composé), pilotant la façade
-depuis Python et produisant diagnostics + sorties. Lancer : `python python/demos/<nom>.py`
-(avec le module `adc` sur le `PYTHONPATH`, cf. `python/README` ou le build `-DADC_CASES_BUILD_PYTHON=ON`).
+Par bloc : `model` (`"diocotron"` 1 var / `"electron_euler"` 4 var / `"ion_isothermal"`
+3 var), `limiter` (`none`/`minmod`/`vanleer`), `flux` (`rusanov` robuste / `hllc` onde de
+contact, Euler complet uniquement), `time` (`explicit`=SSPRK2 / `imex`=transport explicite
++ source implicite), `substeps` (sous-cyclage). Le raccourci `add_species(name, model, charge)`
+équivaut bit pour bit à `add_block(..., "minmod", "rusanov", "explicit", 1)`.
+
+**Démos Python** (`python/demos/`) : un script par capacité (`composition_api` = composition
+bloc par bloc, diocotron, AMR, Euler-Poisson gravité/plasma, two-fluide AP raide/magnétisé,
+multi-espèces composé), pilotant la façade depuis Python et produisant diagnostics + sorties.
+Lancer : `python python/demos/<nom>.py` (avec le module `adc` sur le `PYTHONPATH`, cf.
+`python/README` ou le build `-DADC_CASES_BUILD_PYTHON=ON`).

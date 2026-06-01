@@ -1,10 +1,11 @@
 #include <adc/solver/simulation.hpp>
 
-#include <adc/coupling/elliptic_rhs.hpp>  // add_scaled_component
+#include <adc/coupling/elliptic_rhs.hpp>       // add_scaled_component
 #include <adc/elliptic/geometric_mg.hpp>
+#include <adc/integrator/implicit_stepper.hpp>  // backward_euler_source
 #include <adc/model/charged_fluid.hpp>
 #include <adc/model/diocotron.hpp>
-#include <adc/operator/spatial_operator.hpp>  // assemble_rhs
+#include <adc/operator/spatial_operator.hpp>    // assemble_rhs, SourceFreeModel
 
 #include <adc/mesh/box_array.hpp>
 #include <adc/mesh/distribution_mapping.hpp>
@@ -27,7 +28,9 @@ struct Simulation::Impl {
     MultiFab U;
     double charge;
     Kind kind;
-    // fermeture d'avancee (SSPRK2), figee au modele compile a l'ajout de l'espece.
+    // fermeture d'avancee figee a l'ajout : modele + schema spatial (Limiter, Flux) +
+    // traitement temporel (explicite / IMEX) + sous-pas, tout compile. Type-erased SEULEMENT
+    // au niveau de la liste d'especes ; le noyau (assemble_rhs<L,F>) reste compile.
     std::function<void(MultiFab&, Real)> advance;
   };
 
@@ -71,19 +74,76 @@ struct Simulation::Impl {
     throw std::runtime_error("Simulation: espece inconnue '" + name + "'");
   }
 
-  // SSPRK2 generique sur un modele compile (aux gele sur le pas). Type-erased au niveau
-  // de la fermeture, mais le noyau (assemble_rhs) est compile pour le modele concret.
-  template <class Model>
+  // SSPRK2 sur un modele compile, schema spatial (Limiter, Flux) en parametres de template
+  // (aux gele sur le pas). Type-erased a la liste d'especes, mais le noyau est compile.
+  template <class Limiter, class Flux, class Model>
   void ssprk2(const Model& model, MultiFab& U, Real dt) {
     MultiFab R(ba, dm, Model::n_vars, 0);
     fill_ghosts(U, dom, bc);
-    assemble_rhs<Minmod, RusanovFlux>(model, U, aux, geom, R);
+    assemble_rhs<Limiter, Flux>(model, U, aux, geom, R);
     MultiFab U1 = U;
     saxpy(U1, dt, R);
     fill_ghosts(U1, dom, bc);
-    assemble_rhs<Minmod, RusanovFlux>(model, U1, aux, geom, R);
+    assemble_rhs<Limiter, Flux>(model, U1, aux, geom, R);
     saxpy(U1, dt, R);
     lincomb(U, Real(0.5), U, Real(0.5), U1);
+  }
+
+  // Pas IMEX : transport EXPLICITE (−div F, modele source-free) puis source IMPLICITE
+  // (backward-Euler / Newton local). C'est "electrons implicites" cote source raide.
+  template <class Limiter, class Flux, class Model>
+  void imex_step(const Model& model, MultiFab& U, Real dt) {
+    const SourceFreeModel<Model> sf{model};
+    MultiFab R(ba, dm, Model::n_vars, 0);
+    fill_ghosts(U, dom, bc);
+    assemble_rhs<Limiter, Flux>(sf, U, aux, geom, R);
+    saxpy(U, dt, R);                              // transport explicite (Euler avant)
+    backward_euler_source(model, aux, U, dt);     // source implicite
+  }
+
+  // Fermeture pour (Limiter, Flux) fixes : sous-cyclage + explicite/IMEX.
+  template <class Limiter, class Flux, class Model>
+  std::function<void(MultiFab&, Real)> closure(const Model& m, bool imex, int substeps) {
+    Impl* P = this;
+    if (imex)
+      return [P, m, substeps](MultiFab& U, Real dt) {
+        const Real h = dt / static_cast<Real>(substeps);
+        for (int s = 0; s < substeps; ++s) P->imex_step<Limiter, Flux>(m, U, h);
+      };
+    return [P, m, substeps](MultiFab& U, Real dt) {
+      const Real h = dt / static_cast<Real>(substeps);
+      for (int s = 0; s < substeps; ++s) P->ssprk2<Limiter, Flux>(m, U, h);
+    };
+  }
+
+  // Dispatch des tags (limiter, flux) -> fermeture compilee. HLLC garde par `requires`
+  // (n'est instancie que pour un modele exposant wave_speeds, sinon erreur claire).
+  template <class Model>
+  std::function<void(MultiFab&, Real)> make_advance(const Model& m, const std::string& lim,
+                                                    const std::string& flx, bool imex,
+                                                    int substeps) {
+    if (flx == "rusanov") {
+      if (lim == "none") return closure<NoSlope, RusanovFlux>(m, imex, substeps);
+      if (lim == "minmod") return closure<Minmod, RusanovFlux>(m, imex, substeps);
+      if (lim == "vanleer") return closure<VanLeer, RusanovFlux>(m, imex, substeps);
+      throw std::runtime_error("Simulation: limiter inconnu '" + lim + "'");
+    }
+    if (flx == "hllc") {
+      // HLLC restitue l'onde de contact : exige la pression ET 4 variables (energie en
+      // [3]). Le modele isotherme (3 var, sans pression) et diocotron en sont exclus ->
+      // erreur claire les renvoyant vers 'rusanov'.
+      if constexpr (Model::n_vars == 4 &&
+                    requires(const Model mm, typename Model::State s) { mm.pressure(s); }) {
+        if (lim == "none") return closure<NoSlope, HLLCFlux>(m, imex, substeps);
+        if (lim == "minmod") return closure<Minmod, HLLCFlux>(m, imex, substeps);
+        if (lim == "vanleer") return closure<VanLeer, HLLCFlux>(m, imex, substeps);
+        throw std::runtime_error("Simulation: limiter inconnu '" + lim + "'");
+      } else {
+        throw std::runtime_error("Simulation: flux 'hllc' exige un modele Euler complet "
+                                 "(4 variables + pression) ; ce modele -> 'rusanov'");
+      }
+    }
+    throw std::runtime_error("Simulation: flux inconnu '" + flx + "' (rusanov|hllc)");
   }
 
   void solve_fields() {
@@ -122,34 +182,46 @@ Simulation::~Simulation() = default;
 Simulation::Simulation(Simulation&&) noexcept = default;
 Simulation& Simulation::operator=(Simulation&&) noexcept = default;
 
-void Simulation::add_species(const std::string& name, const std::string& model,
-                             double charge) {
+void Simulation::add_block(const std::string& name, const std::string& model, double charge,
+                           const std::string& limiter, const std::string& flux,
+                           const std::string& time, int substeps) {
   using Kind = Impl::Kind;
   Impl* P = p_.get();
+  if (substeps < 1) throw std::runtime_error("Simulation::add_block : substeps >= 1");
+  if (time != "explicit" && time != "imex")
+    throw std::runtime_error("Simulation::add_block : time 'explicit' | 'imex' (recu '" +
+                             time + "')");
+  const bool imex = (time == "imex");
+
   int ncomp = 1;
   Kind kind = Kind::Diocotron;
   std::function<void(MultiFab&, Real)> advance;
-
   if (model == "diocotron") {
     ncomp = 1; kind = Kind::Diocotron;
-    const Diocotron m{Real(P->cfg.B0), Real(1), Real(1)};
-    advance = [P, m](MultiFab& U, Real dt) { P->ssprk2(m, U, dt); };
+    advance = P->make_advance(Diocotron{Real(P->cfg.B0), Real(1), Real(1)}, limiter, flux,
+                              imex, substeps);
   } else if (model == "electron_euler") {
     ncomp = 4; kind = Kind::Euler;
-    const ChargedEuler m{Euler{Real(P->cfg.gamma)}, Real(charge), Real(charge)};
-    advance = [P, m](MultiFab& U, Real dt) { P->ssprk2(m, U, dt); };
+    advance = P->make_advance(ChargedEuler{Euler{Real(P->cfg.gamma)}, Real(charge),
+                                           Real(charge)}, limiter, flux, imex, substeps);
   } else if (model == "ion_isothermal") {
     ncomp = 3; kind = Kind::Isothermal;
-    const ChargedEulerIsothermal m{Real(P->cfg.cs2), Real(charge), Real(charge)};
-    advance = [P, m](MultiFab& U, Real dt) { P->ssprk2(m, U, dt); };
+    advance = P->make_advance(ChargedEulerIsothermal{Real(P->cfg.cs2), Real(charge),
+                                                     Real(charge)}, limiter, flux, imex,
+                              substeps);
   } else {
-    throw std::runtime_error("Simulation::add_species : modele inconnu '" + model +
+    throw std::runtime_error("Simulation::add_block : modele inconnu '" + model +
                              "' (diocotron|electron_euler|ion_isothermal)");
   }
 
   P->sp.push_back(Impl::Species{name, MultiFab(P->ba, P->dm, ncomp, 2), charge, kind,
                                 std::move(advance)});
   P->sp.back().U.set_val(Real(0));
+}
+
+void Simulation::add_species(const std::string& name, const std::string& model,
+                             double charge) {
+  add_block(name, model, charge);  // minmod + rusanov + explicite + 1 sous-pas
 }
 
 void Simulation::set_density(const std::string& name,

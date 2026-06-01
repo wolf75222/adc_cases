@@ -38,8 +38,19 @@ class Simulation {
   Simulation(Simulation&&) noexcept;
   Simulation& operator=(Simulation&&) noexcept;
 
-  // Ajoute une espece : modele ("diocotron"|"electron_euler"|"ion_isothermal"), charge
-  // (signe pour le Poisson ET coefficient de force q/m, masse unite). Densite init nulle.
+  // Ajoute un BLOC d'equation (= espece) en COMPOSANT, comme le voulait le tuteur :
+  //   model    : "diocotron" | "electron_euler" | "ion_isothermal"
+  //   charge   : signe pour le Poisson de systeme (et q/m de la force, masse unite)
+  //   limiter  : reconstruction spatiale "none" | "minmod" | "vanleer"
+  //   flux     : flux numerique "rusanov" | "hllc"  (hllc exige un modele Euler-like)
+  //   time     : "explicit" (SSPRK2) | "imex" (transport explicite + source implicite)
+  //   substeps : sous-pas par bloc (10 electrons : 1 ion). Chaque bloc choisit SON schema.
+  // C'est le niveau d'assemblage : Python dit QUOI composer, le C++ compile fait le calcul.
+  void add_block(const std::string& name, const std::string& model, double charge,
+                 const std::string& limiter = "minmod",
+                 const std::string& flux = "rusanov",
+                 const std::string& time = "explicit", int substeps = 1);
+  // Raccourci historique : minmod + rusanov + explicite + 1 sous-pas.
   void add_species(const std::string& name, const std::string& model, double charge);
   // Fixe la densite (composante 0) d'une espece, tableau n*n row-major ; les autres
   // composantes (quantite de mouvement, energie) sont posees a l'equilibre au repos.

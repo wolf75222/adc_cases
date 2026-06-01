@@ -41,6 +41,12 @@ struct ChargedEuler {
   ADC_HD Real max_wave_speed(const State& u, const Aux& a, int dir) const {
     return hydro.max_wave_speed(u, a, dir);
   }
+  // Delegues a Euler -> debloque HLL/HLLC (vitesses signees + pression) sur ce modele.
+  ADC_HD Real pressure(const State& u) const { return hydro.pressure(u); }
+  ADC_HD void wave_speeds(const State& u, const Aux& a, int dir, Real& smin,
+                          Real& smax) const {
+    hydro.wave_speeds(u, a, dir, smin, smax);
+  }
   ADC_HD State source(const State& u, const Aux& a) const {
     const Real Ex = -a.grad_x, Ey = -a.grad_y;  // E = -grad phi
     State s{};
@@ -76,6 +82,14 @@ struct ChargedEulerIsothermal {
     const Real vn = (dir == 0 ? u[1] : u[2]) / u[0];
     const Real a = vn < 0 ? -vn : vn;
     return a + std::sqrt(cs2);
+  }
+  // Vitesses d'onde signees (requises par HLL/HLLC) : isotherme -> v_dir ∓ c_s.
+  ADC_HD void wave_speeds(const State& u, const Aux&, int dir, Real& smin,
+                          Real& smax) const {
+    const Real vn = (dir == 0 ? u[1] : u[2]) / u[0];
+    const Real c = std::sqrt(cs2);
+    smin = vn - c;
+    smax = vn + c;
   }
   ADC_HD State source(const State& u, const Aux& a) const {
     const Real Ex = -a.grad_x, Ey = -a.grad_y;

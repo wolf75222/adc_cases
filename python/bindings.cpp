@@ -198,10 +198,18 @@ PYBIND11_MODULE(adc, m) {
       .def_readwrite("n", &SimulationConfig::n)
       .def_readwrite("L", &SimulationConfig::L)
       .def_readwrite("B0", &SimulationConfig::B0)
+      .def_readwrite("gamma", &SimulationConfig::gamma)
+      .def_readwrite("cs2", &SimulationConfig::cs2)
       .def_readwrite("periodic", &SimulationConfig::periodic);
 
   py::class_<Simulation>(m, "Simulation")
       .def(py::init<const SimulationConfig&>())
+      // Composition par BLOC : Python dit QUOI assembler (modele + schema spatial
+      // limiter/flux + traitement temporel explicit/imex + sous-pas), le C++ compile
+      // fait le calcul. C'est le niveau d'abstraction vise par le tuteur.
+      .def("add_block", &Simulation::add_block, py::arg("name"), py::arg("model"),
+           py::arg("charge"), py::arg("limiter") = "minmod", py::arg("flux") = "rusanov",
+           py::arg("time") = "explicit", py::arg("substeps") = 1)
       .def("add_species", &Simulation::add_species, py::arg("name"), py::arg("model"),
            py::arg("charge"))
       .def("set_density",
