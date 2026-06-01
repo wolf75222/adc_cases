@@ -54,6 +54,10 @@ add_executable(test_solver test_solver.cpp)
 target_link_libraries(test_solver PRIVATE adc_cases::solver)
 add_test(NAME test_solver COMMAND test_solver)
 
+add_executable(test_diocotron_fft test_diocotron_fft.cpp)
+target_link_libraries(test_diocotron_fft PRIVATE adc_cases::solver)
+add_test(NAME test_diocotron_fft COMMAND test_diocotron_fft)
+
 # --- Outils d'analyse Eigen (cote hote) ---
 if(TARGET adc_eigen)
   add_executable(test_diocotron_theory test_diocotron_theory.cpp)

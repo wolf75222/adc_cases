@@ -46,6 +46,7 @@ PYBIND11_MODULE(adc, m) {
       .def_readwrite("alpha", &DiocotronConfig::alpha)
       .def_readwrite("eps", &DiocotronConfig::eps)
       .def_readwrite("poisson_per_stage", &DiocotronConfig::poisson_per_stage)
+      .def_readwrite("use_fft", &DiocotronConfig::use_fft)
       .def_readwrite("ic", &DiocotronConfig::ic)
       .def_readwrite("band_amp", &DiocotronConfig::band_amp)
       .def_readwrite("band_width", &DiocotronConfig::band_width)

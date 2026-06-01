@@ -37,6 +37,11 @@ struct DiocotronConfig {
   // (OncePerStep) -> ~2.6x plus rapide. Voir docs/PERFORMANCE.md.
   bool poisson_per_stage = true;
 
+  // Solveur elliptique : false = multigrille geometrique (tout cas), true = FFT
+  // spectrale directe (~5x, mais EXIGE periodique + n puissance de 2). Ignore pour
+  // Ring (paroi conductrice Dirichlet : la FFT ne sait pas la traiter).
+  bool use_fft = false;
+
   DiocotronIC ic = DiocotronIC::Smooth;
   // --- bande de charge periodique (ic = Band) ---
   double band_amp = 1.0;     // amplitude A de la bande

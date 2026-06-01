@@ -2,6 +2,7 @@
 
 #include <adc/coupling/coupler.hpp>
 #include <adc/coupling/coupling_policy.hpp>
+#include <adc/elliptic/poisson_fft_solver.hpp>
 #include <adc/mesh/box_array.hpp>
 #include <adc/mesh/distribution_mapping.hpp>
 #include <adc/mesh/for_each.hpp>  // device_fence
@@ -15,10 +16,30 @@
 
 #include <cmath>
 #include <functional>
+#include <variant>
 
 namespace adc {
 
 static constexpr double kPi = 3.14159265358979323846;
+
+// Backend elliptique choisi a l'execution (use_fft), comme pour Euler-Poisson : la
+// variante tient soit la multigrille (tout cas, paroi embarquee comprise), soit la FFT
+// directe (~5x ; EXIGE periodique + n puissance de 2). FFT refusee si paroi/Dirichlet.
+using CouplerMG = Coupler<Diocotron>;
+using CouplerFFT = Coupler<Diocotron, PoissonFFTSolver>;
+using CouplerVar = std::variant<CouplerMG, CouplerFFT>;
+
+static CouplerVar make_coupler(const Diocotron& m, const Geometry& g,
+                               const BoxArray& ba, const BCRec& bcU,
+                               const BCRec& bcPhi,
+                               const std::function<bool(Real, Real)>& active,
+                               bool use_fft) {
+  const bool periodic = bcPhi.xlo == BCType::Periodic && bcPhi.xhi == BCType::Periodic &&
+                        bcPhi.ylo == BCType::Periodic && bcPhi.yhi == BCType::Periodic;
+  if (use_fft && periodic && !active)
+    return CouplerVar{CouplerFFT(m, g, ba, bcU, bcPhi)};
+  return CouplerVar{CouplerMG(m, g, ba, bcU, bcPhi, active)};
+}
 
 struct DiocotronSolver::Impl {
   Geometry geom;
@@ -27,7 +48,7 @@ struct DiocotronSolver::Impl {
   Diocotron model;
   BCRec bcU, bcPhi;
   std::function<bool(Real, Real)> active;
-  Coupler<Diocotron> cpl;
+  CouplerVar cpl;
   MultiFab U;
   double t = 0;
   int n;
@@ -77,11 +98,12 @@ struct DiocotronSolver::Impl {
         dm(1, n_ranks()),
         model{c.B0, init_ni0(c), c.alpha},
         bcU(make_bcU(c)), bcPhi(make_bcPhi(c)), active(make_active(c)),
-        cpl(model, geom, ba, bcU, bcPhi, active),
+        cpl(make_coupler(model, geom, ba, bcU, bcPhi, active, c.use_fft)),
         U(ba, dm, 1, 2),
         n(c.n), per_stage(c.poisson_per_stage), B0(c.B0) {
     fill_ic(c);
-    cpl.solve_fields(U);  // phi + aux valides pour le premier max_drift_speed
+    std::visit([&](auto& c) { c.solve_fields(U); },
+               cpl);  // phi + aux valides pour le premier max_drift_speed
   }
 
   // CI ecrite en boucle HOTE (operation unique, memoire unifiee coherente avec les
@@ -111,16 +133,21 @@ struct DiocotronSolver::Impl {
   }
 
   void step(double dt) {
-    if (per_stage)
-      cpl.advance<Minmod, PerStageCoupling>(U, dt);
-    else
-      cpl.advance<Minmod, OncePerStepCoupling>(U, dt);
+    std::visit(
+        [&](auto& c) {
+          if (per_stage)
+            c.template advance<Minmod, PerStageCoupling>(U, dt);
+          else
+            c.template advance<Minmod, OncePerStepCoupling>(U, dt);
+        },
+        cpl);
     t += dt;
   }
 
   double max_drift_speed() const {
     device_fence();  // GPU : barriere avant lecture hote (memoire unifiee)
-    const ConstArray4 ax = cpl.aux().fab(0).const_array();
+    const ConstArray4 ax = std::visit(
+        [](const auto& c) -> ConstArray4 { return c.aux().fab(0).const_array(); }, cpl);
     const Box2D v = U.box(0);
     double vmax = 1e-12;
     for (int j = v.lo[1]; j <= v.hi[1]; ++j)
@@ -161,7 +188,8 @@ double DiocotronSolver::time() const { return p_->t; }
 int DiocotronSolver::nx() const { return p_->n; }
 std::vector<double> DiocotronSolver::density() const { return p_->copy_field(p_->U); }
 std::vector<double> DiocotronSolver::potential() const {
-  return p_->copy_field(p_->cpl.phi());
+  return p_->copy_field(
+      std::visit([](auto& c) -> MultiFab& { return c.phi(); }, p_->cpl));
 }
 
 }  // namespace adc
