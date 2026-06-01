@@ -1,0 +1,11 @@
+build*/
+_deps/
+*.o
+*.so
+__pycache__/
+*.pyc
+out/
+*.csv
+*.png
+*.gif
+*.h5
