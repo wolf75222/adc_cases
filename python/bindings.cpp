@@ -12,6 +12,7 @@
 #include <adc/solver/diocotron_solver.hpp>
 #include <adc/solver/euler_poisson_solver.hpp>
 #include <adc/solver/multispecies_solver.hpp>
+#include <adc/solver/simulation.hpp>
 #include <adc/solver/two_fluid_ap_solver.hpp>
 
 #include <cstring>
@@ -189,4 +190,37 @@ PYBIND11_MODULE(adc, m) {
            [](const MultiSpeciesSolver& s) { return to_2d(s.density_i(), s.nx()); })
       .def("potential",
            [](const MultiSpeciesSolver& s) { return to_2d(s.potential(), s.nx()); });
+
+  // --- Composition a l'execution : on ajoute des especes une a une (add_species),
+  // toutes partagent un Poisson de systeme. Esprit `sim.add_equation(...)` du TODO.
+  py::class_<SimulationConfig>(m, "SimulationConfig")
+      .def(py::init<>())
+      .def_readwrite("n", &SimulationConfig::n)
+      .def_readwrite("L", &SimulationConfig::L)
+      .def_readwrite("B0", &SimulationConfig::B0)
+      .def_readwrite("periodic", &SimulationConfig::periodic);
+
+  py::class_<Simulation>(m, "Simulation")
+      .def(py::init<const SimulationConfig&>())
+      .def("add_species", &Simulation::add_species, py::arg("name"), py::arg("charge"))
+      .def("set_density",
+           [](Simulation& s, const std::string& name,
+              py::array_t<double, py::array::c_style | py::array::forcecast> arr) {
+             s.set_density(name, std::vector<double>(arr.data(), arr.data() + arr.size()));
+           },
+           py::arg("name"), py::arg("rho"))
+      .def("solve_fields", &Simulation::solve_fields)
+      .def("step", &Simulation::step, py::arg("dt"))
+      .def("advance", &Simulation::advance, py::arg("dt"), py::arg("nsteps"))
+      .def("nx", &Simulation::nx)
+      .def("time", &Simulation::time)
+      .def("n_species", &Simulation::n_species)
+      .def("mass", &Simulation::mass, py::arg("name"))
+      .def("density",
+           [](const Simulation& s, const std::string& name) {
+             return to_2d(s.density(name), s.nx());
+           },
+           py::arg("name"))
+      .def("potential",
+           [](const Simulation& s) { return to_2d(s.potential(), s.nx()); });
 }

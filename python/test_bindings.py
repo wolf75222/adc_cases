@@ -144,6 +144,28 @@ chk(np.isfinite(ne).all() and np.isfinite(phi).all(), "multispecies_finite")
 chk(abs(mss.mass_e() - mse0) < 1e-9, "multispecies_masse_e_conservee")
 chk(abs(mss.mass_i() - msi0) < 1e-9, "multispecies_masse_i_conservee")
 
+# --- Simulation : composition a l'EXECUTION (on ajoute les especes une a une) ---
+sc = adc.SimulationConfig()
+sc.n = 32
+sim = adc.Simulation(sc)
+sim.add_species("electrons", -1.0)
+sim.add_species("ions", 1.0)
+chk(sim.n_species() == 2, "simulation_two_species")
+xs = (np.arange(32) + 0.5) / 32.0
+ne = 1.0 + 0.1 * np.cos(2 * np.pi * xs)[None, :] * np.ones((32, 1))
+sim.set_density("electrons", ne)
+sim.set_density("ions", np.ones((32, 32)))
+sim.solve_fields()
+phi = sim.potential()
+se0, si0 = sim.mass("electrons"), sim.mass("ions")
+sim.advance(0.002, 10)
+print(f"Simulation : n_species={sim.n_species()} phimax={np.abs(phi).max():.3e} "
+      f"dmasse_e={abs(sim.mass('electrons') - se0):.2e} dmasse_i={abs(sim.mass('ions') - si0):.2e}")
+chk(np.abs(phi).max() > 1e-6, "simulation_potential_nonzero")
+chk(sim.density("electrons").shape == (32, 32), "simulation_density_numpy")
+chk(abs(sim.mass("electrons") - se0) < 1e-10, "simulation_masse_e_conservee")
+chk(abs(sim.mass("ions") - si0) < 1e-10, "simulation_masse_i_conservee")
+
 if fails == 0:
     print("OK test_bindings")
 sys.exit(0 if fails == 0 else 1)

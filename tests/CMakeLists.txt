@@ -66,6 +66,10 @@ add_executable(test_multispecies_solver test_multispecies_solver.cpp)
 target_link_libraries(test_multispecies_solver PRIVATE adc_cases::solver)
 add_test(NAME test_multispecies_solver COMMAND test_multispecies_solver)
 
+add_executable(test_simulation test_simulation.cpp)
+target_link_libraries(test_simulation PRIVATE adc_cases::solver)
+add_test(NAME test_simulation COMMAND test_simulation)
+
 # --- Outils d'analyse Eigen (cote hote) ---
 if(TARGET adc_eigen)
   add_executable(test_diocotron_theory test_diocotron_theory.cpp)
