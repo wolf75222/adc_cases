@@ -1,4 +1,4 @@
-# adc_cases — cas d'utilisation Python de la lib `adc`
+# adc_cases : cas d'utilisation Python de la lib `adc`
 
 Ce dépôt ne contient **que du Python** : des **cas d'utilisation** du solveur
 `adc` (advection-diffusion / couplage hyperbolique-elliptique). Toute la physique
@@ -8,7 +8,7 @@ que composer et piloter** : un dossier par cas, chacun important `adc`, écrivan
 conditions initiales en numpy, et lançant la simulation.
 
 > **Principe** : *Python dit QUOI assembler, le C++ compilé fait le calcul.* Aucun
-> binding ni code C++ dans ce dépôt — la lib et ses bindings sont dans `adc_cpp`.
+> binding ni code C++ dans ce dépôt : la lib et ses bindings sont dans `adc_cpp`.
 
 ## Prérequis : construire le module `adc`
 
@@ -25,6 +25,10 @@ Puis on met le paquet sur le `PYTHONPATH` (le dossier qui contient le paquet `ad
 ```bash
 export PYTHONPATH=$PWD/build-py/python      # depuis adc_cpp
 ```
+
+Lancer les cas avec le **même interpréteur Python** que celui ayant compilé le module
+(l'extension porte un suffixe ABI `cpython-3XY`). En cas de Python multiples, pinner à la
+configuration : `-DPython_EXECUTABLE=$(which python3.12)`.
 
 (Dépendances Python des cas : `numpy`, et `matplotlib` pour la repro diocotron.)
 
@@ -45,20 +49,20 @@ python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 | Dossier | Cas | Ce qu'il montre |
 |---|---|---|
 | [`diocotron/`](diocotron/) | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (bloc `diocotron` + paroi conductrice), figures + gif. Voir [diocotron/README.md](diocotron/README.md). `band_instability.py` : variante périodique minimale. |
-| [`composition/`](composition/) | Composition multi-blocs | **Le cas phare** : électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
-| [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) — un seul signe de couplage les sépare ; masse et impulsion conservées. |
+| [`composition/`](composition/) | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
+| [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Solveur **spécialisé** `adc.TwoFluidAP` : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). |
 | [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Solveur **spécialisé** `adc.DiocotronAmr` : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
 
 ## L'API en deux niveaux
 
-- **Composition générique** — `adc.System` : on ajoute des **blocs**, chacun avec son
+- **Composition générique** (`adc.System`) : on ajoute des **blocs**, chacun avec son
   modèle, son schéma spatial (`adc.Spatial(limiter, flux)`), son traitement temporel
   (`adc.Explicit` / `adc.IMEX` / `adc.Implicit`) et son sous-cyclage ; ils partagent un
   Poisson de système. Idéal pour coupler ions/électrons/neutres. Modèles : `diocotron`,
   `electron_euler`, `ion_isothermal`, `euler_poisson`.
-- **Solveurs spécialisés** — `adc.TwoFluidAP`, `adc.DiocotronAmr` : intégrateurs sur
+- **Solveurs spécialisés** (`adc.TwoFluidAP`, `adc.DiocotronAmr`) : intégrateurs sur
   mesure (AP, AMR) exposés comme façades, non composables bloc à bloc.
 
 Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et

@@ -1,4 +1,4 @@
-# Cas diocotron — reproduction de arXiv:2510.11808 (100 % Python)
+# Cas diocotron : reproduction de arXiv:2510.11808 (100 % Python)
 
 Reproduction du benchmark **diocotron** de Hoffart, Maier, Shadid, Tomas, *Structure-preserving
 finite-element approximations of the magnetic Euler-Poisson equations*
@@ -11,7 +11,7 @@ Script : [`run.py`](run.py). Variante périodique minimale : [`band_instability.
 Le papier valide son schéma dans la **limite de dérive magnétique** (`ω_d ≪ ω_p ≪ ω_c`) en
 reproduisant le **taux de croissance de l'instabilité diocotron** d'une colonne creuse, comparé
 à la dispersion analytique. Ce modèle réduit de dérive `E × B` se **compose ici depuis Python**
-via `adc.System` — **un bloc `diocotron` + un Poisson de système à paroi conductrice circulaire** —
+via `adc.System` (**un bloc `diocotron` + un Poisson de système à paroi conductrice circulaire**),
 **sans aucun solveur C++ dédié au diocotron** :
 
 ```python
@@ -23,21 +23,21 @@ sim.set_density("ne", ring_numpy)        # CI anneau écrite en numpy
 dt = sim.step_cfl(0.4)                    # le calcul (transport + Poisson) reste C++
 ```
 
-C'est exactement le « Python compose, le C++ calcule » : la paroi conductrice (embedded
-boundary) et la résolution de Poisson sont dans le cœur `adc_cpp` ; Python ne fait qu'assembler.
+« Python compose, le C++ calcule » : la paroi conductrice (embedded boundary) et la
+résolution de Poisson sont dans le cœur `adc_cpp` ; Python ne fait qu'assembler.
 
 ## Ce qui est reproduit (`figures/`)
 
 | Figure | Contenu |
 |---|---|
 | `dispersion.png` | `γ` vs mode azimutal `l` : **analytique** (valeurs propres de Petri/Davidson-Felice, numpy) + **mesuré par `adc`** + **cibles du papier** |
-| `amplitude.png` | `\|c_l\|(t)` (mode `l` de `φ`) en échelle log — croissance exponentielle, phase linéaire ajustée |
+| `amplitude.png` | `\|c_l\|(t)` (mode `l` de `φ`) en échelle log : croissance exponentielle, phase linéaire ajustée |
 | `diocotron.gif` | évolution de la densité (mode `l=4`) : l'anneau développe `l` lobes qui s'enroulent |
 | `snapshots.png` | 4 instantanés de densité du même run |
 
 ## Méthode (les deux côtés, en Python)
 
-**Analytique** — problème aux valeurs propres radial de Petri (arXiv:astro-ph/0611936),
+**Analytique** : problème aux valeurs propres radial de Petri (arXiv:astro-ph/0611936),
 réimplémenté en numpy (`diocotron_eigenvalue`) :
 
 ```
@@ -48,7 +48,7 @@ réimplémenté en numpy (`diocotron_eigenvalue`) :
 `r0:r1:Rwall = 6:8:16` (anneau net `w = 0.05`). **Reproduit les cibles du papier :
 `γ₃ = 0.772`, `γ₄ = 0.912`, `γ₅ = 0.687`** (le taux normalisé est invariant d'échelle).
 
-**Numérique** — le bloc `diocotron` de `adc.System` (paroi conductrice circulaire Dirichlet,
+**Numérique** : le bloc `diocotron` de `adc.System` (paroi conductrice circulaire Dirichlet,
 ratios `0.15:0.20:0.40` à `L=1`, MUSCL Minmod + SSPRK2, couplage Poisson *once-per-step*).
 Pour chaque mode `l` : perturbation azimutale faible (`δ = 0.01`), amplitude du **mode `l` de `φ`**
 sur un cercle au rayon médian (FFT azimutale), ajustement `exp(γ t)` sur la phase linéaire,
@@ -69,7 +69,7 @@ instable) est correct.
 
 **Côté numérique**, le schéma volumes-finis **d'ordre 2 (Minmod) à n=192 sous-estime** le taux
 (−5 à −27 %) : effet attendu de la **diffusion numérique** de l'ordre modéré, documenté dans
-l'étude de résolution ([adc_cpp/docs/DIOCOTRON_GROWTH_RATE.md](../../adc_cpp/docs/DIOCOTRON_GROWTH_RATE.md)) —
+l'étude de résolution ([adc_cpp/docs/DIOCOTRON_GROWTH_RATE.md](../../adc_cpp/docs/DIOCOTRON_GROWTH_RATE.md)),
 où seul l'ordre élevé (WENO5-Z + SSPRK3) referme l'écart. La simulation **capture bien
 l'instabilité** (croissance exponentielle, bon classement des modes, `l=4` dominant) ; la
 quantification fine relève de la résolution et de l'ordre.

@@ -6,16 +6,16 @@ Le papier valide son schema "structure-preserving" pour les equations magnetic E
 dans la LIMITE DE DERIVE MAGNETIQUE (omega_d << omega_p << omega_c) en reproduisant le TAUX DE
 CROISSANCE de l'instabilite diocotron d'une colonne creuse, compare a la relation de dispersion
 analytique. Ce modele reduit de derive E x B (la limite visee) se COMPOSE ici GENERIQUEMENT
-depuis Python -- un bloc `diocotron` + un Poisson de systeme a paroi conductrice circulaire,
-via `adc.System` -- SANS aucun solveur C++ dedie au diocotron. On reproduit donc directement la
+depuis Python, un bloc `diocotron` + un Poisson de systeme a paroi conductrice circulaire,
+via `adc.System`, SANS aucun solveur C++ dedie au diocotron. On reproduit donc directement la
 figure-cle du papier (gamma numerique vs analytique vs mode l), en pur Python sur la lib.
 
 Ce qui est produit (dans diocotron/figures/) :
-  1. dispersion.png  : taux de croissance gamma_l vs mode azimutal l — courbe analytique
+  1. dispersion.png  : taux de croissance gamma_l vs mode azimutal l, courbe analytique
      (probleme aux valeurs propres radial de Petri/Davidson-Felice, resolu ici en numpy) +
      points mesures par notre solveur + cibles du papier (gamma_3=0.772, 4=0.911, 5=0.683).
   2. amplitude.png   : |c_l|(t) en echelle log, phase exponentielle + ajustement, modes 3/4/5.
-  3. diocotron.gif   : evolution de la densite (mode l=4) — l'anneau developpe l lobes qui
+  3. diocotron.gif   : evolution de la densite (mode l=4) ; l'anneau developpe l lobes qui
      s'enroulent (instabilite diocotron non lineaire).
   4. snapshots.png   : 4 instantanes de densite (t croissant) du meme run.
 
@@ -50,7 +50,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
 #    Port EXACT de adc_cases/include/adc/analysis/diocotron_growth.hpp (cf. ce fichier).
 # ===========================================================================
 # Geometrie ABSOLUE pour le probleme aux valeurs propres (memes RATIOS 6:8:16 que la simu,
-# mais a une echelle ou le lissage w=0.05 represente un anneau NET — le taux NORMALISE est
+# mais a une echelle ou le lissage w=0.05 represente un anneau NET ; le taux NORMALISE est
 # invariant d'echelle, donc directement comparable a la simu qui tourne en r0:r1:wall =
 # 0.15:0.20:0.40). C'est l'echelle exacte de adc_cases/analysis/diocotron_growth.hpp.
 ANA_A, ANA_B, ANA_RW, ANA_W, ANA_N = 6.0, 8.0, 16.0, 0.05, 2000
@@ -140,7 +140,7 @@ def fit_linear_phase(t, a):
 def ring_density(n, l, delta):
     """CI anneau (mode l) ecrite EN PYTHON/numpy : ~1 entre R0 et R1, ~0 ailleurs,
     avec une perturbation azimutale sin(l*theta). C'est l'unique endroit ou la CI
-    est definie -- plus aucune fonction C++ par cas."""
+    est definie, plus aucune fonction C++ par cas."""
     coord = (np.arange(n) + 0.5) / n * L
     xx, yy = np.meshgrid(coord, coord, indexing="xy")
     r = np.hypot(xx - 0.5 * L, yy - 0.5 * L)
@@ -208,7 +208,7 @@ def main():
     from matplotlib import animation
 
     print("=" * 74)
-    print("Reproduction arXiv:2510.11808 (diocotron) avec le solveur adc — full Python")
+    print("Reproduction arXiv:2510.11808 (diocotron) avec le solveur adc : full Python")
     print("=" * 74)
 
     # --- (1) analytique : courbe de dispersion + verification des cibles du papier ---
@@ -279,7 +279,7 @@ def main():
             ax.imshow(frames[k], origin="lower", cmap="inferno", vmin=0, vmax=vmax,
                       extent=[0, L, 0, L])
             ax.set_title(f"t = {times[k]:.2f}"); ax.set_xticks([]); ax.set_yticks([])
-        fig.suptitle("Instabilite diocotron mode l=4 — densite (adc, reproduction arXiv:2510.11808)")
+        fig.suptitle("Instabilite diocotron mode l=4 : densite (adc, reproduction arXiv:2510.11808)")
         fig.tight_layout(); fig.savefig(os.path.join(OUT, "snapshots.png"), dpi=130)
         plt.close(fig)
         print(f"   {len(frames)} frames, t_final = {times[-1]:.2f}")

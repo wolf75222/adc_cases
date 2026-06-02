@@ -45,7 +45,7 @@ Ce que le script verifie
     une erreur claire ; un modele inconnu aussi ; substeps < 1 aussi.
 (D) Integrateur temporel ECRIT EN PYTHON : on avance un bloc diocotron avec
     adc.integrate.ssprk2_step(sim, dt) (SSPRK2 Python, Poisson re-resolu per-stage) ;
-    la masse reste conservee et l'etat fini — on ecrit son propre take_step en Python
+    la masse reste conservee et l'etat fini ; on ecrit son propre take_step en Python
     tandis que le calcul par cellule reste en C++.
 
 Sorties : diagnostics numeriques imprimes (aucune dependance graphique). Invariants par

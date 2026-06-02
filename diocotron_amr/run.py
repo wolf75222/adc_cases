@@ -1,7 +1,7 @@
 """Demo "diocotron_amr" : instabilite diocotron sur grille AMR multi-patch.
 
 Cette demo pilote depuis Python la facade compilee `adc.DiocotronAmr` (toute la physique
-est en C++) -- solveur SPECIALISE sur AMR. On instancie le solveur AMR qui simule la meme instabilite
+est en C++), solveur SPECIALISE sur AMR. On instancie le solveur AMR qui simule la meme instabilite
 diocotron qu'en mono-grille, mais sur une hierarchie de patchs raffines dynamiquement :
 toutes les `regrid_every` iterations, le maillage est re-decoupe pour suivre les zones
 ou la structure (gradients de densite) est la plus fine. Python ne fait que composer la

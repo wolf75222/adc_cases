@@ -2,7 +2,7 @@
 """Demo "two_fluid_ap" : modele bi-fluide isotherme en regime RAIDE (asymptotic-preserving).
 
 On pilote depuis Python la facade compilee `adc.TwoFluidAP` (toute la physique est en
-C++) -- un solveur SPECIALISE (integrateur sur mesure, non composable bloc-a-bloc comme
+C++), un solveur SPECIALISE (integrateur sur mesure, non composable bloc-a-bloc comme
 `adc.System`). Il integre deux fluides charges (electrons + ions) couples au champ
 electrique par la contrainte de quasi-neutralite. La frequence plasma omega_pe fixe
 l'echelle de temps RAIDE du systeme : un schema explicite serait limite par
