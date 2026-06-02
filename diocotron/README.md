@@ -11,12 +11,15 @@ Script : [`run.py`](run.py). Variante périodique minimale : [`band_instability.
 Le papier valide son schéma dans la **limite de dérive magnétique** (`ω_d ≪ ω_p ≪ ω_c`) en
 reproduisant le **taux de croissance de l'instabilité diocotron** d'une colonne creuse, comparé
 à la dispersion analytique. Ce modèle réduit de dérive `E × B` se **compose ici depuis Python**
-via `adc.System` (**un bloc `diocotron` + un Poisson de système à paroi conductrice circulaire**),
-**sans aucun solveur C++ dédié au diocotron** :
+via `adc.System` (**briques `ExB` + `BackgroundDensity` + un Poisson de système à paroi
+conductrice circulaire**), **sans aucun solveur C++ dédié** : `adc_cpp` ne nomme aucun scénario,
+`models.diocotron(...)` (côté `adc_cases`) assemble les briques :
 
 ```python
-sim = adc.System(n=192, L=1.0, B0=1.0, alpha=1.0, n_i0=0.0, periodic=False)
-sim.add_block("ne", model="diocotron", charge=1.0, spatial=adc.Spatial(minmod=True))
+import models                             # adc_cases/models.py : compositions de briques nommées
+sim = adc.System(n=192, L=1.0, periodic=False)
+sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=0.0),
+              spatial=adc.Spatial(minmod=True))
 sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="dirichlet",
                 wall="circle", wall_radius=0.40)
 sim.set_density("ne", ring_numpy)        # CI anneau écrite en numpy
@@ -48,7 +51,7 @@ réimplémenté en numpy (`diocotron_eigenvalue`) :
 `r0:r1:Rwall = 6:8:16` (anneau net `w = 0.05`). **Reproduit les cibles du papier :
 `γ₃ = 0.772`, `γ₄ = 0.912`, `γ₅ = 0.687`** (le taux normalisé est invariant d'échelle).
 
-**Numérique** : le bloc `diocotron` de `adc.System` (paroi conductrice circulaire Dirichlet,
+**Numérique** : la composition de dérive `E × B` (briques `ExB` + `BackgroundDensity`) sur `adc.System` (paroi conductrice circulaire Dirichlet,
 ratios `0.15:0.20:0.40` à `L=1`, MUSCL Minmod + SSPRK2, couplage Poisson *once-per-step*).
 Pour chaque mode `l` : perturbation azimutale faible (`δ = 0.01`), amplitude du **mode `l` de `φ`**
 sur un cercle au rayon médian (FFT azimutale), ajustement `exp(γ t)` sur la phase linéaire,

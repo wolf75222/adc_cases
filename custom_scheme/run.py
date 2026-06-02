@@ -15,9 +15,15 @@ densite vit cote Python, la lib joue le role de solveur elliptique. On verifie :
 Le diocotron : d_t n + div(n v) = 0, v = (-d_y phi, d_x phi)/B0, lap phi = alpha (n - n_i0).
 """
 
+import os
+import sys
+
 import numpy as np
 
 import adc
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models
 
 PI = np.pi
 
@@ -66,8 +72,8 @@ def main():
     n_i0 = float(n.mean())  # fond neutralisant : Poisson periodique a moyenne nulle
 
     # adc.System sert UNIQUEMENT d'oracle de Poisson (un bloc diocotron, alpha (n - n_i0)).
-    sim = adc.System(n=nx, L=L, B0=B0, alpha=1.0, n_i0=n_i0, periodic=True)
-    sim.add_block("ne", model="diocotron", charge=1.0)
+    sim = adc.System(n=nx, L=L, periodic=True)
+    sim.add_block("ne", model=models.diocotron(B0=B0, alpha=1.0, n_i0=n_i0))
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
 
     print("== custom_scheme : transport diocotron 100 % Python, Poisson par adc ==")

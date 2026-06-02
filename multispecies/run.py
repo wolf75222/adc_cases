@@ -29,8 +29,15 @@ Invariants verifies (assert)
     qui est precisement le terme source qui alimente le Poisson couple.
 """
 
+import os
+import sys
+
 import numpy as np
 import adc
+
+# Les compositions de modeles nommees vivent cote application (adc_cases/models.py).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models
 
 
 def main():
@@ -38,24 +45,21 @@ def main():
     sim = adc.System(
         n=48,             # grille 48x48, petite pour rester rapide
         L=1.0,            # domaine carre [0, L]^2
-        gamma=5.0 / 3.0,  # adiabatique pour les electrons (Euler complet)
-        cs2=1.0,          # vitesse du son^2 des ions (fermeture isotherme)
         periodic=True,    # conditions aux limites periodiques
     )
 
     # Electrons : Euler complet, charge -1, reconstruction minmod, temps explicite.
+    # gamma = 5/3 (adiabatique) est porte par le modele compose, pas par le systeme.
     sim.add_block(
         "electrons",
-        model="electron_euler",
-        charge=-1.0,
+        model=models.electron_euler(charge=-1.0, gamma=5.0 / 3.0),
         spatial=adc.Spatial(minmod=True),
         time=adc.Explicit(),
     )
-    # Ions : Euler isotherme, charge +1.
+    # Ions : Euler isotherme, charge +1, fermeture cs2 = 1.0 portee par le modele.
     sim.add_block(
         "ions",
-        model="ion_isothermal",
-        charge=+1.0,
+        model=models.ion_isothermal(charge=+1.0, cs2=1.0),
         spatial=adc.Spatial(minmod=True),
         time=adc.Explicit(),
     )

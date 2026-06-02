@@ -45,8 +45,15 @@ Invariants verifies par assert :
   - croissance de l'instabilite : amplitude finale > amplitude initiale.
 """
 
+import os
+import sys
+
 import numpy as np
+
 import adc
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models
 
 
 def perturbation_amplitude(density):
@@ -88,8 +95,8 @@ def main():
     n_i0 = float(ne0.mean())
 
     # --- Composition du systeme : un seul bloc "diocotron" (1 variable) ---
-    sim = adc.System(n=n, L=L, B0=1.0, alpha=1.0, n_i0=n_i0, periodic=True)
-    sim.add_block("ne", model="diocotron", charge=1.0,
+    sim = adc.System(n=n, L=L, periodic=True)
+    sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
                   spatial=adc.Spatial(minmod=True), time=adc.Explicit())
     # Poisson periodique sans paroi : RHS = densite de charge Sum_s elliptic_rhs_s,
     # solveur multigrille geometrique.

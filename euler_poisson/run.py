@@ -10,9 +10,9 @@ composer le systeme, fixer la condition initiale, avancer en temps et
 diagnostiquer.
 
 On effectue DEUX runs identiques (n=64) ne differant que par le SIGNE du
-couplage, encode par la charge du bloc :
-  1) charge = +1.0  -> force ATTRACTIVE (auto-gravite)
-  2) charge = -1.0  -> force REPULSIVE (charge d'espace, plasma)
+couplage, passe au modele compose ``models.euler_poisson(sign=...)`` :
+  1) sign = +1.0  -> force ATTRACTIVE (auto-gravite)
+  2) sign = -1.0  -> force REPULSIVE (charge d'espace, plasma)
 
 Condition initiale commune : densite au repos faiblement perturbee par un cosinus
   rho = rho0 * (1 + eps*cos(2*pi*x/L)),  eps = 0.01
@@ -37,8 +37,15 @@ sur System : on lit ces diagnostics directement sur cet etat
 (p_x = U[1].sum(), p_y = U[2].sum(), E_tot = U[3].sum()).
 """
 
+import os
+import sys
+
 import numpy as np
 import adc
+
+# La composition de modeles nommee vit cote application (adc_cases/models.py).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models
 
 # Tolerances physiques.
 TOL_MASS = 1e-9   # derive relative de masse admissible
@@ -67,13 +74,15 @@ def energy_and_momentum(sim):
     return U[3].sum(), U[1].sum(), U[2].sum()  # E_tot, p_x, p_y
 
 
-def run_case(charge, label):
+def run_case(sign, label):
     """Avance un run Euler-Poisson et renvoie un dictionnaire de diagnostics.
 
-    charge = +1.0 -> GRAVITE (attractif) ; charge = -1.0 -> PLASMA (repulsif).
+    sign = +1.0 -> GRAVITE (attractif) ; sign = -1.0 -> PLASMA (repulsif).
     """
-    sim = adc.System(n=N, L=L, gamma=GAMMA, four_pi_G=1.0, rho0=RHO0, periodic=True)
-    sim.add_block("gas", model="euler_poisson", charge=charge,
+    sim = adc.System(n=N, L=L, periodic=True)
+    sim.add_block("gas",
+                  model=models.euler_poisson(sign=sign, gamma=GAMMA,
+                                              four_pi_G=1.0, rho0=RHO0),
                   spatial=adc.Spatial(vanleer=True, flux="hllc"),
                   time=adc.Explicit())
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
@@ -118,7 +127,7 @@ def run_case(charge, label):
 
 
 def main():
-    # Deux runs : seul le signe du couplage (charge du bloc) change.
+    # Deux runs : seul le signe du couplage (sign du modele) change.
     grav = run_case(+1.0, "GRAVITE")
     print()
     plas = run_case(-1.0, "PLASMA ")

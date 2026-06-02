@@ -32,6 +32,9 @@ import numpy as np
 
 import adc  # notre solveur (facade compilee)
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models  # compositions de briques nommees (cote application)
+
 # ---------------------------------------------------------------------------
 # Geometrie de l'anneau (cibles analytiques du papier reproduites a cette geometrie).
 R0, R1, RWALL = 0.15, 0.20, 0.40   # rayons interne / externe / paroi  (6:8:16)
@@ -47,12 +50,12 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
 # ===========================================================================
 # 1. ANALYTIQUE : probleme aux valeurs propres radial de Petri (numpy, "full python").
 #    omega L_m phi = m Omega L_m phi + q_m phi,  phi(0)=phi(Rw)=0,  Omega = -(1/r^2) int rho r'.
-#    Port EXACT de adc_cases/include/adc/analysis/diocotron_growth.hpp (cf. ce fichier).
+#    Probleme aux valeurs propres resolu en pur numpy (Petri / Davidson-Felice).
 # ===========================================================================
 # Geometrie ABSOLUE pour le probleme aux valeurs propres (memes RATIOS 6:8:16 que la simu,
 # mais a une echelle ou le lissage w=0.05 represente un anneau NET ; le taux NORMALISE est
 # invariant d'echelle, donc directement comparable a la simu qui tourne en r0:r1:wall =
-# 0.15:0.20:0.40). C'est l'echelle exacte de adc_cases/analysis/diocotron_growth.hpp.
+# 0.15:0.20:0.40).
 ANA_A, ANA_B, ANA_RW, ANA_W, ANA_N = 6.0, 8.0, 16.0, 0.05, 2000
 
 
@@ -154,8 +157,8 @@ def ring_density(n, l, delta):
 def make_ring_system(n, l, delta):
     """Compose le diocotron GENERIQUEMENT depuis Python : un bloc 'diocotron', un
     Poisson de systeme avec paroi conductrice circulaire. Aucun DiocotronSolver C++."""
-    sim = adc.System(n=n, L=L, B0=B0, alpha=ALPHA, n_i0=0.0, periodic=False)
-    sim.add_block("ne", model="diocotron", charge=1.0,
+    sim = adc.System(n=n, L=L, periodic=False)
+    sim.add_block("ne", model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=0.0),
                   spatial=adc.Spatial(minmod=True), time=adc.Explicit())
     sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="dirichlet",
                     wall="circle", wall_radius=RWALL)

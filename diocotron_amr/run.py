@@ -17,9 +17,15 @@ grille AMR grossiere. Le couplage Poisson periodique exige une CI a moyenne null
 le fond neutralisant n_i0 = <n_e>.
 """
 
+import os
+import sys
+
 import numpy as np
 
 import adc
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import models
 
 PI = np.pi
 
@@ -38,9 +44,9 @@ def main():
     ne = band_density(n, L, amp, width, mode, disp)
     n_i0 = float(ne.mean())  # fond neutralisant : Poisson periodique a moyenne nulle
 
-    sim = adc.AmrSystem(n=n, L=L, B0=1.0, alpha=1.0, n_i0=n_i0, regrid_every=10,
-                        periodic=True)
-    sim.add_block("ne", model="diocotron", charge=1.0, spatial=adc.Spatial(none=True))
+    sim = adc.AmrSystem(n=n, L=L, regrid_every=10, periodic=True)
+    sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
+                  spatial=adc.Spatial(none=True))
     sim.set_refinement(threshold=n_i0 + refine_frac)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     sim.set_density("ne", ne)

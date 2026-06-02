@@ -49,7 +49,7 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
 
 | Dossier | Cas | Ce qu'il montre |
 |---|---|---|
-| [`diocotron/`](diocotron/) | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (bloc `diocotron` + paroi conductrice), figures + gif. Voir [diocotron/README.md](diocotron/README.md). `band_instability.py` : variante périodique minimale. |
+| [`diocotron/`](diocotron/) | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (briques `ExB` + `BackgroundDensity` + paroi conductrice), figures + gif. Voir [diocotron/README.md](diocotron/README.md). `band_instability.py` : variante périodique minimale. |
 | [`composition/`](composition/) | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
 | [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
@@ -62,11 +62,12 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
 - **Composition générique** (`adc.System`) : on ajoute des **blocs**, chacun avec son
   modèle, son schéma spatial (`adc.Spatial(limiter, flux)`), son traitement temporel
   (`adc.Explicit` / `adc.IMEX` / `adc.Implicit`) et son sous-cyclage ; ils partagent un
-  Poisson de système. Idéal pour coupler ions/électrons/neutres. Modèles : `diocotron`,
-  `electron_euler`, `ion_isothermal`, `euler_poisson`.
-- **Composition sur AMR** — `adc.AmrSystem` : un bloc porté sur une hiérarchie raffinée
+  Poisson de système. Idéal pour coupler ions/électrons/neutres. Un modèle est une
+  **composition de briques** `adc.Model(state, transport, source, elliptic)` ; les compositions
+  nommées (`diocotron`, `electron_euler`, ...) sont définies dans [`models.py`](models.py).
+- **Composition sur AMR** (`adc.AmrSystem`) : un bloc porté sur une hiérarchie raffinée
   (même API que `System`, plus `set_refinement`).
-- **Solveur spécialisé** — `adc.TwoFluidAP` : intégrateur asymptotic-preserving sur mesure,
+- **Solveur spécialisé** (`adc.TwoFluidAP`) : intégrateur asymptotic-preserving sur mesure,
   exposé comme façade, non composable bloc à bloc.
 
 Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
