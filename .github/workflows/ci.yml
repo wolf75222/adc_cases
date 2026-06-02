@@ -1,0 +1,68 @@
+name: CI
+
+# adc_cases est 100 % Python : il importe le module `adc` (les bindings de la lib
+# adc_cpp). La CI clone adc_cpp (depot public), construit le module, puis LANCE chaque
+# cas (un dossier par cas). Un cas qui echoue (assert) sort en erreur -> CI rouge.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cases:
+    name: ubuntu-latest / cases
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout adc_cases
+        uses: actions/checkout@v5
+
+      - name: Checkout adc_cpp (la lib)
+        uses: actions/checkout@v5
+        with:
+          repository: wolf75222/adc_cpp
+          path: adc_cpp
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the adc Python module
+        # pybind11 est tire par FetchContent si absent du systeme (cf. adc_cpp/CMakeLists).
+        # -j 2 : le module (System + facades) est leger, mais on cape par prudence.
+        run: |
+          cmake -B adc_cpp/build-py -S adc_cpp -DCMAKE_BUILD_TYPE=Release \
+                -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF
+          cmake --build adc_cpp/build-py --target _adc -j 2
+
+      - name: Install Python deps
+        run: pip install --upgrade pip numpy matplotlib
+
+      - name: Run every case
+        env:
+          PYTHONPATH: ${{ github.workspace }}/adc_cpp/build-py/python
+        run: |
+          set -e
+          for c in composition/run.py \
+                   euler_poisson/run.py \
+                   multispecies/run.py \
+                   two_fluid_ap/run.py \
+                   diocotron_amr/run.py \
+                   diocotron/band_instability.py \
+                   diocotron/run.py ; do
+            echo "::group::$c"
+            python3 "$c"
+            echo "::endgroup::"
+          done
