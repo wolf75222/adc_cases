@@ -52,3 +52,25 @@ def euler_poisson(sign=1.0, gamma=1.4, four_pi_G=1.0, rho0=1.0):
         source=adc.GravityForce(),
         elliptic=adc.GravityCoupling(sign=sign, four_pi_G=four_pi_G, rho0=rho0),
     )
+
+
+def euler(gamma=1.4):
+    """Euler compressible PUR : un gaz isole, sans source ni couplage (f = 0). Sert aux cas
+    multi-fluides NON couples (meme flux pour chaque espece, seules les CI different)."""
+    return adc.Model(
+        state=adc.FluidState(kind="compressible", gamma=gamma),
+        transport=adc.CompressibleFlux(),
+        source=adc.NoSource(),
+        elliptic=adc.ChargeDensity(charge=0.0),
+    )
+
+
+def neutral_isothermal(cs2=1.0):
+    """Gaz neutre isotherme : pas de force (charge nulle, n'entre pas dans Poisson). Sert d'espece
+    de fond reactive (ionisation, collisions) dans un plasma."""
+    return adc.Model(
+        state=adc.FluidState(kind="isothermal", cs2=cs2),
+        transport=adc.IsothermalFlux(),
+        source=adc.NoSource(),
+        elliptic=adc.ChargeDensity(charge=0.0),
+    )
