@@ -53,7 +53,7 @@ python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 | [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Solveur **spécialisé** `adc.TwoFluidAP` : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). |
-| [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Solveur **spécialisé** `adc.DiocotronAmr` : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
+| [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
 
 ## L'API en deux niveaux
 
@@ -62,8 +62,10 @@ python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
   (`adc.Explicit` / `adc.IMEX` / `adc.Implicit`) et son sous-cyclage ; ils partagent un
   Poisson de système. Idéal pour coupler ions/électrons/neutres. Modèles : `diocotron`,
   `electron_euler`, `ion_isothermal`, `euler_poisson`.
-- **Solveurs spécialisés** (`adc.TwoFluidAP`, `adc.DiocotronAmr`) : intégrateurs sur
-  mesure (AP, AMR) exposés comme façades, non composables bloc à bloc.
+- **Composition sur AMR** — `adc.AmrSystem` : un bloc porté sur une hiérarchie raffinée
+  (même API que `System`, plus `set_refinement`).
+- **Solveur spécialisé** — `adc.TwoFluidAP` : intégrateur asymptotic-preserving sur mesure,
+  exposé comme façade, non composable bloc à bloc.
 
 Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
 [adc_cpp/docs/ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
