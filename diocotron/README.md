@@ -1,4 +1,4 @@
-# Cas diocotron : reproduction de arXiv:2510.11808 (100 % Python)
+# Cas diocotron : reproduction de arXiv:2510.11808 
 
 Reproduction du benchmark **diocotron** de Hoffart, Maier, Shadid, Tomas, *Structure-preserving
 finite-element approximations of the magnetic Euler-Poisson equations*
