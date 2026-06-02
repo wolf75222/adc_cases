@@ -42,6 +42,7 @@ python3 euler_poisson/run.py      # auto-gravité vs plasma (Langmuir)
 python3 multispecies/run.py       # électrons Euler + ions isothermes, Poisson de système
 python3 two_fluid_ap/run.py       # bi-fluide raide asymptotic-preserving
 python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
+python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python, Poisson par adc
 ```
 
 ## Les cas (un dossier par cas)
@@ -54,6 +55,7 @@ python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Solveur **spécialisé** `adc.TwoFluidAP` : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). |
 | [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
+| [`custom_scheme/`](custom_scheme/) | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
 
 ## L'API en deux niveaux
 
