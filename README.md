@@ -1,78 +1,65 @@
-# adc_cases
+# adc_cases — cas d'utilisation Python de la lib `adc`
 
-Applications et cas physiques du solveur **adc**. Ce dépôt contient les modèles
-(diocotron, Euler-Poisson, two-fluid), les façades compilées (`libadc`), les
-bindings Python, les exemples, scripts et tutoriels. Le cœur générique (concepts
-`PhysicalModel`/`EllipticSolver`, coupleur, elliptique, AMR, seams CPU/OpenMP/MPI/GPU)
-vit dans le dépôt séparé [`adc_cpp`](../adc_cpp), tiré ici via FetchContent.
+Ce dépôt ne contient **que du Python** : des **cas d'utilisation** du solveur
+`adc` (advection-diffusion / couplage hyperbolique-elliptique). Toute la physique
+et tout le calcul cellule par cellule vivent dans la bibliothèque **[adc_cpp](../adc_cpp)**
+et sont exposés par son module Python `adc` (bindings pybind11). Ici, **Python ne fait
+que composer et piloter** : un dossier par cas, chacun important `adc`, écrivant ses
+conditions initiales en numpy, et lançant la simulation.
 
-## Découpage
+> **Principe** : *Python dit QUOI assembler, le C++ compilé fait le calcul.* Aucun
+> binding ni code C++ dans ce dépôt — la lib et ses bindings sont dans `adc_cpp`.
 
-| Dépôt | Rôle |
-|---|---|
-| `adc_cpp` | cœur de la bibliothèque (générique, templates, parallélisme, AMR) |
-| `adc_cases` | applications : modèles physiques, façades, exemples, Python |
+## Prérequis : construire le module `adc`
 
-```
-include/adc/model/      modeles physiques (diocotron, euler, euler_poisson, charged_fluid, ...)
-include/adc/solver/     facades PIMPL (Diocotron, EulerPoisson, TwoFluidAP, DiocotronAmr,
-                        MultiSpecies, Simulation)
-include/adc/analysis/   diagnostics applicatifs (invariants, taux de croissance, HDF5)
-include/adc/integrator/ integrateurs specifiques a un cas (magnetic_euler_poisson, two_fluid_ap)
-src/                    instanciation des facades (libadc)
-examples/               pilotes de demonstration (diocotron, AMR, MPI, multispecies)
-python/                 bindings pybind11 + demos (python/demos/) + test_bindings.py
-tests/                  tests applicatifs (modeles, facades, integration coeur+modele)
-scripts/ romeo/ tutorials/   outils, runs HPC, tutoriels
+Le module Python est compilé depuis `adc_cpp` :
+
+```bash
+cd ../adc_cpp
+cmake -B build-py -DADC_BUILD_PYTHON=ON
+cmake --build build-py --target _adc -j
 ```
 
-## Build
+Puis on met le paquet sur le `PYTHONPATH` (le dossier qui contient le paquet `adc/`) :
 
-```
-cmake -B build                          # tire adc_cpp (../adc_cpp), serie
-cmake --build build -j
-ctest --test-dir build
+```bash
+export PYTHONPATH=$PWD/build-py/python      # depuis adc_cpp
 ```
 
-Backends (propagés au cœur) : `-DADC_USE_KOKKOS=ON` (**recommandé** — CPU OpenMP + GPU),
-`-DADC_USE_MPI=ON`, `-DADC_USE_HDF5=ON` ; `-DADC_USE_OPENMP=ON` est **déprécié** (Kokkos le
-couvre). Bindings Python : `-DADC_CASES_BUILD_PYTHON=ON`. Chemin du cœur surchargeable :
-`-DADC_CPP_DIR=/chemin/vers/adc_cpp`.
+(Dépendances Python des cas : `numpy`, et `matplotlib` pour la repro diocotron.)
 
-## Multi-espèces et composition depuis Python
+## Lancer un cas
 
-Le cœur sait coupler N espèces (ions, électrons, neutres…), chacune avec son modèle, son
-schéma spatial et sa politique temporelle ; elles interagissent dans le second membre de
-Poisson (`f = Σ_s q_s n_s`) et dans la source. Deux façades exposent ça :
-
-- **`MultiSpeciesSolver`** (compilée) : système deux fluides figé (électrons Euler + ions
-  isothermes + Poisson de système).
-- **`Simulation`** (composition à l'exécution) : on assemble le système **bloc par bloc**
-  depuis Python, et pour **chaque** bloc on choisit indépendamment le modèle, la
-  reconstruction spatiale, le flux numérique, le traitement temporel et le nombre de
-  sous-pas. La physique reste en C++ compilé — aucun callback Python dans le hot path :
-  chaque bloc embarque une fermeture d'avancée compilée.
-
-```python
-import adc
-sim = adc.Simulation(adc.SimulationConfig())
-# Python dit QUOI assembler ; le C++ compilé fait le calcul.
-sim.add_block(name="electrons", model="electron_euler", charge=-1.0,
-              limiter="vanleer", flux="hllc", time="imex", substeps=10)  # raide → sous-cyclé
-sim.add_block(name="ions", model="ion_isothermal", charge=+1.0,
-              limiter="minmod", flux="rusanov", time="explicit", substeps=1)
-sim.set_density("electrons", ne); sim.set_density("ions", ni)
-sim.advance(1e-3, 100)          # masse conservée par bloc, Poisson de système Σ q_s n_s
+```bash
+cd ../adc_cases
+python3 diocotron/run.py          # reproduction du papier arXiv:2510.11808 (figures + gif)
+python3 composition/run.py        # composition hétérogène + intégrateur temporel Python
+python3 euler_poisson/run.py      # auto-gravité vs plasma (Langmuir)
+python3 multispecies/run.py       # électrons Euler + ions isothermes, Poisson de système
+python3 two_fluid_ap/run.py       # bi-fluide raide asymptotic-preserving
+python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 ```
 
-Par bloc : `model` (`"diocotron"` 1 var / `"electron_euler"` 4 var / `"ion_isothermal"`
-3 var), `limiter` (`none`/`minmod`/`vanleer`), `flux` (`rusanov` robuste / `hllc` onde de
-contact, Euler complet uniquement), `time` (`explicit`=SSPRK2 / `imex`=transport explicite
-+ source implicite), `substeps` (sous-cyclage). Le raccourci `add_species(name, model, charge)`
-équivaut bit pour bit à `add_block(..., "minmod", "rusanov", "explicit", 1)`.
+## Les cas (un dossier par cas)
 
-**Démos Python** (`python/demos/`) : un script par capacité (`composition_api` = composition
-bloc par bloc, diocotron, AMR, Euler-Poisson gravité/plasma, two-fluide AP raide/magnétisé,
-multi-espèces composé), pilotant la façade depuis Python et produisant diagnostics + sorties.
-Lancer : `python python/demos/<nom>.py` (avec le module `adc` sur le `PYTHONPATH`, cf.
-`python/README` ou le build `-DADC_CASES_BUILD_PYTHON=ON`).
+| Dossier | Cas | Ce qu'il montre |
+|---|---|---|
+| [`diocotron/`](diocotron/) | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (bloc `diocotron` + paroi conductrice), figures + gif. Voir [diocotron/README.md](diocotron/README.md). `band_instability.py` : variante périodique minimale. |
+| [`composition/`](composition/) | Composition multi-blocs | **Le cas phare** : électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
+| [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) — un seul signe de couplage les sépare ; masse et impulsion conservées. |
+| [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
+| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Solveur **spécialisé** `adc.TwoFluidAP` : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). |
+| [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Solveur **spécialisé** `adc.DiocotronAmr` : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
+
+## L'API en deux niveaux
+
+- **Composition générique** — `adc.System` : on ajoute des **blocs**, chacun avec son
+  modèle, son schéma spatial (`adc.Spatial(limiter, flux)`), son traitement temporel
+  (`adc.Explicit` / `adc.IMEX` / `adc.Implicit`) et son sous-cyclage ; ils partagent un
+  Poisson de système. Idéal pour coupler ions/électrons/neutres. Modèles : `diocotron`,
+  `electron_euler`, `ion_isothermal`, `euler_poisson`.
+- **Solveurs spécialisés** — `adc.TwoFluidAP`, `adc.DiocotronAmr` : intégrateurs sur
+  mesure (AP, AMR) exposés comme façades, non composables bloc à bloc.
+
+Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
+[adc_cpp/docs/ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
