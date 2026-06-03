@@ -57,7 +57,7 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_euler/`](two_euler/) | Deux Euler indépendants | Électrons + ions, **deux gaz d'Euler non couplés**, mêmes briques (`CompressibleFlux` + HLLC + **reconstruction primitive**) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
 | [`plasma/`](plasma/) | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g→n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
-| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Solveur **spécialisé** `adc.TwoFluidAP` : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). |
+| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). Retiré de l'API publique ; piloté via l'échappatoire interne `adc._adc._TwoFluidAP`. |
 | [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
 | [`custom_scheme/`](custom_scheme/) | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
 
@@ -71,8 +71,10 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
   nommées (`diocotron`, `electron_euler`, ...) sont définies dans [`models.py`](models.py).
 - **Composition sur AMR** (`adc.AmrSystem`) : un bloc porté sur une hiérarchie raffinée
   (même API que `System`, plus `set_refinement`).
-- **Solveur spécialisé** (`adc.TwoFluidAP`) : intégrateur asymptotic-preserving sur mesure,
-  exposé comme façade, non composable bloc à bloc.
+- **Intégrateur sur mesure** (AP deux-fluides) : schéma asymptotic-preserving non composable
+  bloc à bloc (la stabilisation AP couple la raideur au pas de temps dans l'elliptique). Ce
+  n'est **pas** un scénario de l'API publique : sa méthode reste compilée dans le module privé
+  et est pilotée via l'échappatoire interne `adc._adc._TwoFluidAP` (cf. `two_fluid_ap/`).
 
 Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
 [adc_cpp/docs/ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).

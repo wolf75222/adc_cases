@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Demo "two_fluid_ap" : modele bi-fluide isotherme en regime RAIDE (asymptotic-preserving).
 
-On pilote depuis Python la facade compilee `adc.TwoFluidAP` (toute la physique est en
-C++), un solveur SPECIALISE (integrateur sur mesure, non composable bloc-a-bloc comme
-`adc.System`). Il integre deux fluides charges (electrons + ions) couples au champ
-electrique par la contrainte de quasi-neutralite. La frequence plasma omega_pe fixe
-l'echelle de temps RAIDE du systeme : un schema explicite serait limite par
-dt * omega_pe < O(1), donc exploserait des qu'on prend un grand pas de temps.
+On pilote depuis Python l'integrateur AP-IMEX deux-fluides compile (toute la physique est
+en C++). C'est un integrateur SUR MESURE, non composable bloc-a-bloc comme `adc.System` :
+la stabilisation AP couple la raideur au pas de temps DANS l'elliptique (Poisson reformule
+lap(phi) = (ne* - ni*)/(1 + dt^2 (wpe^2 + wpi^2))), ce que la composition System ne sait
+pas reproduire. Il n'est donc PAS un scenario de l'API publique du coeur : `adc.TwoFluidAP`
+a ete retire de l'API. On pilote ici l'ECHAPPATOIRE interne `adc._adc._TwoFluidAP` (cf.
+_ap_config / _ap_solver ci-dessous) : le coeur ne nomme ainsi aucun scenario, le pilotage
+du cas reste cote application.
+
+Il integre deux fluides charges (electrons + ions) couples au champ electrique par la
+contrainte de quasi-neutralite. La frequence plasma omega_pe fixe l'echelle de temps RAIDE
+du systeme : un schema explicite serait limite par dt * omega_pe < O(1), donc exploserait
+des qu'on prend un grand pas de temps.
 
 Le solveur emploie un traitement IMEX / asymptotic-preserving (AP) : le terme raide
 est integre de maniere implicite, ce qui rend le schema STABLE et CONSISTANT meme
@@ -37,6 +44,19 @@ import numpy as np
 import adc
 
 
+# --- Echappatoire interne vers l'integrateur AP --------------------------------------------
+# La methode AP-IMEX n'est pas exposee comme scenario nomme de l'API publique (cf. docstring).
+# On la resout dans le module prive `adc._adc` sous les noms prefixes `_` (convention "prive").
+def _ap_config():
+    """Renvoie une config neuve de l'integrateur AP (echappatoire interne `_adc._TwoFluidAPConfig`)."""
+    return adc._adc._TwoFluidAPConfig()
+
+
+def _ap_solver(cfg):
+    """Instancie l'integrateur AP (echappatoire interne `_adc._TwoFluidAP`) depuis sa config."""
+    return adc._adc._TwoFluidAP(cfg)
+
+
 def _rel_err(a, b):
     """Erreur relative robuste (denominateur protege contre le zero)."""
     return abs(a - b) / max(abs(b), 1e-30)
@@ -44,12 +64,12 @@ def _rel_err(a, b):
 
 def run_stiff():
     """Run 1 : regime raide non magnetise, dt * omega_pe = 5."""
-    cfg = adc.TwoFluidAPConfig()
+    cfg = _ap_config()
     cfg.n = 64
     cfg.omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps RAIDE
     cfg.omega_pi = 20.0    # frequence plasma ionique
 
-    solver = adc.TwoFluidAP(cfg)
+    solver = _ap_solver(cfg)
 
     dt = 5.0 / 1.0e3                 # dt choisi tel que dt * omega_pe = 5
     stiffness = dt * cfg.omega_pe    # nombre de raideur (>> 1 ici)
@@ -85,12 +105,12 @@ def run_stiff():
 
 def run_magnetized():
     """Run 2 : plasma raide magnetise (rotation cyclotron active)."""
-    cfg = adc.TwoFluidAPConfig()
+    cfg = _ap_config()
     cfg.n = 64
     cfg.omega_ce = 4.0   # frequence cyclotron electronique
     cfg.omega_ci = 0.2   # frequence cyclotron ionique
 
-    solver = adc.TwoFluidAP(cfg)
+    solver = _ap_solver(cfg)
 
     dt = 0.01
     mass_e0 = solver.mass_e()
