@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Demo "two_fluid_ap" : modele bi-fluide isotherme en regime RAIDE (asymptotic-preserving).
 
-On pilote depuis Python l'integrateur AP-IMEX deux-fluides compile (toute la physique est
-en C++). C'est un integrateur SUR MESURE, non composable bloc-a-bloc comme `adc.System` :
-la stabilisation AP couple la raideur au pas de temps DANS l'elliptique (Poisson reformule
-lap(phi) = (ne* - ni*)/(1 + dt^2 (wpe^2 + wpi^2))), ce que la composition System ne sait
-pas reproduire. Il n'est donc PAS un scenario de l'API publique du coeur : `adc.TwoFluidAP`
-a ete retire de l'API. On pilote ici l'ECHAPPATOIRE interne `adc._adc._TwoFluidAP` (cf.
-_ap_config / _ap_solver ci-dessous) : le coeur ne nomme ainsi aucun scenario, le pilotage
-du cas reste cote application.
+L'integrateur AP-IMEX deux-fluides a QUITTE le coeur adc_cpp : c'est un SCENARIO sur mesure,
+pas une brique generique composable bloc-a-bloc comme `adc.System`. La stabilisation AP couple
+la raideur (frequence plasma) au pas de temps DANS l'elliptique (Poisson reformule
+lap(phi) = (ne* - ni*)/(1 + dt^2 (wpe^2 + wpi^2))), ce que la composition System ne sait pas
+reproduire. Le solveur vit donc ICI, dans adc_cases : la physique est en C++ (two_fluid_ap.hpp +
+_two_fluid_ap.cpp) et n'utilise du coeur que des BRIQUES GENERIQUES (maillage, elliptique,
+parallele) incluses depuis adc_cpp/include. Ce module .cpp est compile A LA VOLEE en une
+bibliotheque partagee et charge dans CE process via ctypes (meme principe que le JIT du DSL),
+puis pilote depuis Python : aucun binding C++ cote cas, et le coeur ne nomme aucun scenario.
 
 Il integre deux fluides charges (electrons + ions) couples au champ electrique par la
 contrainte de quasi-neutralite. La frequence plasma omega_pe fixe l'echelle de temps RAIDE
@@ -36,25 +37,150 @@ Conclusion : le schema IMEX / AP reste stable et conservatif pour un plasma raid
 magnetise ou non, la ou un schema explicite serait inutilisable.
 
 Sortie : diagnostics numeriques imprimes, puis la ligne finale "OK two_fluid_ap".
-Dependances : numpy + adc uniquement.
+Dependances : numpy + un compilateur C++20 (le solveur AP est compile a la volee).
 """
+
+import ctypes
+import os
+import shutil
+import subprocess
+import sys
 
 import numpy as np
 
-import adc
+import adc  # le coeur : on s'en sert pour localiser ses en-tetes (adc_cpp/include)
 
 
-# --- Echappatoire interne vers l'integrateur AP --------------------------------------------
-# La methode AP-IMEX n'est pas exposee comme scenario nomme de l'API publique (cf. docstring).
-# On la resout dans le module prive `adc._adc` sous les noms prefixes `_` (convention "prive").
-def _ap_config():
-    """Renvoie une config neuve de l'integrateur AP (echappatoire interne `_adc._TwoFluidAPConfig`)."""
-    return adc._adc._TwoFluidAPConfig()
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _ap_solver(cfg):
-    """Instancie l'integrateur AP (echappatoire interne `_adc._TwoFluidAP`) depuis sa config."""
-    return adc._adc._TwoFluidAP(cfg)
+# --- Localisation des en-tetes du coeur adc_cpp -------------------------------------------
+def _adc_include():
+    """Renvoie le dossier include/ d'adc_cpp (en-tetes header-only du coeur).
+
+    Priorite a $ADC_INCLUDE (override explicite) ; sinon on remonte depuis le paquet `adc`
+    installe (build-py/python/adc/ -> ../../../include) ; en dernier recours, le depot
+    voisin ../adc_cpp/include depuis adc_cases. On exige que adc/mesh/multifab.hpp existe.
+    """
+    candidates = []
+    env = os.environ.get("ADC_INCLUDE")
+    if env:
+        candidates.append(env)
+    pkg = os.path.dirname(os.path.abspath(adc.__file__))  # .../adc
+    candidates.append(os.path.normpath(os.path.join(pkg, "..", "..", "..", "include")))
+    candidates.append(os.path.normpath(os.path.join(HERE, "..", "..", "adc_cpp", "include")))
+    for c in candidates:
+        if os.path.isfile(os.path.join(c, "adc", "mesh", "multifab.hpp")):
+            return c
+    raise RuntimeError(
+        "two_fluid_ap : en-tetes adc_cpp introuvables (cherche adc/mesh/multifab.hpp). "
+        "Definir ADC_INCLUDE=<adc_cpp>/include. Candidats essayes : " + ", ".join(candidates))
+
+
+# --- Compilation a la volee du solveur AP -------------------------------------------------
+def _build_lib(include):
+    """Compile _two_fluid_ap.cpp en bibliotheque partagee et la charge (ctypes).
+
+    Recompile seulement si la .so manque ou est plus vieille que les sources (cache local).
+    """
+    cxx = (os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++")
+           or shutil.which("clang++"))
+    if not cxx:
+        print("two_fluid_ap : aucun compilateur C++ trouve (definir CXX) -> abandon")
+        sys.exit(1)
+    cpp = os.path.join(HERE, "_two_fluid_ap.cpp")
+    hpp = os.path.join(HERE, "two_fluid_ap.hpp")
+    suffix = ".dylib" if sys.platform == "darwin" else ".so"
+    lib = os.path.join(HERE, "_two_fluid_ap" + suffix)
+    stale = (not os.path.exists(lib) or
+             os.path.getmtime(lib) < max(os.path.getmtime(cpp), os.path.getmtime(hpp)))
+    if stale:
+        cmd = [cxx, "-shared", "-fPIC", "-std=c++20", "-O2", "-I", include, cpp, "-o", lib]
+        print("two_fluid_ap : compilation du solveur AP\n  " + " ".join(cmd))
+        subprocess.run(cmd, check=True)
+    return ctypes.CDLL(lib)
+
+
+def _bind(lib):
+    """Declare les signatures ctypes des fonctions extern "C" du solveur AP."""
+    dptr = ctypes.POINTER(ctypes.c_double)
+    lib.tfap_create.restype = ctypes.c_void_p
+    lib.tfap_create.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double,
+                                ctypes.c_double, ctypes.c_double, ctypes.c_int, ctypes.c_double,
+                                ctypes.c_int, ctypes.c_double, ctypes.c_double]
+    lib.tfap_destroy.restype = None
+    lib.tfap_destroy.argtypes = [ctypes.c_void_p]
+    lib.tfap_step.restype = None
+    lib.tfap_step.argtypes = [ctypes.c_void_p, ctypes.c_double]
+    lib.tfap_advance.restype = None
+    lib.tfap_advance.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int]
+    lib.tfap_nx.restype = ctypes.c_int
+    lib.tfap_nx.argtypes = [ctypes.c_void_p]
+    for name in ("tfap_mass_e", "tfap_mass_i", "tfap_max_charge", "tfap_max_dev"):
+        f = getattr(lib, name)
+        f.restype = ctypes.c_double
+        f.argtypes = [ctypes.c_void_p]
+    for name in ("tfap_density_e", "tfap_density_i"):
+        f = getattr(lib, name)
+        f.restype = None
+        f.argtypes = [ctypes.c_void_p, dptr]
+    return lib
+
+
+class TwoFluidAP:
+    """Pilote Python du solveur deux-fluides AP (C++ charge via ctypes).
+
+    Remplace l'ancien echappatoire interne `adc._adc._TwoFluidAP` (retire du coeur) :
+    meme API (step / advance / mass_e / max_charge / ...), mais le solveur vit dans adc_cases.
+    """
+
+    def __init__(self, lib, n=64, L=2.0 * np.pi, cse2=1.0, csi2=0.04, omega_pe=5.0,
+                 omega_pi=1.0, stabilize=True, eps=1e-3, upwind_continuity=False,
+                 omega_ce=0.0, omega_ci=0.0):
+        self._lib = lib
+        self._h = lib.tfap_create(n, L, cse2, csi2, omega_pe, omega_pi, int(stabilize), eps,
+                                  int(upwind_continuity), omega_ce, omega_ci)
+        if not self._h:
+            raise RuntimeError("two_fluid_ap : tfap_create a echoue")
+
+    def __del__(self):
+        h = getattr(self, "_h", None)
+        if h:
+            self._lib.tfap_destroy(h)
+            self._h = None
+
+    def step(self, dt):
+        self._lib.tfap_step(self._h, dt)
+
+    def advance(self, dt, nsteps):
+        self._lib.tfap_advance(self._h, dt, int(nsteps))
+
+    def nx(self):
+        return self._lib.tfap_nx(self._h)
+
+    def mass_e(self):
+        return self._lib.tfap_mass_e(self._h)
+
+    def mass_i(self):
+        return self._lib.tfap_mass_i(self._h)
+
+    def max_charge(self):
+        return self._lib.tfap_max_charge(self._h)
+
+    def max_dev(self):
+        return self._lib.tfap_max_dev(self._h)
+
+    def _density(self, fn):
+        n = self.nx()
+        out = np.empty(n * n, dtype=np.float64)
+        fn(self._h, out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+        return out.reshape(n, n)
+
+    def density_e(self):
+        return self._density(self._lib.tfap_density_e)
+
+    def density_i(self):
+        return self._density(self._lib.tfap_density_i)
 
 
 def _rel_err(a, b):
@@ -62,17 +188,15 @@ def _rel_err(a, b):
     return abs(a - b) / max(abs(b), 1e-30)
 
 
-def run_stiff():
+def run_stiff(lib):
     """Run 1 : regime raide non magnetise, dt * omega_pe = 5."""
-    cfg = _ap_config()
-    cfg.n = 64
-    cfg.omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps RAIDE
-    cfg.omega_pi = 20.0    # frequence plasma ionique
-
-    solver = _ap_solver(cfg)
+    omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps RAIDE
+    omega_pi = 20.0    # frequence plasma ionique
+    n = 64
+    solver = TwoFluidAP(lib, n=n, omega_pe=omega_pe, omega_pi=omega_pi)
 
     dt = 5.0 / 1.0e3                 # dt choisi tel que dt * omega_pe = 5
-    stiffness = dt * cfg.omega_pe    # nombre de raideur (>> 1 ici)
+    stiffness = dt * omega_pe        # nombre de raideur (>> 1 ici)
     mass_e0 = solver.mass_e()
 
     solver.advance(dt, 200)
@@ -83,7 +207,7 @@ def run_stiff():
     mass_rel = _rel_err(mass_e, mass_e0)
 
     print("[run 1 - raide, non magnetise]")
-    print("  n=%d  omega_pe=%.3e  omega_pi=%.3e" % (cfg.n, cfg.omega_pe, cfg.omega_pi))
+    print("  n=%d  omega_pe=%.3e  omega_pi=%.3e" % (n, omega_pe, omega_pi))
     print("  dt=%.3e  nsteps=200  dt*omega_pe=%.1f  (explicite EXPLOSERAIT)" % (dt, stiffness))
     print("  max_dev()    = %.6e   (ecart a la quasi-neutralite)" % max_dev)
     print("  max_charge() = %.6e   (charge nette locale)" % max_charge)
@@ -103,14 +227,12 @@ def run_stiff():
     return max_dev, max_charge, mass_rel
 
 
-def run_magnetized():
+def run_magnetized(lib):
     """Run 2 : plasma raide magnetise (rotation cyclotron active)."""
-    cfg = _ap_config()
-    cfg.n = 64
-    cfg.omega_ce = 4.0   # frequence cyclotron electronique
-    cfg.omega_ci = 0.2   # frequence cyclotron ionique
-
-    solver = _ap_solver(cfg)
+    omega_ce = 4.0   # frequence cyclotron electronique
+    omega_ci = 0.2   # frequence cyclotron ionique
+    n = 64
+    solver = TwoFluidAP(lib, n=n, omega_ce=omega_ce, omega_ci=omega_ci)
 
     dt = 0.01
     mass_e0 = solver.mass_e()
@@ -123,7 +245,7 @@ def run_magnetized():
     mass_rel = _rel_err(mass_e, mass_e0)
 
     print("[run 2 - raide magnetise]")
-    print("  n=%d  omega_ce=%.3e  omega_ci=%.3e" % (cfg.n, cfg.omega_ce, cfg.omega_ci))
+    print("  n=%d  omega_ce=%.3e  omega_ci=%.3e" % (n, omega_ce, omega_ci))
     print("  dt=%.3e  nsteps=100" % dt)
     print("  max_dev()    = %.6e" % max_dev)
     print("  max_charge() = %.6e" % max_charge)
@@ -140,8 +262,9 @@ def run_magnetized():
 
 def main():
     print("=== Demo two_fluid_ap : bi-fluide isotherme raide (asymptotic-preserving) ===")
-    run_stiff()
-    run_magnetized()
+    lib = _bind(_build_lib(_adc_include()))
+    run_stiff(lib)
+    run_magnetized(lib)
     print("Conclusion : schema IMEX / asymptotic-preserving stable et conservatif")
     print("pour un plasma raide, magnetise ou non (un schema explicite echouerait).")
     print("OK two_fluid_ap")

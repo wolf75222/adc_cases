@@ -1,14 +1,19 @@
 # adc_cases : cas d'utilisation Python de la lib `adc`
 
-Ce dépôt ne contient **que du Python** : des **cas d'utilisation** du solveur
-`adc` (advection-diffusion / couplage hyperbolique-elliptique). Toute la physique
-et tout le calcul cellule par cellule vivent dans la bibliothèque **[adc_cpp](../adc_cpp)**
-et sont exposés par son module Python `adc` (bindings pybind11). Ici, **Python ne fait
-que composer et piloter** : un dossier par cas, chacun important `adc`, écrivant ses
-conditions initiales en numpy, et lançant la simulation.
+Ce dépôt contient les **cas d'utilisation** du solveur `adc` (advection-diffusion /
+couplage hyperbolique-elliptique). Toute la physique générique et tout le calcul cellule
+par cellule vivent dans la bibliothèque **[adc_cpp](../adc_cpp)** et sont exposés par son
+module Python `adc` (bindings pybind11). Ici, **Python compose et pilote** : un dossier par
+cas, chacun important `adc`, écrivant ses conditions initiales en numpy, et lançant la
+simulation. La quasi-totalité des cas est donc du Python pur.
 
-> **Principe** : *Python dit QUOI assembler, le C++ compilé fait le calcul.* Aucun
-> binding ni code C++ dans ce dépôt : la lib et ses bindings sont dans `adc_cpp`.
+> **Principe** : *Python dit QUOI assembler, le C++ compilé fait le calcul.*
+
+Un cas **sur mesure** peut porter son propre C++ (un scénario qui n'est pas une brique
+générique du cœur) : il est alors compilé **à la volée** contre les en-têtes génériques
+d'`adc_cpp` et chargé dans le process (`ctypes`). C'est le cas de [`two_fluid_ap/`](two_fluid_ap/)
+(solveur asymptotic-preserving). Cela exige un compilateur C++20 ; le dossier `include/`
+d'`adc_cpp` est localisé automatiquement depuis le module `adc`, ou via `ADC_INCLUDE`.
 
 ## Prérequis : construire le module `adc`
 
@@ -30,7 +35,7 @@ Lancer les cas avec le **même interpréteur Python** que celui ayant compilé l
 (l'extension porte un suffixe ABI `cpython-3XY`). En cas de Python multiples, pinner à la
 configuration : `-DPython_EXECUTABLE=$(which python3.12)`.
 
-(Dépendances Python des cas : `numpy`, et `matplotlib` pour la repro diocotron.)
+(Dépendances des cas : `numpy`, `matplotlib` pour la repro diocotron, et un compilateur C++20 pour `two_fluid_ap` (solveur compilé à la volée).)
 
 ## Lancer un cas
 
@@ -57,7 +62,7 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
 | [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_euler/`](two_euler/) | Deux Euler indépendants | Électrons + ions, **deux gaz d'Euler non couplés**, mêmes briques (`CompressibleFlux` + HLLC + **reconstruction primitive**) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
 | [`plasma/`](plasma/) | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g→n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
-| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). Retiré de l'API publique ; piloté via l'échappatoire interne `adc._adc._TwoFluidAP`. |
+| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). **Scénario**, pas une brique générique : sa physique C++ (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) vit ici, compilée à la volée contre les en-têtes génériques d'`adc_cpp` puis pilotée depuis Python (`ctypes`). |
 | [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
 | [`custom_scheme/`](custom_scheme/) | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
 
@@ -71,10 +76,10 @@ python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python,
   nommées (`diocotron`, `electron_euler`, ...) sont définies dans [`models.py`](models.py).
 - **Composition sur AMR** (`adc.AmrSystem`) : un bloc porté sur une hiérarchie raffinée
   (même API que `System`, plus `set_refinement`).
-- **Intégrateur sur mesure** (AP deux-fluides) : schéma asymptotic-preserving non composable
+- **Scénario sur mesure** (AP deux-fluides) : schéma asymptotic-preserving non composable
   bloc à bloc (la stabilisation AP couple la raideur au pas de temps dans l'elliptique). Ce
-  n'est **pas** un scénario de l'API publique : sa méthode reste compilée dans le module privé
-  et est pilotée via l'échappatoire interne `adc._adc._TwoFluidAP` (cf. `two_fluid_ap/`).
+  n'est **pas** une brique générique du cœur : sa physique C++ vit dans `two_fluid_ap/`,
+  compilée à la volée contre les en-têtes génériques d'`adc_cpp` et chargée via `ctypes`.
 
 Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
 [adc_cpp/docs/ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
