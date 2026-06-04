@@ -21,26 +21,23 @@ import numpy as np
 
 import adc
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models  # noqa: E402  (compositions de briques nommees, cote application)
+from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+from adc_cases.common.checks import assert_finite, assert_mass_conserved  # noqa: E402
+from adc_cases.common.initial_conditions import (  # noqa: E402
+    euler_pressure, euler_pressure_blob)
 
 GAMMA = 1.4
 
 
 def blob(n, L, rho0, p0, dp):
     """Gaz au repos, surpression gaussienne centrale (detente radiale). U = (rho, 0, 0, E)."""
-    coord = (np.arange(n) + 0.5) / n * L
-    xx, yy = np.meshgrid(coord, coord, indexing="xy")
-    r2 = (xx - 0.5 * L) ** 2 + (yy - 0.5 * L) ** 2
-    U = np.zeros((4, n, n))
-    U[0] = rho0
-    p = p0 + dp * np.exp(-r2 / (0.02 * L * L))
-    U[3] = p / (GAMMA - 1.0)  # u = v = 0 : E = p/(gamma-1)
-    return U
+    return euler_pressure_blob(n, L, rho0=rho0, p0=p0, dp=dp, gamma=GAMMA)
 
 
 def pressure(U):
-    return (GAMMA - 1.0) * (U[3] - 0.5 * (U[1] ** 2 + U[2] ** 2) / U[0])
+    return euler_pressure(U, gamma=GAMMA)
 
 
 def disturbed(U, U0, thr):
@@ -70,8 +67,8 @@ def main():
 
     Ue = np.array(sim.get_state("electrons")).reshape(4, n, n)
     Ui = np.array(sim.get_state("ions")).reshape(4, n, n)
-    dme = abs(sim.mass("electrons") - me0) / abs(me0)
-    dmi = abs(sim.mass("ions") - mi0) / abs(mi0)
+    dme = assert_mass_conserved(sim.mass("electrons"), me0, tol=1e-9, label="electrons")
+    dmi = assert_mass_conserved(sim.mass("ions"), mi0, tol=1e-9, label="ions")
     pe, pi = pressure(Ue), pressure(Ui)
     fe, fi = disturbed(Ue, Ue0, 0.02), disturbed(Ui, Ui0, 0.02)
     print("  masse      : electrons drel=%.2e  ions drel=%.2e" % (dme, dmi))
@@ -79,11 +76,11 @@ def main():
           % (Ue[0].min(), Ui[0].min(), pe.min(), pi.min()))
     print("  front (frac cellules perturbees) : electrons=%.3f ions=%.3f" % (fe, fi))
 
-    assert dme < 1e-9 and dmi < 1e-9, "masse non conservee par bloc"
     assert Ue[0].min() > 0 and Ui[0].min() > 0, "densite negative"
     assert pe.min() > 0 and pi.min() > 0, "pression negative"
     assert fe > fi, "les electrons (plus legers) devraient s'etendre plus vite que les ions"
-    assert np.isfinite(Ue).all() and np.isfinite(Ui).all(), "etat non fini"
+    assert_finite(Ue, "etat electrons")
+    assert_finite(Ui, "etat ions")
     print("OK two_euler")
 
 

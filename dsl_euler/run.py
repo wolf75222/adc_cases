@@ -13,9 +13,18 @@ briques compilees ; ce cas montre le bout "declaratif" cote utilisateur.
 On verifie : masse conservee (continuite, domaine periodique), dynamique non triviale (la bulle de
 pression genere des ondes acoustiques), etat physique (rho > 0, p > 0, fini).
 """
+import os
+import sys
+
 import numpy as np
 
 from adc import dsl
+
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
+from adc_cases.common.grid import meshgrid_xy  # noqa: E402
+from adc_cases.common.initial_conditions import euler_pressure  # noqa: E402
 
 GAMMA = 1.4
 
@@ -42,8 +51,7 @@ def make_euler():
 
 
 def pressure(U):
-    rho = U[0]
-    return (GAMMA - 1.0) * (U[3] - 0.5 * (U[1] ** 2 + U[2] ** 2) / rho)
+    return euler_pressure(U, gamma=GAMMA)
 
 
 def main():
@@ -52,8 +60,7 @@ def main():
 
     n, L = 64, 1.0
     h = L / n
-    xs = (np.arange(n) + 0.5) / n
-    gx, gy = np.meshgrid(xs, xs, indexing="xy")
+    gx, gy = meshgrid_xy(n, L)
     r2 = (gx - 0.5) ** 2 + (gy - 0.5) ** 2
 
     # rho uniforme, vitesse nulle, bulle de pression au centre -> expansion acoustique
@@ -70,7 +77,7 @@ def main():
     for _ in range(steps):
         U = U + pf.cfl_dt(U, h, 0.4) * pf.residual(U, h)
 
-    drel = abs(float(U[0].sum()) - mass0) / mass0
+    drel = relative_drift(float(U[0].sum()), mass0)
     moved = float(np.max(np.abs(pressure(U) - p_init)))
 
     print("apres %d pas : drho_max=%.3f  |v|_max=%.3f"
@@ -78,7 +85,7 @@ def main():
              float(np.max(np.sqrt((U[1] / U[0]) ** 2 + (U[2] / U[0]) ** 2)))))
     print("masse : drel=%.2e   dynamique : max|dp|=%.3f" % (drel, moved))
 
-    assert np.isfinite(U).all(), "etat non fini"
+    assert_finite(U, "etat")
     assert U[0].min() > 0 and pressure(U).min() > 0, "rho ou p negatif"
     assert drel < 1e-9, "masse non conservee (drel=%.2e)" % drel
     assert moved > 1e-3, "dynamique triviale (rien ne bouge)"

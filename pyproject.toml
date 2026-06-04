@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adc_cases"
+version = "0.1.0"
+description = "Cas d'utilisation Python de la lib adc (advection-diffusion / couplage hyperbolique-elliptique)"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+# matplotlib n'est requis que par la reproduction diocotron (figures + gif).
+figures = ["matplotlib"]
+
+[tool.setuptools]
+# Seul le paquet adc_cases est distribue ; les dossiers de cas (diocotron/, plasma/, ...)
+# sont des scripts pilotes, pas des modules importables.
+packages = ["adc_cases", "adc_cases.common"]
+
+# Le module C++ `adc` (bindings pybind11 d'adc_cpp) n'est PAS une dependance pip : il est
+# construit depuis adc_cpp et fourni via le PYTHONPATH (cf. README).

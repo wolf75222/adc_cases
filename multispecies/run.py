@@ -35,9 +35,11 @@ import sys
 import numpy as np
 import adc
 
-# Les compositions de modeles nommees vivent cote application (adc_cases/models.py).
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models
+from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+from adc_cases.common.checks import (  # noqa: E402
+    assert_finite, assert_mass_conserved, assert_positive)
 
 
 def main():
@@ -115,23 +117,21 @@ def main():
     print(f"[t={sim.time():.4f}] masse ions      mass_i = {mass_i1:.12e}")
     print(f"[t={sim.time():.4f}] separation de charge max|f| = {qmax1:.6e}")
 
-    # --- Verification des invariants physiques ----------------------------------
-    drift_e = abs(mass_e1 - mass_e0)
-    drift_i = abs(mass_i1 - mass_i0)
+    # --- Verification des invariants physiques (utilitaires partages) -----------
+    # Conservation de la masse PAR ESPECE (coeur de la demo de couplage), en ABSOLU
+    # comme historiquement.
+    drift_e = assert_mass_conserved(mass_e1, mass_e0, tol=1e-9, label="electrons",
+                                    relative=False)
+    drift_i = assert_mass_conserved(mass_i1, mass_i0, tol=1e-9, label="ions",
+                                    relative=False)
     print(f"[diag] derive masse electrons |dM_e| = {drift_e:.3e}")
     print(f"[diag] derive masse ions      |dM_i| = {drift_i:.3e}")
 
-    # Conservation de la masse PAR ESPECE (coeur de la demo de couplage).
-    assert drift_e < 1e-9, f"masse electrons non conservee: {drift_e:.3e}"
-    assert drift_i < 1e-9, f"masse ions non conservee: {drift_i:.3e}"
-
-    # Densites finies (stabilite numerique).
-    assert np.all(np.isfinite(de)), "densite electrons non finie (NaN/Inf)"
-    assert np.all(np.isfinite(di)), "densite ions non finie (NaN/Inf)"
-
-    # Positivite des densites (un fluide physique reste positif).
-    assert de.min() > 0.0, f"densite electrons negative: min = {de.min():.3e}"
-    assert di.min() > 0.0, f"densite ions negative: min = {di.min():.3e}"
+    # Densites finies (stabilite numerique) et positives (fluide physique).
+    assert_finite(de, "densite electrons")
+    assert_finite(di, "densite ions")
+    assert_positive(de, "densite electrons")
+    assert_positive(di, "densite ions")
 
     print(f"[diag] n_e dans [{de.min():.6f}, {de.max():.6f}]")
     print(f"[diag] n_i dans [{di.min():.6f}, {di.max():.6f}]")

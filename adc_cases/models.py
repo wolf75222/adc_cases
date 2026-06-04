@@ -5,9 +5,8 @@ briques (ExB, CompressibleFlux, PotentialForce, ChargeDensity, BackgroundDensity
 modele est une composition `adc.Model(state, transport, source, elliptic)`.
 
 Usage (depuis un cas) :
-    import sys, os
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import models
+    import adc_cases
+    models = adc_cases.bootstrap()   # met le depot sur le chemin d'import, renvoie ce module
     sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=0.0), ...)
 """
 

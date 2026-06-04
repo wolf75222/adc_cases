@@ -43,9 +43,10 @@ import sys
 import numpy as np
 import adc
 
-# La composition de modeles nommee vit cote application (adc_cases/models.py).
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models
+from adc_cases import models  # noqa: E402  (composition nommee, cote application)
+from adc_cases.common.checks import relative_drift  # noqa: E402
 
 # Tolerances physiques.
 TOL_MASS = 1e-9   # derive relative de masse admissible
@@ -105,7 +106,7 @@ def run_case(sign, label):
         m = sim.mass("gas")
         e, px, py = energy_and_momentum(sim)
 
-        rel_mass = abs(m - mass0) / abs(mass0)
+        rel_mass = relative_drift(m, mass0)
         max_rel_mass = max(max_rel_mass, rel_mass)
         max_mom = max(max_mom, abs(px), abs(py))
 

@@ -24,8 +24,10 @@ import numpy as np
 
 import adc
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models  # noqa: E402
+from adc_cases import models  # noqa: E402  (recettes systeme nommees, cote application)
+from adc_cases.common.checks import relative_drift  # noqa: E402
 
 PI = np.pi
 
@@ -50,7 +52,7 @@ def main():
         sim.step_cfl(0.3)
 
     mi1, mg1 = sim.mass("ions"), sim.mass("neutrals")
-    drel = abs((mi1 + mg1) - (mi0 + mg0)) / abs(mi0 + mg0)
+    drel = relative_drift(mi1 + mg1, mi0 + mg0)
     dens = {s: np.array(sim.density(s)) for s in ("electrons", "ions", "neutrals")}
     finite_pos = all(np.isfinite(d).all() and float(d.min()) > 0.0 for d in dens.values())
 

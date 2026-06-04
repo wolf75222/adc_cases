@@ -22,10 +22,11 @@ import numpy as np
 
 import adc
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models
-
-PI = np.pi
+from adc_cases import models  # noqa: E402
+from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
+from adc_cases.common.initial_conditions import band_density  # noqa: E402
 
 
 def drift(phi, dx, B0):
@@ -65,10 +66,8 @@ def rhs(sim, n, dx, B0):
 def main():
     nx, L, B0 = 96, 1.0, 1.0
     dx = L / nx
-    coord = (np.arange(nx) + 0.5) / nx * L
-    xx, yy = np.meshgrid(coord, coord, indexing="xy")
-    y0 = 0.5 * L + 0.02 * np.cos(2 * PI * 4 * xx / L)
-    n = 1.0 + np.exp(-((yy - y0) ** 2) / 0.05 ** 2)
+    # CI en bande gaussienne perturbee (mode 4) : meme profil que le cas diocotron.
+    n = band_density(nx, L, amp=1.0, width=0.05, mode=4, disp=0.02)
     n_i0 = float(n.mean())  # fond neutralisant : Poisson periodique a moyenne nulle
 
     # adc.System sert UNIQUEMENT d'oracle de Poisson (un bloc diocotron, alpha (n - n_i0)).
@@ -90,10 +89,10 @@ def main():
         n1 = n + dt * r1                      # etage 1
         r2, _ = rhs(sim, n1, dx, B0)
         n = 0.5 * n + 0.5 * (n1 + dt * r2)    # SSPRK2, ecrit en Python
-        assert np.isfinite(n).all(), "densite non finie au pas %d" % step
+        assert_finite(n, "densite au pas %d" % step)
 
     mass1 = float(n.sum()) * dx * dx
-    drel = abs(mass1 - mass0) / abs(mass0)
+    drel = relative_drift(mass1, mass0)
     moved = float(np.abs(n - n0).max())
     print("  derive de masse relative = %.3e  (flux upwind conservatif)" % drel)
     print("  evolution max|dn|        = %.3e  (dynamique non triviale)" % moved)

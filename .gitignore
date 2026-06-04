@@ -2,8 +2,11 @@ build*/
 _deps/
 *.o
 *.so
+*.dylib
 __pycache__/
 *.pyc
+*.egg-info/
+.eggs/
 out/
 *.csv
 *.png

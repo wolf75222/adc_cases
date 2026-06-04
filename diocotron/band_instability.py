@@ -52,8 +52,11 @@ import numpy as np
 
 import adc
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models
+from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+from adc_cases.common.checks import relative_drift  # noqa: E402
+from adc_cases.common.initial_conditions import band_density  # noqa: E402
 
 
 def perturbation_amplitude(density):
@@ -68,27 +71,11 @@ def perturbation_amplitude(density):
     return float(np.sqrt(np.mean(delta * delta)))
 
 
-def band_initial_condition(n, L, band_amp=1.0, band_width=0.05, band_mode=2,
-                           band_disp=0.02):
-    """Bande horizontale de charge perturbee, en disposition row-major [j, i].
-
-    Convention de grille du systeme : rho[j, i] est la cellule de centre
-    x = (i + 0.5) / n * L (colonne, axis=1) et y = (j + 0.5) / n * L (ligne,
-    axis=0). On construit donc X et Y avec indexing="xy" pour que X[j, i] = x_i
-    et Y[j, i] = y_j.
-    """
-    coord = (np.arange(n) + 0.5) / n * L
-    X, Y = np.meshgrid(coord, coord, indexing="xy")  # X[j,i]=x_i, Y[j,i]=y_j
-    y0 = 0.5 * L + band_disp * np.cos(2.0 * np.pi * band_mode * X / L)
-    ne = 1.0 + band_amp * np.exp(-((Y - y0) ** 2) / (band_width ** 2))
-    return np.ascontiguousarray(ne)
-
-
 def main():
-    # --- Condition initiale en bande, grille 96 x 96 ---
+    # --- Condition initiale en bande, grille 96 x 96 (CI partagee, mode 2) ---
     n = 96
     L = 1.0
-    ne0 = band_initial_condition(n, L)
+    ne0 = band_density(n, L, amp=1.0, width=0.05, mode=2, disp=0.02)
 
     # Fond ionique neutralisant : moyenne de la densite initiale. Indispensable
     # pour la solubilite de Poisson sur un domaine periodique (RHS a moyenne nulle).
@@ -128,7 +115,7 @@ def main():
 
         # Invariant physique : la masse totale est conservee (transport advectif).
         mass = sim.mass("ne")
-        rel_mass = abs(mass - mass0) / abs(mass0)
+        rel_mass = relative_drift(mass, mass0)
         assert rel_mass < rel_mass_tol, (
             f"masse non conservee au pas {step} : ecart relatif {rel_mass:.3e}"
         )

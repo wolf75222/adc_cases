@@ -35,7 +35,47 @@ Lancer les cas avec le **même interpréteur Python** que celui ayant compilé l
 (l'extension porte un suffixe ABI `cpython-3XY`). En cas de Python multiples, pinner à la
 configuration : `-DPython_EXECUTABLE=$(which python3.12)`.
 
-(Dépendances des cas : `numpy`, `matplotlib` pour la repro diocotron, et un compilateur C++20 pour `two_fluid_ap` (solveur compilé à la volée).)
+## Le paquet `adc_cases`
+
+Ce dépôt est lui-même un **paquet Python importable** `adc_cases` qui centralise ce qui est
+commun aux cas (modèles nommés, conditions initiales, grilles, invariants, sorties) :
+
+| Module | Contenu |
+|---|---|
+| `adc_cases.models` | modèles nommés = compositions de briques `adc` (electron_euler, ion_isothermal, diocotron, euler_poisson, recettes `two_fluid` / `plasma`). |
+| `adc_cases.common.grid` | grilles à centres de cellules (`meshgrid_xy`), convention `field[j, i]` de la façade `adc`. |
+| `adc_cases.common.initial_conditions` | CI réutilisées : bande gaussienne (`band_density`), anneau (`ring_density`), bulle de pression Euler (`euler_pressure_blob`). |
+| `adc_cases.common.checks` | invariants vérifiés par plusieurs cas (`assert_mass_conserved`, `assert_finite`, `assert_positive`, `relative_drift`). |
+| `adc_cases.common.io` | répertoire de sortie `out/` (hors source, ignoré par git). |
+
+Installer le paquet en **editable** une fois (les cas font alors `import adc_cases` sans toucher
+à `sys.path`) :
+
+```bash
+cd adc_cases
+pip install -e .                 # numpy tiré automatiquement
+pip install -e '.[figures]'      # + matplotlib (repro diocotron)
+```
+
+Sans installation, chaque cas reste lançable directement (`python3 diocotron/run.py`) : un
+court préambule met la racine du dépôt sur le chemin d'import.
+
+(Dépendances des cas : `numpy` ; `matplotlib` pour la repro diocotron ; un compilateur C++20
+pour `two_fluid_ap` (solveur compilé à la volée).)
+
+## Sorties
+
+Les cas qui produisent des fichiers (figures, gif) écrivent sous **`out/<cas>/`** à la racine du
+dépôt, **pas** dans leur dossier source. `out/` est ignoré par git. On peut surcharger la racine
+via `ADC_CASES_OUT=<chemin>`.
+
+## Manifeste des cas et CI
+
+[`cases_manifest.toml`](cases_manifest.toml) classe chaque cas par **catégorie** (`validation`,
+`tutoriel`, `reproduction`, `experimental`) et indique s'il tourne en **CI** (`ci = true`). La
+CI ne lance **que les cas légers** (`ci = true`) ; les cas longs (reproduction `diocotron/run.py`
+avec figures/gif) et expérimentaux (`dsl_euler`, DSL interprété) restent **hors CI** et se
+lancent à la main.
 
 ## Lancer un cas
 
@@ -50,6 +90,7 @@ python3 plasma/run.py             # électrons + ions + neutres : Poisson + ioni
 python3 two_fluid_ap/run.py       # bi-fluide raide asymptotic-preserving
 python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python, Poisson par adc
+python3 dsl_euler/run.py          # Euler écrit en formules (mini-DSL adc.dsl, expérimental)
 ```
 
 ## Les cas (un dossier par cas)

@@ -1,8 +1,11 @@
 name: CI
 
-# adc_cases est 100 % Python : il importe le module `adc` (les bindings de la lib
-# adc_cpp). La CI clone adc_cpp (depot public), construit le module, puis LANCE chaque
-# cas (un dossier par cas). Un cas qui echoue (assert) sort en erreur -> CI rouge.
+# adc_cases est 100 % Python : il importe le module `adc` (les bindings de la lib adc_cpp).
+# La CI clone adc_cpp (depot public), construit le module, installe le paquet adc_cases en
+# editable, puis lance UNIQUEMENT les cas legers du manifeste (cases_manifest.toml, champ
+# ci = true). Les cas longs (reproduction figures/gif) et experimentaux (DSL interprete)
+# restent HORS CI et se lancent a la main (cf. README). Un cas qui echoue (assert) sort en
+# erreur -> CI rouge.
 
 on:
   push:
@@ -22,7 +25,7 @@ concurrency:
 
 jobs:
   cases:
-    name: ubuntu-latest / cases
+    name: ubuntu-latest / cases (legers)
     runs-on: ubuntu-latest
 
     steps:
@@ -47,22 +50,31 @@ jobs:
                 -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF
           cmake --build adc_cpp/build-py --target _adc -j 2
 
-      - name: Install Python deps
-        run: pip install --upgrade pip numpy matplotlib
+      - name: Install adc_cases + deps
+        # Le paquet adc_cases est installe en editable : les cas font `import adc_cases`
+        # sans manipuler sys.path. numpy est tire par la dependance du paquet.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
 
-      - name: Run every case
+      - name: Run light cases (manifest ci = true)
+        # On lit le manifeste et on lance les cas legers UNIQUEMENT. Le module `adc` (binding
+        # C++) est fourni par le PYTHONPATH du build adc_cpp.
         env:
           PYTHONPATH: ${{ github.workspace }}/adc_cpp/build-py/python
         run: |
           set -e
-          for c in composition/run.py \
-                   euler_poisson/run.py \
-                   multispecies/run.py \
-                   two_fluid_ap/run.py \
-                   diocotron_amr/run.py \
-                   diocotron/band_instability.py \
-                   diocotron/run.py ; do
+          python - <<'PY' > ci_cases.txt
+          import tomllib
+          with open("cases_manifest.toml", "rb") as f:
+              man = tomllib.load(f)
+          for c in man["case"]:
+              if c.get("ci"):
+                  print(c["path"])
+          PY
+          while read -r c; do
+            [ -z "$c" ] && continue
             echo "::group::$c"
             python3 "$c"
             echo "::endgroup::"
-          done
+          done < ci_cases.txt

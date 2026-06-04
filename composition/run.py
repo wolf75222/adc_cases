@@ -71,17 +71,17 @@ import sys
 import numpy as np
 import adc
 
-# Les modeles nommes (compositions de briques) vivent cote application, dans models.py.
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models  # noqa: E402
+from adc_cases import models  # noqa: E402  (compositions de briques, cote application)
+from adc_cases.common.grid import meshgrid_xy  # noqa: E402
 
 
 MASS_TOL = 1e-10
 
 
 def _meshgrid_centres(n, L):
-    coord = (np.arange(n) + 0.5) / n * L
-    return np.meshgrid(coord, coord, indexing="xy")
+    return meshgrid_xy(n, L)
 
 
 def partie_A():

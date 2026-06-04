@@ -1,0 +1,94 @@
+# Manifeste des cas adc_cases
+# ===========================
+# Classe chaque cas par CATEGORIE et indique s'il tourne en CI. La CI (.github/workflows/ci.yml)
+# lit l'esprit de ce manifeste : elle ne lance QUE les cas legers marques `ci = true`. Les cas
+# longs (reproduction figures, gif) ou couteux restent hors CI et se lancent a la main.
+#
+# Categories :
+#   validation  : test numerique leger qui verifie des invariants par assert (coeur de la CI) ;
+#   tutoriel    : exemple pedagogique d'une capacite de l'API (lisible, leger) ;
+#   reproduction: reproduction d'un resultat publie, peut etre LONG (figures, gif) -> hors CI ;
+#   experimental: prototype / chemin non finalise (DSL interprete) -> hors CI par prudence.
+#
+# Champs :
+#   path     : script a lancer (relatif a la racine du depot) ;
+#   category : une des categories ci-dessus ;
+#   ci       : true => lance en CI ; false => hors CI (long ou experimental) ;
+#   needs    : dependances particulieres ("matplotlib", "cxx" pour un compilateur C++20).
+
+[[case]]
+path = "composition/run.py"
+category = "tutoriel"
+ci = true
+needs = []
+desc = "Composition multi-blocs heterogene + integrateur temporel ecrit en Python."
+
+[[case]]
+path = "euler_poisson/run.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Euler couple a Poisson : auto-gravite (attractif) vs plasma (repulsif)."
+
+[[case]]
+path = "multispecies/run.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Electrons Euler + ions isothermes couples par un Poisson de systeme."
+
+[[case]]
+path = "two_euler/run.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Deux gaz d'Euler independants, meme schema (HLLC + recon primitive), multirate."
+
+[[case]]
+path = "plasma/run.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Trois especes (e + i + n) : Poisson + ionisation + collision."
+
+[[case]]
+path = "diocotron_amr/run.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Instabilite diocotron sur AMR multi-patch (adc.AmrSystem, reflux conservatif)."
+
+[[case]]
+path = "custom_scheme/run.py"
+category = "tutoriel"
+ci = true
+needs = []
+desc = "Schema spatial + temporel ecrit en Python ; adc ne sert que d'oracle de Poisson."
+
+[[case]]
+path = "diocotron/band_instability.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Variante diocotron periodique minimale (croissance de l'instabilite, sans figures)."
+
+[[case]]
+path = "two_fluid_ap/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Bi-fluide raide asymptotic-preserving ; solveur C++ compile a la volee (ctypes)."
+
+[[case]]
+path = "dsl_euler/run.py"
+category = "experimental"
+ci = false
+needs = []
+desc = "Euler ecrit en formules (mini-DSL adc.dsl, interprete CPU) ; prototype declaratif."
+
+[[case]]
+path = "diocotron/run.py"
+category = "reproduction"
+ci = false
+needs = ["matplotlib"]
+desc = "Reproduction arXiv:2510.11808 (taux de croissance + figures + gif) : LONG, hors CI."

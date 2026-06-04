@@ -32,8 +32,11 @@ import numpy as np
 
 import adc  # notre solveur (facade compilee)
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models  # compositions de briques nommees (cote application)
+from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+from adc_cases.common.initial_conditions import ring_density as _ring_density  # noqa: E402
+from adc_cases.common.io import case_output_dir  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Geometrie de l'anneau (cibles analytiques du papier reproduites a cette geometrie).
@@ -44,7 +47,6 @@ RHOBAR = 1.0                       # densite moyenne de l'anneau (convention pap
 WIDTH = 0.05                       # lissage du profil radial (eigenvalue)
 MODES = [3, 4, 5]                  # modes du papier
 PAPER = {3: 0.772, 4: 0.911, 5: 0.683}   # cibles analytiques (Section 5.3)
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
 
 
 # ===========================================================================
@@ -141,17 +143,12 @@ def fit_linear_phase(t, a):
 
 
 def ring_density(n, l, delta):
-    """CI anneau (mode l) ecrite EN PYTHON/numpy : ~1 entre R0 et R1, ~0 ailleurs,
-    avec une perturbation azimutale sin(l*theta). C'est l'unique endroit ou la CI
-    est definie, plus aucune fonction C++ par cas."""
-    coord = (np.arange(n) + 0.5) / n * L
-    xx, yy = np.meshgrid(coord, coord, indexing="xy")
-    r = np.hypot(xx - 0.5 * L, yy - 0.5 * L)
-    th = np.arctan2(yy - 0.5 * L, xx - 0.5 * L)
-    ne = np.full((n, n), 1e-3)
-    ring = (r > R0) & (r < R1)
-    ne[ring] = 1.0 - delta + delta * np.sin(l * th[ring])
-    return ne
+    """CI anneau (mode l) : ~1 entre R0 et R1, ~0 ailleurs, perturbation azimutale sin(l theta).
+
+    Delegue a `adc_cases.common.initial_conditions.ring_density` (CI partagee) ; c'est l'unique
+    endroit ou la CI est posee, plus aucune fonction C++ par cas.
+    """
+    return _ring_density(n, L=L, r0=R0, r1=R1, mode=l, delta=delta, floor=1e-3)
 
 
 def make_ring_system(n, l, delta):
@@ -204,7 +201,7 @@ def run_evolution(l=4, n=192, delta=0.1, cfl=0.4, nframes=60, steps_per_frame=12
 
 
 def main():
-    os.makedirs(OUT, exist_ok=True)
+    out = case_output_dir("diocotron")  # sorties sous <depot>/out/diocotron (gitignore)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -243,7 +240,7 @@ def main():
     ax.set_xlabel("mode azimutal $l$"); ax.set_ylabel(r"taux de croissance $\gamma$ (norm. $\omega_D$)")
     ax.set_title("Instabilite diocotron : taux de croissance\n(reproduction arXiv:2510.11808 avec adc)")
     ax.grid(alpha=0.3); ax.legend(fontsize=8)
-    fig.tight_layout(); fig.savefig(os.path.join(OUT, "dispersion.png"), dpi=130)
+    fig.tight_layout(); fig.savefig(os.path.join(out, "dispersion.png"), dpi=130)
     plt.close(fig)
 
     # --- figure amplitude(t) log ---
@@ -254,7 +251,7 @@ def main():
     ax.set_xlabel("temps"); ax.set_ylabel(r"amplitude du mode $|c_l|$ (de $\phi$)")
     ax.set_title("Croissance exponentielle du mode azimutal (phase lineaire)")
     ax.grid(alpha=0.3, which="both"); ax.legend(fontsize=8)
-    fig.tight_layout(); fig.savefig(os.path.join(OUT, "amplitude.png"), dpi=130)
+    fig.tight_layout(); fig.savefig(os.path.join(out, "amplitude.png"), dpi=130)
     plt.close(fig)
 
     # --- (3) evolution -> gif + snapshots ---
@@ -273,7 +270,7 @@ def main():
             return (im,)
 
         anim = animation.FuncAnimation(fig, update, frames=len(frames), interval=80, blit=False)
-        anim.save(os.path.join(OUT, "diocotron.gif"), writer=animation.PillowWriter(fps=12))
+        anim.save(os.path.join(out, "diocotron.gif"), writer=animation.PillowWriter(fps=12))
         plt.close(fig)
 
         idx = [0, len(frames) // 3, 2 * len(frames) // 3, len(frames) - 1]
@@ -283,11 +280,11 @@ def main():
                       extent=[0, L, 0, L])
             ax.set_title(f"t = {times[k]:.2f}"); ax.set_xticks([]); ax.set_yticks([])
         fig.suptitle("Instabilite diocotron mode l=4 : densite (adc, reproduction arXiv:2510.11808)")
-        fig.tight_layout(); fig.savefig(os.path.join(OUT, "snapshots.png"), dpi=130)
+        fig.tight_layout(); fig.savefig(os.path.join(out, "snapshots.png"), dpi=130)
         plt.close(fig)
         print(f"   {len(frames)} frames, t_final = {times[-1]:.2f}")
 
-    print(f"\nFigures + gif ecrits dans : {OUT}")
+    print(f"\nFigures + gif ecrits dans : {out}")
     print("OK repro_paper_2510_11808")
 
 

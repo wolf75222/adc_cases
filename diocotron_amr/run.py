@@ -24,24 +24,19 @@ import numpy as np
 
 import adc
 
+# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import models
+from adc_cases import models  # noqa: E402
+from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
+from adc_cases.common.initial_conditions import band_density  # noqa: E402
 
 PI = np.pi
-
-
-def band_density(n, L, amp, width, mode, disp):
-    """CI en bande : un ruban gaussien horizontal perturbe en x (mode azimutal `mode`)."""
-    coord = (np.arange(n) + 0.5) / n * L
-    xx, yy = np.meshgrid(coord, coord, indexing="xy")
-    y0 = 0.5 * L + disp * np.cos(2 * PI * mode * xx / L)
-    return 1.0 + amp * np.exp(-((yy - y0) ** 2) / (width ** 2))
 
 
 def main():
     n, L = 64, 1.0
     amp, width, mode, disp, refine_frac = 1.0, 0.05, 4, 0.02, 0.15
-    ne = band_density(n, L, amp, width, mode, disp)
+    ne = band_density(n, L, amp=amp, width=width, mode=mode, disp=disp)
     n_i0 = float(ne.mean())  # fond neutralisant : Poisson periodique a moyenne nulle
 
     sim = adc.AmrSystem(n=n, L=L, regrid_every=10, periodic=True)
@@ -64,18 +59,18 @@ def main():
         sim.step_cfl(0.4)
         mass = sim.mass()
         npatch = sim.n_patches()
-        drel = abs(mass - mass0) / abs(mass0)
+        drel = relative_drift(mass, mass0)
         patches_seen.add(npatch)
         assert npatch >= 1, "AMR inactif (n_patches() < 1)"
         assert drel < tol_mass, "masse non conservee au pas %d : drel=%.3e" % (k, drel)
-        assert np.isfinite(sim.density()).all(), "densite non finie au pas %d" % k
+        assert_finite(sim.density(), "densite au pas %d" % k)
         if k % 10 == 0 or k == 39:
             print("  %-5d %-8.4f %-8d %-13.8e %-11.3e" % (k, sim.time(), npatch, mass, drel))
 
     dens = sim.density()
     print("# patchs observes : %s" % sorted(patches_seen))
     print("# masse : init=%.12e final=%.12e drel=%.3e"
-          % (mass0, sim.mass(), abs(sim.mass() - mass0) / abs(mass0)))
+          % (mass0, sim.mass(), relative_drift(sim.mass(), mass0)))
     print("# densite : min=%.6e max=%.6e" % (float(dens.min()), float(dens.max())))
     assert min(patches_seen) >= 1, "AMR n'a jamais ete actif"
     print("OK diocotron_amr")
