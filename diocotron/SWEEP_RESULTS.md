@@ -1,4 +1,4 @@
-# Balayage diocotron : ordre x resolution x mode (mesure PR-0)
+# Balayage diocotron : ordre x resolution x mode (mesure, O1/O2 + haut ordre O5)
 
 Quantification de l'ecart de taux de croissance diocotron (numerique `adc` vs cible analytique
 de Petri) en fonction de la **resolution** et de l'**ordre de reconstruction**, pour decider la
@@ -6,6 +6,11 @@ PR-A "transport-wall". Aucune physique modifiee : ce balayage REUTILISE tel quel
 [`run.py`](run.py) (CI anneau partagee, FFT azimutale du mode `l` de `phi`, ajustement de la
 phase lineaire `exp(gamma t)`, normalisation par `omega_D`, cible analytique de Petri en numpy).
 Script : [`sweep.py`](sweep.py). Donnees brutes : `out/diocotron/sweep_results.csv`.
+
+Cette version etend PR-0 (qui balayait {O1, O2-minmod, O2-vanleer}) avec l'axe **haut ordre O5 =
+WENO5-Z + SSPRK3**, desormais atteignable depuis Python (adc_cpp #88, master `ca803dc`). Le but de
+l'axe O5 est d'ECLAIRER la question laissee ouverte par PR-0 : le residu l-dependant a O2 est-il de
+la diffusion (refermable par l'ordre) ou un verrou structurel du bord d'anneau cartesien ?
 
 ## Protocole
 
@@ -23,31 +28,31 @@ Script : [`sweep.py`](sweep.py). Donnees brutes : `out/diocotron/sweep_results.c
   n=192** (l=3 -22 %, l=4 -27 %, l=5 -5 %), ce qui ANCRE la mesure. C'est un reglage de boucle,
   pas un nouvel observable.
 
-## Axe ordre : ce qui est REELLEMENT atteignable depuis Python
+## Axe ordre : ce qui est atteignable depuis Python
 
-L'axe ordre vise par le cahier des charges etait {O2, **O5 WENO5-Z**}. Verification faite sur le
-solveur (master `adc_cpp` 30f6dfd) : **WENO5-Z n'est PAS atteignable depuis Python** par le
-chemin du cas diocotron.
+L'axe ordre vise par le cahier des charges etait {O2, **O5 WENO5-Z**}. Au moment de PR-0 (master
+`adc_cpp` 30f6dfd) WENO5-Z et SSPRK3 n'etaient PAS atteignables depuis le chemin du cas diocotron.
+**Depuis adc_cpp #88 (master `ca803dc`), ils le sont** par le chemin natif `add_block` :
 
-- `adc.System.add_block` route le limiteur vers la dispatch runtime `make_block`
-  (`include/adc/runtime/block_builder.hpp`), qui n'instancie QUE `NoSlope` (ordre 1), `Minmod`
-  (ordre 2 TVD) et `VanLeer` (ordre 2) pour le flux Rusanov. La politique `Weno5` (ordre 5,
-  `weno5z`) existe bien dans le coeur (`numerics/reconstruction.hpp`, `numerics/spatial_operator.hpp`)
-  mais **aucun `build_block<Weno5, ...>` n'est instancie** : aucune chaine `"weno5"` n'est acceptee.
-- Les chemins `add_dynamic_block` et `add_compiled_block` (DSL) plafonnent aussi a l'ordre 2
-  (`recon_id` 0/1/2 = none/minmod/vanleer ; le compiled block delegue a `make_block`).
-- `adc.Explicit` est SSPRK2 (ordre 2 en temps) ; seul `substeps` est reglable, pas SSPRK3.
+- `adc.Spatial(limiter="weno5", flux="rusanov")` : reconstruction WENO5-Z (ordre 5 en zone lisse,
+  stencil 5 points, 3 ghosts) ; `make_block` instancie maintenant la politique `Weno5`. Seul le
+  chemin natif `add_block` l'expose (les chemins .so AOT/JIT allouent 2 ghosts et la rejettent).
+- `adc.Explicit(method="ssprk3")` : integrateur SSPRK3 (Shu-Osher 3 etages, ordre 3). On l'apparie
+  a WENO5-Z car appairer un ordre eleve en espace a SSPRK2 (ordre 2 en temps) briderait l'ordre
+  effectif. La cle d'ordre `weno5` du balayage aiguille donc les DEUX briques (cf. `sweep.py`
+  `make_system` : `limiter == "weno5"` selectionne `Explicit(method="ssprk3")`).
 
-Verification empirique : `add_block(spatial=adc.Spatial(limiter="weno5"))` leve
-`System : limiter inconnu 'weno5'`. La doc roadmap (`docs/PAPER_ROADMAP.md` panier 1, "adc.Spatial
-expose deja WENO5-Z") **anticipe** ce cablage ; il n'est pas present sur master. Cabler `Weno5`
-(et SSPRK3) dans `make_block` est du code COEUR, hors perimetre de cette PR mesure.
+Verification empirique (master `ca803dc`) : `add_block(spatial=adc.Spatial(limiter="weno5"),
+time=adc.Explicit(method="ssprk3"))` se compose et avance sans NaN (la chaine `"weno5"`, qui levait
+`System : limiter inconnu 'weno5'` sur 30f6dfd, est maintenant acceptee). Les ordres O1/O2 gardent
+l'integrateur historique SSPRK2 (`adc.Explicit()` par defaut) : leurs lignes ci-dessous reproduisent
+exactement PR-0 (meme observable, meme calage `t_end=48`).
 
-**Axe ordre effectivement balaye** : `{O1 none, O2 minmod, O2 vanleer}`. C'est suffisant pour
-isoler diffusion-vs-structurel : la diffusion numerique decroit (a) en montant la resolution et
-(b) en montant l'ordre / en baissant la dissipation du limiteur (none -> minmod -> vanleer, du
-plus diffusif au moins diffusif a ordre 2). Un point O5 reste a obtenir apres cablage coeur
-(suivi ROMEO, ci-dessous).
+**Axe ordre effectivement balaye** : `{O1 none, O2 minmod, O2 vanleer, O5 weno5}`. La diffusion
+numerique decroit (a) en montant la resolution et (b) en montant l'ordre / en baissant la
+dissipation (none -> minmod -> vanleer, puis WENO5-Z + SSPRK3 a l'ordre 5). L'axe O5 est ce qui
+permet d'eclairer la question diffusion-vs-structurel : a l'ordre 5 la diffusion residuelle est
+fortement bornee, donc ce qui RESTE a O5 est le candidat le plus credible au plancher structurel.
 
 ## Resultats : gamma_num (%err vs analytique), `t_end = 48`
 
@@ -64,9 +69,38 @@ plus diffusif au moins diffusif a ordre 2). Un point O5 reste a obtenir apres ca
 | 192 | O2 vanleer   | 0.658 (-14.8 %) | 0.752 (-17.5 %) | 0.714 (+3.9 %) |
 | 256 | O2 vanleer   | 0.684 (-11.4 %) | 0.862 (-5.5 %) | 0.744 (+8.3 %) |
 | 384 | O2 vanleer   | 0.702 (-9.1 %) | 0.825 (-9.5 %) | 0.710 (+3.3 %) |
+| 128 | O5 weno5     | 0.659 (-14.6 %) | 0.874 (-4.2 %)  | 0.735 (+6.9 %) |
+| 192 | O5 weno5     | 0.677 (-12.4 %) | 0.768 (-15.8 %) | 0.700 (+1.8 %) |
+| 256 | O5 weno5     | 0.692 (-10.3 %) | 0.875 (-4.1 %)  | 0.719 (+4.7 %) |
 
-(n=192 O2 minmod = ligne d'ancrage, reproduit le README. n=384 = sonde au-dela de la grille
-principale, 1 run ~ 143 s ; voir "lance vs saute".)
+(n=192 O2 minmod = ligne d'ancrage, reproduit le README. Les lignes O1/O2 sont rejouees ici et
+reproduisent PR-0 a l'identique. O5 = WENO5-Z + SSPRK3, lance en local n=128/192/256 ; n=384 O5
+saute, cf. "lance vs saute". n=384 O2 = sonde au-dela de la grille principale, 1 run ~ 143 s.)
+
+### Tracabilite : fenetre de fit des trois points O5 l=4
+
+Le CSV (`out/diocotron/sweep_results.csv`) ecrit pour CHAQUE ligne les bornes de la fenetre de
+`fit_linear_phase` : indices `fit_i0..fit_i1` et temps `fit_t0..fit_t1`. Voici ces bornes pour les
+trois points O5 l=4 (re-lances en local avec le logging de fenetre, master `adc_cpp` 28198b4) :
+
+| n | gamma_num | %err | fenetre i0..i1 | fenetre t0..t1 |
+|---|---|---|---|---|
+| 128 | 0.8736 | -4.2 % | 269..528 | 20.8..41.1 |
+| 192 | 0.7675 | -15.8 % | 108..703 | **5.4**..35.1 |
+| 256 | 0.8745 | -4.1 % | 357..1095 | 13.3..40.8 |
+
+La ligne n=192 est directement verifiable : sa fenetre s'OUVRE a t0 = 5.4 (contre 20.8 a n=128 et
+13.3 a n=256), donc bien avant la phase exponentielle propre. C'est cette ouverture precoce qui
+sous-lit la pente sur ce seul run.
+
+**Note de lecture sur le point n=192 O5 l=4 (-15.8 %).** C'est un ARTEFACT de la fenetre
+d'ajustement, pas une regression physique. La fenetre lineaire de `fit_linear_phase` s'ouvre a
+t=5.4 sur ce run (contre t=20.8 a n=128 et t=13.3 a n=256), donc elle capte une transitoire
+pre-asymptotique et sous-lit la pente. Les deux points O5 l=4 dont la fenetre s'ouvre sur la phase
+exponentielle propre (n=128 et n=256) donnent un gamma coherent ~0.874 (soit -4.1 / -4.2 %). C'est
+cette valeur ~ -4 % qui est representative de l=4 a l'ordre 5 sur ces deux points propres ; le
+-15.8 % de n=192 est du bruit d'ajustement sur ce seul run. (Meme diagnostic de fenetre que la
+sur-lecture deja signalee a `nsteps` fixe dans le protocole.)
 
 ## Lecture diffusion-vs-structurel, par mode
 
@@ -74,54 +108,75 @@ Methode : pour un ordre donne, si l'`|%err|` **decroit nettement** avec `n` (et 
 la part diffuse est dominante ; s'il **plafonne** en resolution, le residu est structurel (bord
 d'anneau cartesien advecte sur grille pleine, cf. `docs/PAPER_ROADMAP.md`).
 
-- **l = 3 : part MAJORITAIREMENT diffuse.** L'`|%err|` se referme de facon monotone avec la
-  resolution ET avec l'ordre. minmod : -34 % -> -22 % -> -17 % -> -12 % (128->384) ; vanleer,
-  moins dissipatif a meme ordre : -21 % -> -15 % -> -11 % -> -9 %. La courbe ne plafonne pas
-  encore a n=384 : l'essentiel de l'ecart est de la diffusion numerique, le plancher structurel
-  eventuel est < 10 % et non encore atteint en local.
-- **l = 4 : part diffuse forte A BASSE resolution, mais PLATEAU structurel a haute resolution.**
-  C'est le mode le plus diffuse au depart (O1 n=128 quasi nul, 0.005). La resolution + l'ordre
-  referment beaucoup (minmod -33 % -> -27 % -> -12 % de 128 a 256), MAIS de n=256 a n=384 minmod
-  PLAFONNE (-12.1 % -> -12.5 %, plat / leger recul). Van Leer confirme l'absence de convergence
-  propre a haute resolution (-5.5 % a n=256 puis -9.5 % a n=384, non monotone). Donc apres avoir
-  paye le gros de la diffusion, **l=4 bute sur un plancher ~10-12 % qui ne se referme plus en
-  resolution** : signature du **verrou structurel** (bord d'anneau cartesien) sur le mode le plus
-  instable, exactement le l-dependant attendu par la roadmap.
-- **l = 5 : part diffuse FAIBLE, pas de plancher.** Deja a la cible des n=192 (minmod -5 %,
-  vanleer +4 %), l'erreur TRAVERSE zero et reste petite et de signe variable a n=256/384 (minmod
-  +2.3 % -> +2.6 %, vanleer +8.3 % -> +3.3 %). Le residu est domine par le bruit de mesure / un
-  leger sur-tir, PAS par un plancher structurel : la diffusion est negligeable des le depart pour
-  ce mode a plus grande longueur d'onde radiale.
+- **l = 3 : part MAJORITAIREMENT diffuse ; l'ordre reduit fortement le gap.** L'`|%err|` se referme
+  de facon monotone avec la resolution ET avec l'ordre. minmod : -34 % -> -22 % -> -17 % -> -12 %
+  (128->384) ; vanleer (moins dissipatif) : -21 % -> -15 % -> -11 % -> -9 % ; **O5 : -14.6 % ->
+  -12.4 % -> -10.3 %** (n=128->256). A chaque n, O5 ameliore strictement vanleer (le meilleur O2) :
+  -14.6 vs -21.5 (n=128), -10.3 vs -11.4 (n=256). L'ordre reduit donc fortement l'ecart l=3 ; le
+  residu O5 ~ -10 % decroit encore et ne plafonne pas a n=256. **Verdict : l'ordre reduit fortement
+  le gap observe a O2 sur l=3 ; pas de plancher structurel visible (residu diffuse non encore epuise
+  en local), mais cela reste a confirmer a plus haute resolution.**
+- **l = 4 : le mode-cle. L'ordre reduit fortement le gap observe a O2 ~12 %.** A O2,
+  l=4 semblait buter sur ~10-12 % qui cessait de se refermer en resolution (minmod -12.1 % a n=256
+  puis -12.5 % a n=384 ; vanleer non monotone -5.5 % -> -9.5 %), ce que PR-0 lisait comme un verrou
+  structurel candidat. **L'ordre 5 suggere fortement l'autre lecture : O5 amene l=4 a -4.1 % a n=256**
+  (et -4.2 % a n=128), nettement SOUS le plateau O2-minmod (-12 %) et sous O2-vanleer (-5.5 %) a meme
+  resolution. Mais cette lecture ne tient que sur DEUX points propres (n=128 et n=256) : le point
+  intermediaire n=192 O5 donne -15.8 %, et c'est un artefact de la fenetre de fit (fenetre ouverte a
+  t0=5.4, cf. tableau de tracabilite ci-dessus), pas une mesure exploitable. Sur les deux points
+  propres, le residu l=4 de ~12 % vu a O2 apparait MAJORITAIREMENT comme de la diffusion residuelle
+  reduite par l'ordre : le plateau ~12 % de PR-0 ressemble plutot a un plateau de diffusion d'ordre 2
+  qu'a un plancher structurel dur. **Verdict : l'ordre reduit fortement le gap l=4 sous le plateau O2,
+  sur deux points propres ; un plancher structurel eventuel est inferieur aux ~12 % vus a O2, mais
+  reste a confirmer par n=384/512 (le point n=192 etant inutilisable a cause de sa fenetre).**
+- **l = 5 : part diffuse FAIBLE, deja resolu ; O5 le confirme.** Deja a la cible des O2 a n=192
+  (minmod -5 %, vanleer +4 %), l'erreur traverse zero et reste petite et de signe variable.
+  **O5 : +6.9 % -> +1.8 % -> +4.7 %** (n=128->256), du meme ordre de grandeur (quelques %, signe
+  variable) que les O2. Le residu est domine par le bruit de mesure / un leger sur-tir, PAS par un
+  plancher structurel. **Verdict : aucun gap notable a refermer ; O5 ne fait pas apparaitre de
+  plancher sur l=5.**
 
-**Conclusion globale.** L'ordre et la resolution referment une part SUBSTANTIELLE de l'ecart sur
-les trois modes (la majeure partie est de la diffusion numerique, comme attendu d'un FV d'ordre
-2). Mais le residu est l-dependant : **l=4 conserve un plancher ~10-12 % qui cesse de se refermer
-au-dela de n=256**, ce qui est le signal quantitatif d'un verrou STRUCTUREL (advection de l'anneau
-sur grille cartesienne pleine, transport sans bord embedded), alors que l=3 reste diffusion-limite
-et l=5 est deja resolu. Ce plancher l=4 est l'argument chiffre justifiant la PR-A "transport-wall"
-(porter le cut-cell du Poisson vers l'operateur hyperbolique). Deux confirmations restent a faire,
-toutes deux sur ROMEO/GH200 : (1) **n=512** pour verrouiller le plateau l=4 a haute resolution ;
-(2) un point **O5 WENO5-Z** une fois l'ordre 5 cable cote coeur, le test le plus discriminant pour
-borner la diffusion residuelle et isoler le plancher structurel pur.
+**Conclusion globale (avec l'axe O5).** L'ajout de l'ordre 5 (WENO5-Z + SSPRK3) suggere fortement
+une lecture de la question laissee ouverte par PR-0 : **le residu l-dependant a O2 est majoritairement
+de la diffusion numerique, reduite par l'ordre, plutot qu'un verrou structurel a ~12 %.** Le cas le
+plus net est l=4 : son plateau apparent ~12 % a O2 tombe a ~4 % a O5 sur les deux points propres
+(n=128 et n=256 ; le point n=192 a -15.8 % est un artefact de fenetre de fit, cf. tableau de
+tracabilite), ce qui suggere fortement que l'essentiel de l'ecart l=4 etait de la dissipation
+d'ordre 2 plutot qu'un plancher du bord d'anneau cartesien. l=3 se reduit aussi avec l'ordre
+(O5 < O2 a tout n), et l=5 etait deja resolu. Autrement dit, **l'ordre reduit fortement le gap
+observe a O2** : a l'horizon de mesure et aux resolutions locales, on ne voit pas de plancher
+structurel residuel net (le residu O5 le plus grand est l=3 ~ -10 %, encore decroissant, donc
+encore compatible avec de la diffusion). Cela AFFAIBLIT (sans la refuter) l'hypothese de PR-0 d'un
+plancher structurel ~12 % derriere la PR-A "transport-wall" : aux resolutions {128,192,256} et a
+l'ordre 5, le plateau O2 n'est pas robuste a la montee en ordre, et un plancher structurel eventuel
+est inferieur aux ~12 % vus a O2, mais reste a confirmer par n=384/512. Deux mesures sont donc
+REQUISES avant de reecrire la roadmap papier, sur ROMEO/GH200 : (1) **n=384 / n=512** (incluant O5)
+pour voir si le residu O5 l=3/l=4 plafonne enfin a haute resolution (-> plancher structurel pur) ou
+continue de decroitre (-> diffusion encore) ; (2) un balayage O5 a plus fin pour borner le plancher
+structurel l-dependant sous le bruit de mesure.
 
 ## Ce qui a ete lance vs saute
 
-- **Lance (grille principale, 27 runs)** : `n in {128,192,256} x {O1 none, O2 minmod, O2 vanleer}
-  x l in {3,4,5}`, `t_end=48`. 27 runs en ~10 min (CPU local, mono-thread). CSV complet, entierement
-  rejouable par `sweep.py` (defaut).
-- **Lance (sonde n=384, 6 runs)** : `n=384 x {O2 minmod, O2 vanleer} x l in {3,4,5}` pour tester
-  la convergence au-dela de n=256 (un run unique n=384 ~ 143 s, dans la limite "quelques minutes"
-  du cahier des charges ; rejouable via `sweep.py --ns 384 --orders minmod,vanleer`). Decisif pour
-  voir le PLATEAU l=4. O1 saute a n=384 (peu informatif : l'ordre 1 est domine par la diffusion a
-  toute resolution).
-- **Saute (a basculer sur ROMEO)** :
-  - **n=512** (et le complement n=384) : trop lourds pour un balayage complet en local
-    (n=512 ~ 4x le cout n=256 par run x 9-27 runs). A lancer sur GH200 (l'integrateur peut le
-    faire), pour confirmer / infirmer le plateau structurel l-dependant a haute resolution.
-  - **O5 WENO5-Z + SSPRK3** : NON atteignable depuis Python sur master (voir ci-dessus). Exige
-    d'abord un cablage `build_block<Weno5,...>` (et SSPRK3) cote COEUR `adc_cpp`, hors perimetre
-    de cette PR mesure. Une fois cable, rejouer ce meme balayage avec l'ordre O5 donnera le point
-    manquant le plus discriminant pour separer diffusion residuelle et plancher structurel.
+- **Lance (grille principale O1/O2, 27 runs)** : `n in {128,192,256} x {O1 none, O2 minmod,
+  O2 vanleer} x l in {3,4,5}`, `t_end=48`. Rejoue ici a l'identique de PR-0 (memes valeurs), donc
+  les lignes O1/O2 du tableau sont stables. Rejouable par `sweep.py --orders none,minmod,vanleer`.
+- **Lance (axe haut ordre O5, 9 runs)** : `n in {128,192,256} x O5 (weno5 + ssprk3) x l in {3,4,5}`,
+  `t_end=48`. Couts par run mesures en local (CPU mono-thread) : n=128 ~ 9 s, n=192 ~ 30 s,
+  n=256 ~ 88 s (WENO5-Z = stencil 5 points + 3 ghosts, SSPRK3 = 3 etages, donc plus lourd que O2 a
+  meme n). L'ensemble du balayage 4 ordres x 3 n x 3 l = **36 runs en ~16,5 min** (CPU local).
+  CSV complet, rejouable par `sweep.py` (defaut, qui inclut maintenant `weno5`).
+- **Lance (sonde n=384 O2, 6 runs)** : `n=384 x {O2 minmod, O2 vanleer} x l in {3,4,5}` (heritee
+  de PR-0 ; un run n=384 O2 ~ 143 s ; rejouable via `sweep.py --ns 384 --orders minmod,vanleer`).
+  O1 saute a n=384 (l'ordre 1 reste domine par la diffusion a toute resolution).
+- **Saute (a basculer sur ROMEO / GH200)** :
+  - **n=384 O5** : volontairement saute en local. Extrapolation du cout n=256 O5 (~88 s) en
+    (384/256)^3 ~ 3,4x -> ~300 s par run x 3 modes ~ 15 min rien que pour n=384 O5, AU-DELA de la
+    limite "quelques minutes par run" du cahier des charges. A lancer sur GH200 pour prolonger la
+    courbe O5 d'un cran en resolution. **FLAG ROMEO.**
+  - **n=512 (tous ordres, surtout O5)** : trop lourd en local (n=512 ~ 4x le cout n=256 par run x
+    le nombre de runs). Le point le plus utile maintenant : voir si le residu O5 l=3 (~ -10 % a
+    n=256, encore decroissant) et l=4 (~ -4 %) PLAFONNENT enfin a n=512 (-> plancher structurel pur)
+    ou continuent de se refermer (-> diffusion encore non epuisee). **FLAG ROMEO.**
 
 ## Reproduire
 
@@ -129,6 +184,10 @@ borner la diffusion residuelle et isoler le plancher structurel pur.
 cd ../adc_cpp && cmake -S . -B build-py -DADC_BUILD_PYTHON=ON -DCMAKE_BUILD_TYPE=Release \
   && cmake --build build-py -j4
 cd ../adc_cases
-PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py        # grille principale
+PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py        # O2 + O5 (defaut)
+PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py --orders weno5  # O5 seul
 PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py --quick # fumee rapide
 ```
+
+Le defaut de `--orders` est maintenant `minmod,vanleer,weno5` (O5 = WENO5-Z + SSPRK3). Ajouter
+`none` pour la ligne O1. L'axe O5 exige adc_cpp #88 ou plus recent (master `ca803dc`).
