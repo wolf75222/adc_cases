@@ -13,15 +13,17 @@ briques compilees ; ce cas montre le bout "declaratif" cote utilisateur.
 On verifie : masse conservee (continuite, domaine periodique), dynamique non triviale (la bulle de
 pression genere des ondes acoustiques), etat physique (rho > 0, p > 0, fini).
 """
-import os
-import sys
-
 import numpy as np
 
 from adc import dsl
 
-# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
 from adc_cases.common.grid import meshgrid_xy  # noqa: E402
 from adc_cases.common.initial_conditions import euler_pressure  # noqa: E402

@@ -13,7 +13,12 @@ Un cas **sur mesure** peut porter son propre C++ (un scénario qui n'est pas une
 générique du cœur) : il est alors compilé **à la volée** contre les en-têtes génériques
 d'`adc_cpp` et chargé dans le process (`ctypes`). C'est le cas de [`two_fluid_ap/`](two_fluid_ap/)
 (solveur asymptotic-preserving). Cela exige un compilateur C++20 ; le dossier `include/`
-d'`adc_cpp` est localisé automatiquement depuis le module `adc`, ou via `ADC_INCLUDE`.
+d'`adc_cpp` est localisé automatiquement depuis le module `adc`, ou via `ADC_INCLUDE`. La
+mécanique commune (localisation des en-têtes, compilation, chargement) vit dans
+`adc_cases.common.native` : la bibliothèque compilée va dans `out/<cas>/build/` (jamais à côté
+du `.cpp`), elle est recompilée dès que sa clé d'ABI change (compilateur, flags, sources,
+en-têtes du cœur) et toute incompatibilité d'ABI (symbole attendu absent) lève une erreur
+explicite au chargement plutôt qu'une panne opaque au premier appel.
 
 ## Prérequis : construire le module `adc`
 
@@ -42,11 +47,13 @@ commun aux cas (modèles nommés, conditions initiales, grilles, invariants, sor
 
 | Module | Contenu |
 |---|---|
-| `adc_cases.models` | modèles nommés = compositions de briques `adc` (electron_euler, ion_isothermal, diocotron, euler_poisson, recettes `two_fluid` / `plasma`). |
+| `adc_cases.models` | modèles d'ESPÈCE nommés = compositions de briques `adc` (electron_euler, ion_isothermal, diocotron, euler_poisson, euler, neutral_isothermal). Un modèle = UNE espèce (`adc.Model`). |
+| `adc_cases.recipes` | recettes SYSTÈME = configurations multi-espèces prêtes à l'emploi (`two_fluid`, `plasma` : blocs + Poisson + couplages). Un niveau au-dessus des modèles d'espèce. |
 | `adc_cases.common.grid` | grilles à centres de cellules (`meshgrid_xy`), convention `field[j, i]` de la façade `adc`. |
 | `adc_cases.common.initial_conditions` | CI réutilisées : bande gaussienne (`band_density`), anneau (`ring_density`), bulle de pression Euler (`euler_pressure_blob`). |
 | `adc_cases.common.checks` | invariants vérifiés par plusieurs cas (`assert_mass_conserved`, `assert_finite`, `assert_positive`, `relative_drift`). |
 | `adc_cases.common.io` | répertoire de sortie `out/` (hors source, ignoré par git). |
+| `adc_cases.common.native` | compilation à la volée + chargement `ctypes` des scénarios C++ sur mesure (cache hors source dans `out/`, contrôle d'ABI explicite). |
 
 Installer le paquet en **editable** une fois (les cas font alors `import adc_cases` sans toucher
 à `sys.path`) :
@@ -58,7 +65,10 @@ pip install -e '.[figures]'      # + matplotlib (repro diocotron)
 ```
 
 Sans installation, chaque cas reste lançable directement (`python3 diocotron/run.py`) : un
-court préambule met la racine du dépôt sur le chemin d'import.
+court préambule tente `import adc_cases` et, seulement s'il échoue (paquet non installé), met
+la racine du dépôt sur le chemin d'import. Une fois le paquet installé, ce préambule ne touche
+plus du tout à `sys.path` : les cas s'appuient sur le paquet importable, pas sur un bricolage
+de chemin.
 
 (Dépendances des cas : `numpy` ; `matplotlib` pour la repro diocotron ; un compilateur C++20
 pour `two_fluid_ap` (solveur compilé à la volée).)
@@ -66,8 +76,9 @@ pour `two_fluid_ap` (solveur compilé à la volée).)
 ## Sorties
 
 Les cas qui produisent des fichiers (figures, gif) écrivent sous **`out/<cas>/`** à la racine du
-dépôt, **pas** dans leur dossier source. `out/` est ignoré par git. On peut surcharger la racine
-via `ADC_CASES_OUT=<chemin>`.
+dépôt, **pas** dans leur dossier source. Idem pour les artefacts de compilation à la volée
+(`two_fluid_ap`), placés sous `out/<cas>/build/`. `out/` est ignoré par git. On peut surcharger
+la racine via `ADC_CASES_OUT=<chemin>`.
 
 ## Manifeste des cas et CI
 

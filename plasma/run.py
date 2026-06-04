@@ -2,7 +2,7 @@
 """Cas "plasma" : electrons + ions + neutres couples (Poisson + ionisation + collision).
 
 Compose le scenario plasma vise par le tuteur depuis Python via une RECETTE SYSTEME
-(`models.plasma`) : trois especes (electrons Euler, ions et neutres isothermes) partageant un
+(`recipes.plasma`) : trois especes (electrons Euler, ions et neutres isothermes) partageant un
 Poisson de systeme (f = q_e n_e + q_i n_i), couplees par des SOURCES inter-especes : ionisation
 (un neutre devient un ion + un electron) et collision ion-neutre (friction). La recette cable
 add_block + set_poisson + add_ionization + add_collision ; le cas ne fait que poser les CI et
@@ -17,16 +17,18 @@ isolement dans le test des bindings (ici le champ agit aussi sur les ions). L'io
 la densite (comp 0) ; le transfert de quantite de mouvement / energie des particules creees est
 une simplification (cf. la brique add_ionization).
 """
-import os
-import sys
-
 import numpy as np
 
 import adc
 
-# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import models  # noqa: E402  (recettes systeme nommees, cote application)
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from adc_cases import recipes  # noqa: E402  (recettes systeme nommees, cote application)
 from adc_cases.common.checks import relative_drift  # noqa: E402
 
 PI = np.pi
@@ -38,8 +40,8 @@ def main():
     ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones((n, n))  # faible separation de charge
 
     sim = adc.System(n=n, L=L, periodic=True)
-    models.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
-                  ionization_rate=0.3, collision_rate=0.5)  # recette systeme : blocs + couplages
+    recipes.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
+                   ionization_rate=0.3, collision_rate=0.5)  # recette systeme : blocs + couplages
 
     sim.solve_fields()
     phi0 = float(np.abs(np.array(sim.potential())).max())

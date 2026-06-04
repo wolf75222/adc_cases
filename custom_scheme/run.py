@@ -15,15 +15,17 @@ densite vit cote Python, la lib joue le role de solveur elliptique. On verifie :
 Le diocotron : d_t n + div(n v) = 0, v = (-d_y phi, d_x phi)/B0, lap phi = alpha (n - n_i0).
 """
 
-import os
-import sys
-
 import numpy as np
 
 import adc
 
-# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from adc_cases import models  # noqa: E402
 from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
 from adc_cases.common.initial_conditions import band_density  # noqa: E402

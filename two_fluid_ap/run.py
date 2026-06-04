@@ -42,63 +42,40 @@ Dependances : numpy + un compilateur C++20 (le solveur AP est compile a la volee
 
 import ctypes
 import os
-import shutil
-import subprocess
 import sys
 
 import numpy as np
 
-import adc  # le coeur : on s'en sert pour localiser ses en-tetes (adc_cpp/include)
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from adc_cases.common import native  # noqa: E402  (build JIT + chargement ctypes, cache hors source)
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-
-# --- Localisation des en-tetes du coeur adc_cpp -------------------------------------------
-def _adc_include():
-    """Renvoie le dossier include/ d'adc_cpp (en-tetes header-only du coeur).
-
-    Priorite a $ADC_INCLUDE (override explicite) ; sinon on remonte depuis le paquet `adc`
-    installe (build-py/python/adc/ -> ../../../include) ; en dernier recours, le depot
-    voisin ../adc_cpp/include depuis adc_cases. On exige que adc/mesh/multifab.hpp existe.
-    """
-    candidates = []
-    env = os.environ.get("ADC_INCLUDE")
-    if env:
-        candidates.append(env)
-    pkg = os.path.dirname(os.path.abspath(adc.__file__))  # .../adc
-    candidates.append(os.path.normpath(os.path.join(pkg, "..", "..", "..", "include")))
-    candidates.append(os.path.normpath(os.path.join(HERE, "..", "..", "adc_cpp", "include")))
-    for c in candidates:
-        if os.path.isfile(os.path.join(c, "adc", "mesh", "multifab.hpp")):
-            return c
-    raise RuntimeError(
-        "two_fluid_ap : en-tetes adc_cpp introuvables (cherche adc/mesh/multifab.hpp). "
-        "Definir ADC_INCLUDE=<adc_cpp>/include. Candidats essayes : " + ", ".join(candidates))
+# Symboles extern "C" exposes par _two_fluid_ap.cpp (cf. ABI plus bas). Leur absence au
+# chargement signe une ABI incompatible et leve une erreur explicite (native.load_symbols).
+TFAP_SYMBOLS = (
+    "tfap_create", "tfap_destroy", "tfap_step", "tfap_advance", "tfap_nx",
+    "tfap_mass_e", "tfap_mass_i", "tfap_max_charge", "tfap_max_dev",
+    "tfap_density_e", "tfap_density_i",
+)
 
 
 # --- Compilation a la volee du solveur AP -------------------------------------------------
-def _build_lib(include):
-    """Compile _two_fluid_ap.cpp en bibliotheque partagee et la charge (ctypes).
+def _build_lib():
+    """Compile _two_fluid_ap.cpp (cache hors source, cle d'ABI) et charge la lib (ctypes).
 
-    Recompile seulement si la .so manque ou est plus vieille que les sources (cache local).
+    Delegue a `adc_cases.common.native` : cache dans out/two_fluid_ap/build/ (jamais a cote du
+    .cpp), recompilation des que la cle d'ABI change (compilateur, flags, sources, en-tetes du
+    coeur), et verification des symboles attendus au chargement (ABI mismatch = erreur explicite).
     """
-    cxx = (os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++")
-           or shutil.which("clang++"))
-    if not cxx:
-        print("two_fluid_ap : aucun compilateur C++ trouve (definir CXX) -> abandon")
-        sys.exit(1)
-    cpp = os.path.join(HERE, "_two_fluid_ap.cpp")
-    hpp = os.path.join(HERE, "two_fluid_ap.hpp")
-    suffix = ".dylib" if sys.platform == "darwin" else ".so"
-    lib = os.path.join(HERE, "_two_fluid_ap" + suffix)
-    stale = (not os.path.exists(lib) or
-             os.path.getmtime(lib) < max(os.path.getmtime(cpp), os.path.getmtime(hpp)))
-    if stale:
-        cmd = [cxx, "-shared", "-fPIC", "-std=c++20", "-O2", "-I", include, cpp, "-o", lib]
-        print("two_fluid_ap : compilation du solveur AP\n  " + " ".join(cmd))
-        subprocess.run(cmd, check=True)
-    return ctypes.CDLL(lib)
+    sources = [os.path.join(HERE, "_two_fluid_ap.cpp"), os.path.join(HERE, "two_fluid_ap.hpp")]
+    lib_path = native.build_shared("two_fluid_ap", sources)
+    return native.load_symbols(lib_path, TFAP_SYMBOLS)
 
 
 def _bind(lib):
@@ -262,7 +239,7 @@ def run_magnetized(lib):
 
 def main():
     print("=== Demo two_fluid_ap : bi-fluide isotherme raide (asymptotic-preserving) ===")
-    lib = _bind(_build_lib(_adc_include()))
+    lib = _bind(_build_lib())
     run_stiff(lib)
     run_magnetized(lib)
     print("Conclusion : schema IMEX / asymptotic-preserving stable et conservatif")

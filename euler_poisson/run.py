@@ -41,14 +41,16 @@ sur System : on lit ces diagnostics directement sur cet etat
 (p_x = U[1].sum(), p_y = U[2].sum(), E_tot = U[3].sum()).
 """
 
-import os
-import sys
-
 import numpy as np
 import adc
 
-# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from adc_cases import models  # noqa: E402  (composition nommee, cote application)
 from adc_cases.common.checks import assert_opposite_sign, relative_drift  # noqa: E402
 

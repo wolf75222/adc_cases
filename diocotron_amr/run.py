@@ -22,15 +22,17 @@ grille AMR grossiere. Le couplage Poisson periodique exige une CI a moyenne null
 le fond neutralisant n_i0 = <n_e>.
 """
 
-import os
-import sys
-
 import numpy as np
 
 import adc
 
-# Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
+try:
+    import adc_cases  # noqa: F401
+except ImportError:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from adc_cases import models  # noqa: E402
 from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
 from adc_cases.common.initial_conditions import band_density  # noqa: E402
