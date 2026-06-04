@@ -80,6 +80,20 @@ needs = ["cxx"]
 desc = "Bi-fluide raide asymptotic-preserving ; solveur C++ compile a la volee (ctypes)."
 
 [[case]]
+path = "diocotron_dsl/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Diocotron ecrit ENTIEREMENT en formules (adc.dsl.Model) ; etat bit-identique au natif."
+
+[[case]]
+path = "two_species_dsl/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Electrons + ions en formules (adc.dsl.Model), Poisson couple ; equivalence au natif par espece."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
