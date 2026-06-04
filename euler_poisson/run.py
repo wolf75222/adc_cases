@@ -27,9 +27,13 @@ Invariants physiques verifies (par assert)
     la force de Poisson derive d'un potentiel et sa somme spatiale est nulle ;
     elle ne peut donc creer aucune impulsion nette. On exige |p_x|, |p_y| < 1e-8.
 
-Le contraste gravite vs plasma se lit sur l'energie : la force attractive et la
-force repulsive agissent en sens opposes, ce qui se traduit par une derive
-d'energie de signes opposes entre les deux runs (diagnostic, non asserte).
+  * Contraste gravite vs plasma (ASSERTE) : la force attractive et la force
+    repulsive agissent en sens opposes, ce qui se traduit par une derive
+    d'energie de SIGNES OPPOSES entre les deux runs. Le signe de chacun est lui
+    aussi fixe par la physique : l'auto-gravite (attractif) abaisse l'energie
+    totale diagnostiquee (dE < 0), la charge d'espace (repulsif) l'eleve
+    (dE > 0). On exige des magnitudes franches (> TOL_DE) pour que le signe soit
+    significatif et non du bruit numerique (dE vaut 0 a perturbation nulle).
 
 Etat : `adc.System.get_state("gas")` renvoie un tableau numpy de forme
 (4, n, n) = [rho, rho*u, rho*v, E]. Il n'y a PAS de energy()/total_momentum()
@@ -46,11 +50,15 @@ import adc
 # Rend le depot importable si le paquet n'est pas installe (cf. adc_cases.ensure_importable).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from adc_cases import models  # noqa: E402  (composition nommee, cote application)
-from adc_cases.common.checks import relative_drift  # noqa: E402
+from adc_cases.common.checks import assert_opposite_sign, relative_drift  # noqa: E402
 
 # Tolerances physiques.
 TOL_MASS = 1e-9   # derive relative de masse admissible
 TOL_MOM = 1e-8    # impulsion nette admissible (doit rester nulle)
+# Magnitude minimale du contraste energetique : la derive d'energie due au travail de la force
+# de Poisson vaut ~6e-4 (eps=0.01, 20 pas), tres au-dessus du bruit machine (dE = 0 exactement a
+# eps=0). On exige donc une derive franche pour que le SIGNE soit physiquement significatif.
+TOL_DE = 1e-5
 
 # Parametres d'integration : petites tailles et peu de pas pour rester rapide.
 N = 64
@@ -158,8 +166,17 @@ def main():
           f"(< {TOL_MOM:.0e})")
     print("Contraste energetique (attractif vs repulsif) :")
     print(f"  dE GRAVITE = {dE_grav:+.6e}   dE PLASMA = {dE_plas:+.6e}")
-    print(f"  -> les deux forces agissent en sens opposes : "
-          f"signes de dE {'opposes' if dE_grav * dE_plas < 0 else 'identiques'}")
+
+    # Les deux derives doivent etre de signes opposes ET franches (au-dessus de TOL_DE),
+    # sinon le signe ne serait pas physiquement significatif (cf. dE = 0 a perturbation nulle).
+    assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE,
+                         label="contraste energetique gravite vs plasma")
+    # Signe physique attendu de chaque run : attractif -> dE < 0, repulsif -> dE > 0.
+    assert dE_grav < 0.0, (
+        f"GRAVITE (attractif) : dE devrait etre < 0, vaut {dE_grav:+.3e}")
+    assert dE_plas > 0.0, (
+        f"PLASMA (repulsif) : dE devrait etre > 0, vaut {dE_plas:+.3e}")
+    print(f"  -> signes opposes (gravite dE<0, plasma dE>0), magnitudes > {TOL_DE:.0e} : OK")
 
     print("OK euler_poisson")
 

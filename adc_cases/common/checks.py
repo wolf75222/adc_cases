@@ -38,3 +38,17 @@ def assert_positive(array, label="densite"):
     mn = float(arr.min())
     assert mn > 0.0, f"{label} negative ou nulle (min = {mn:.3e})"
     return mn
+
+
+def assert_opposite_sign(a, b, min_mag=0.0, label=""):
+    """Verifie que `a` et `b` ont des signes STRICTEMENT opposes (a*b < 0).
+
+    `min_mag` exige en plus que chaque grandeur depasse ce seuil en valeur absolue : on evite
+    ainsi de valider trivialement deux quasi-zeros (bruit machine) dont le produit serait negatif
+    par accident. Utilise pour le contraste physique attractif vs repulsif (euler_poisson).
+    """
+    tag = f"{label} : " if label else ""
+    assert abs(a) > min_mag and abs(b) > min_mag, (
+        f"{tag}magnitude trop faible (|a|={abs(a):.3e}, |b|={abs(b):.3e} <= {min_mag:.1e}) : "
+        "signe non significatif")
+    assert a * b < 0.0, f"{tag}signes non opposes (a={a:+.3e}, b={b:+.3e})"
