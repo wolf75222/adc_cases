@@ -94,6 +94,13 @@ needs = ["cxx"]
 desc = "Electrons + ions en formules (adc.dsl.Model), Poisson couple ; equivalence au natif par espece."
 
 [[case]]
+path = "magnetic_isothermal_dsl/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Fluide isotherme magnetise en formules (adc.dsl.Model) ; force de Lorentz pilotee par B_z (aux etendu)."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
