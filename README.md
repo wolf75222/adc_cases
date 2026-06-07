@@ -83,10 +83,11 @@ la racine via `ADC_CASES_OUT=<chemin>`.
 ## Manifeste des cas et CI
 
 [`cases_manifest.toml`](cases_manifest.toml) classe chaque cas par **catégorie** (`validation`,
-`tutoriel`, `reproduction`, `experimental`) et indique s'il tourne en **CI** (`ci = true`). La
-CI ne lance **que les cas légers** (`ci = true`) ; les cas longs (reproduction `diocotron/run.py`
-avec figures/gif) et expérimentaux (`dsl_euler`, DSL interprété) restent **hors CI** et se
-lancent à la main.
+`tutoriel`, `reproduction`, `reproduction-candidate`, `experimental`) et indique s'il tourne en
+**CI** (`ci = true`). La CI ne lance **que les cas légers** (`ci = true`) ; les cas longs
+(reproduction `diocotron/run.py` avec figures/gif), les reproductions-candidates non encore
+établies (`hoffart_euler_poisson_dsl/run.py`, table PENDING) et les expérimentaux (`dsl_euler`
+DSL interprété, `schur_magnetized_cartesian`) restent **hors CI** et se lancent à la main.
 
 ## Lancer un cas
 
@@ -102,21 +103,43 @@ python3 two_fluid_ap/run.py       # bi-fluide raide asymptotic-preserving
 python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python, Poisson par adc
 python3 dsl_euler/run.py          # Euler écrit en formules (mini-DSL adc.dsl, expérimental)
+
+# Cas écrits en formules via adc.dsl (génération + compilation C++ : compilateur C++20 requis)
+python3 diocotron_dsl/run.py              # diocotron en formules, prouvé bit-identique au natif
+python3 two_species_dsl/run.py            # électrons + ions en formules, Poisson couplé
+python3 magnetic_isothermal_dsl/run.py    # fluide isotherme magnétisé (Lorentz via B_z) en formules
+python3 schur_magnetized_cartesian/run.py # étage source Schur vs explicite (mesure, expérimental)
+python3 hoffart_euler_poisson_dsl/run.py  # Euler-Poisson magnétisé (Hoffart) : reproduction-candidate PENDING
 ```
 
 ## Les cas (un dossier par cas)
 
-| Dossier | Cas | Ce qu'il montre |
-|---|---|---|
-| [`diocotron/`](diocotron/) | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (briques `ExB` + `BackgroundDensity` + paroi conductrice), figures + gif. Voir [diocotron/README.md](diocotron/README.md). `band_instability.py` : variante périodique minimale. |
-| [`composition/`](composition/) | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
-| [`euler_poisson/`](euler_poisson/) | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
-| [`multispecies/`](multispecies/) | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
-| [`two_euler/`](two_euler/) | Deux Euler indépendants | Électrons + ions, **deux gaz d'Euler non couplés**, mêmes briques (`CompressibleFlux` + HLLC + **reconstruction primitive**) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
-| [`plasma/`](plasma/) | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g→n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
-| [`two_fluid_ap/`](two_fluid_ap/) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). **Scénario**, pas une brique générique : sa physique C++ (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) vit ici, compilée à la volée contre les en-têtes génériques d'`adc_cpp` puis pilotée depuis Python (`ctypes`). |
-| [`diocotron_amr/`](diocotron_amr/) | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
-| [`custom_scheme/`](custom_scheme/) | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
+**Chaque dossier de cas dispose désormais d'un `README.md` rédigé selon le gabarit
+commun** (objectif, équations, modèle, méthode, architecture, carte des fichiers,
+commande exacte, conditions initiales, invariants, sorties, coût, limites, CI). La table
+ci-dessous couvre les **15 cas** ; la colonne *Catégorie* est celle du
+[manifeste](cases_manifest.toml) (`validation` / `tutoriel` / `reproduction` /
+`reproduction-candidate` / `experimental`). Les descriptions sont honnêtes : un cas
+`reproduction-candidate` n'est **pas** une reproduction établie, un cas `experimental` est
+un prototype non finalisé.
+
+| Dossier | Catégorie | Cas | Ce qu'il montre |
+|---|---|---|---|
+| [`diocotron/`](diocotron/README.md) | reproduction | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (briques `ExB` + `BackgroundDensity` + paroi conductrice), figures + gif ; LONG, hors CI. Le sous-script `band_instability.py` est une **variante périodique minimale** (croissance de l'instabilité, sans figures) classée `validation` (en CI). |
+| [`composition/`](composition/README.md) | tutoriel | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
+| [`euler_poisson/`](euler_poisson/README.md) | validation | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
+| [`multispecies/`](multispecies/README.md) | validation | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
+| [`two_euler/`](two_euler/README.md) | validation | Deux Euler indépendants | Électrons + ions, **deux gaz d'Euler non couplés**, mêmes briques (`CompressibleFlux` + HLLC + **reconstruction primitive**) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
+| [`plasma/`](plasma/README.md) | validation | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g→n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
+| [`two_fluid_ap/`](two_fluid_ap/README.md) | validation (needs `cxx`) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). **Scénario**, pas une brique générique : sa physique C++ (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) vit ici, compilée à la volée contre les en-têtes génériques d'`adc_cpp` puis pilotée depuis Python (`ctypes`). |
+| [`diocotron_amr/`](diocotron_amr/README.md) | validation | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
+| [`custom_scheme/`](custom_scheme/README.md) | tutoriel | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
+| [`diocotron_dsl/`](diocotron_dsl/README.md) | validation (needs `cxx`) | Diocotron écrit en formules (DSL) | La physique diocotron (transport E×B + fond neutralisant) écrite **entièrement en formules** `adc.dsl.Model` au lieu de briques natives ; `adc.dsl` génère le C++, le compile et l'installe via `add_equation`. Coeur du cas : l'état produit est **bit-identique** à la composition native (`np.array_equal`), sur même grille / CI / Poisson. Backend `production` (natif zéro-copie) sinon `aot` (host-marshalé, numérique identique). |
+| [`two_species_dsl/`](two_species_dsl/README.md) | validation (needs `cxx`) | Électrons + ions en formules (DSL) | Deux espèces **en formules** (`adc.dsl.Model`) : électrons Euler (4 var) + ions isothermes (3 var), chacune avec **source** électrostatique (lit grad φ via le canal aux) et densité de charge, couplées par un même Poisson. Équivalence au natif par espèce : ions bit-identiques, électrons à ε-machine (réassociation flottante dans l'accumulation du RHS de Poisson partagé, tolérance 1e-24). |
+| [`magnetic_isothermal_dsl/`](magnetic_isothermal_dsl/README.md) | validation (needs `cxx`) | Fluide isotherme magnétisé en formules (DSL) | Fluide isotherme magnétisé **en formules** avec **force de Lorentz** `q ρ E + v×B` pilotée par un champ B_z constant lu sur le canal `aux` **étendu** (indice 3, peuplé depuis Python via `set_magnetic_field`). Aucun modèle natif de référence : correction prouvée par **parité inter-backend** (production == aot quand les deux se lient) + **oracle Lorentz** numpy + invariants (masse, positivité, rotation de la quantité de mouvement). |
+| [`schur_magnetized_cartesian/`](schur_magnetized_cartesian/README.md) | experimental (needs `cxx`) | Étage source Schur vs explicite | **Mesure** de l'effet temporel de l'étage source condensé par Schur (`adc.Split(Explicit, CondensedSchur)`) face à l'intégration explicite de la même source de Lorentz raide, sur un fluide isotherme magnétisé cartésien (même DSL que `magnetic_isothermal_dsl`). Balaie le plus grand `dt` stable explicite vs Schur (θ=0.5 / θ=1.0), reporte `dt·ω_c` et le gain. Prototype de mesure, hors CI. |
+| [`dsl_euler/`](dsl_euler/README.md) | experimental | Euler en formules (DSL interprété) | Euler compressible 2D **en formules** (mini-DSL `adc.dsl`), version **prototype interprétée CPU** : l'arbre symbolique est évalué en numpy et branché sur le backend hôte `adc.PythonFlux` (Rusanov, périodique). Démonstrateur déclaratif côté utilisateur, **pas** le chemin de production (qui reste les briques compilées). Vérifie masse conservée, dynamique acoustique non triviale, état physique. |
+| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | **reproduction-candidate** PENDING | Euler-Poisson magnétisé (Hoffart), étage Schur | **Vise** [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La **reproduction quantitative n'est PAS encore établie** (table de validation PENDING) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un **oracle analytique** du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
 
 ## L'API en deux niveaux
 
