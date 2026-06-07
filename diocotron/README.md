@@ -1,9 +1,13 @@
-# Cas diocotron : reproduction de arXiv:2510.11808 
+# Cas diocotron : benchmark de normalisation du diocotron réduit (Petri), arXiv:2510.11808
 
-Reproduction du benchmark **diocotron** de Hoffart, Maier, Shadid, Tomas, *Structure-preserving
-finite-element approximations of the magnetic Euler-Poisson equations*
-([arXiv:2510.11808](https://arxiv.org/abs/2510.11808), Section 5.3), réalisée **avec le solveur
-`adc`** (la lib `adc_cpp` via ses bindings Python), pas avec leur code ni un code tiers.
+Benchmark de normalisation du **diocotron réduit** (limite de dérive `E × B`) de la Section 5.3 de
+Hoffart, Maier, Shadid, Tomas, *Structure-preserving finite-element approximations of the magnetic
+Euler-Poisson equations* ([arXiv:2510.11808](https://arxiv.org/abs/2510.11808)), réalisé **avec le
+solveur `adc`** (la lib `adc_cpp` via ses bindings Python), pas avec leur code ni un code tiers.
+La cible analytique (problème de Petri en numpy) est retrouvée à 3 chiffres ; le solveur
+volumes-finis `adc` sous-estime le taux à résolution modérée (voir Résultats). Ce **n'est pas**
+une reproduction du modèle Euler-Poisson complet (`rho, rho*u, rho*v`) du papier, mais une
+validation de normalisation du **modèle réduit** de dérive `E × B`.
 Script : [`run.py`](run.py). Variante périodique minimale : [`band_instability.py`](band_instability.py).
 
 ## Le point clé : composé GÉNÉRIQUEMENT, sans solveur dédié
