@@ -5,11 +5,14 @@
 > Honest status (Phase 0 / 1): the full Euler-Poisson system is written
 > verbatim from the paper and the measurement harness is pre-registered, but NO
 > quantitative reproduction of the paper growth rates 0.772 / 0.911 / 0.683 is
-> established yet. The system-schur rows of the validation table below are
-> PENDING; no `gamma_numeric` is invented. The Cartesian baseline currently lands
-> far from the paper windows and the prime suspect is GEOMETRY (a Cartesian
-> square box plus an embedded circular Poisson wall diffuses the ring edge),
-> NOT the time splitting. The reduced ExB-scalar normalization study
+> established yet. The Cartesian-square baseline is now MEASURED (n=256 and n=384,
+> raw slope, paper windows, NO 2 pi): l=3 -95%, l=4 -94/-93%, l=5 -82%, and it does
+> NOT improve from n=256 to n=384 (resolution-independent). That rules out "needs
+> more resolution" and confirms the prime suspect is GEOMETRY (a Cartesian square
+> box plus an embedded circular Poisson wall diffuses the ring edge), NOT the time
+> splitting (the analytic rate depends only on l, omega_d, r0, r1, R). The
+> conservative disc cut-cell transport (T5) is in progress to test this. The
+> reduced ExB-scalar normalization study
 > (`diag/diag_polar_omega.py`, the `2 pi / rhobar` factor) is a DIFFERENT,
 > reduced model and is not a reproduction of the full system either. Method-level
 > caveats also remain (Lie, not Strang, splitting; once-per-step Gauss re-solve).
@@ -158,12 +161,12 @@ fidelity discussion, and they remain encumbered by Lie (not Strang) splitting.
 
 | mode | n | gamma_numeric | gamma_paper | err_pct | fit_window | engine | dt | splitting | schur |
 |------|-----|---------------|-------------|---------|--------------------|--------------|--------|------------------|----------------------|
-| 3 | 256 | PENDING | 0.772 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
-| 4 | 256 | PENDING | 0.911 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
-| 5 | 256 | PENDING | 0.683 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
-| 3 | 384 | PENDING | 0.772 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
-| 4 | 384 | PENDING | 0.911 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
-| 5 | 384 | PENDING | 0.683 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
+| 3 | 256 | 0.0372  | 0.772 | -95.2   | [0.40,0.70] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
+| 4 | 256 | 0.0489  | 0.911 | -94.6   | [0.60,0.75] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
+| 5 | 256 | 0.1211  | 0.683 | -82.3   | [1.15,1.35] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
+| 3 | 384 | 0.0385  | 0.772 | -95.0   | [0.40,0.70] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
+| 4 | 384 | 0.0613  | 0.911 | -93.3   | [0.60,0.75] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
+| 5 | 384 | 0.1257  | 0.683 | -81.6   | [1.15,1.35] paper  | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur t=0.5 |
 | 3 | 512 | PENDING | 0.772 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
 | 4 | 512 | PENDING | 0.911 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
 | 5 | 512 | PENDING | 0.683 | PENDING | PENDING            | system-schur | 1e-3   | Lie              | CondensedSchur t=0.5 |
