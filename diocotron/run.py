@@ -203,8 +203,47 @@ def run_evolution(l=4, n=192, delta=0.1, cfl=0.4, nframes=60, steps_per_frame=12
     return frames, times
 
 
+def _git_sha(path):
+    """SHA HEAD du depot contenant `path` (ou "unknown"). Pour la provenance des assets."""
+    import subprocess
+    try:
+        return subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"],
+                                       text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def _write_provenance(out, runs):
+    """Ecrit figures/provenance.json : tout ce qu'il faut pour reproduire les assets committes
+    (SHA adc_cpp + adc_cases, backend, resolution, commande, parametres, taux mesures)."""
+    import json
+    here_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # racine adc_cases
+    adc_cpp_root = os.path.abspath(os.path.join(os.path.dirname(adc.__file__), "..", "..", ".."))
+    provenance = {
+        "script": "diocotron/run.py",
+        "command": "python diocotron/run.py",
+        "produces": ["dispersion.png", "amplitude.png", "diocotron.gif", "snapshots.png"],
+        "adc_cpp_sha": _git_sha(adc_cpp_root),
+        "adc_cases_sha": _git_sha(here_repo),
+        "backend": "natif serie (adc.System, composition de briques models.diocotron)",
+        "resolution": "192x192",
+        "modes": MODES,
+        "nsteps_growth": 900,
+        "cfl": 0.4,
+        "python": sys.version.split()[0],
+        "adc_module": adc.__file__,
+        "gamma_num_mesure": {str(l): float(runs[l][2]) for l in MODES},
+    }
+    with open(os.path.join(out, "provenance.json"), "w") as fh:
+        json.dump(provenance, fh, indent=2)
+
+
 def main():
-    out = case_output_dir("diocotron")  # sorties sous <depot>/out/diocotron (gitignore)
+    # Figures CANONIQUES versionnees : ecrites DIRECTEMENT dans diocotron/figures/ (tracke), pour
+    # qu'une re-execution les rafraichisse EN PLACE (plus de copie manuelle depuis out/). Un
+    # provenance.json est depose a cote (SHA adc_cpp/adc_cases, backend, resolution, commande).
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+    os.makedirs(out, exist_ok=True)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -287,7 +326,8 @@ def main():
         plt.close(fig)
         print(f"   {len(frames)} frames, t_final = {times[-1]:.2f}")
 
-    print(f"\nFigures + gif ecrits dans : {out}")
+    _write_provenance(out, runs)
+    print(f"\nFigures + gif + provenance.json ecrits dans : {out}")
     print("OK repro_paper_2510_11808")
 
 

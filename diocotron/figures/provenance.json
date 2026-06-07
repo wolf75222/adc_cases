@@ -1,0 +1,28 @@
+{
+  "script": "diocotron/run.py",
+  "command": "python diocotron/run.py",
+  "produces": [
+    "dispersion.png",
+    "amplitude.png",
+    "diocotron.gif",
+    "snapshots.png"
+  ],
+  "adc_cpp_sha": "7598316a166117bb6cfc5463dcc13a5e879d975e",
+  "adc_cases_sha": "5112be06509ea72706fcb5fe3d86aa2255561a9c",
+  "backend": "natif serie (adc.System, composition de briques models.diocotron)",
+  "resolution": "192x192",
+  "modes": [
+    3,
+    4,
+    5
+  ],
+  "nsteps_growth": 900,
+  "cfl": 0.4,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "gamma_num_mesure": {
+    "3": 0.5990743592939177,
+    "4": 0.6620881549078356,
+    "5": 0.6519863398671814
+  }
+}
