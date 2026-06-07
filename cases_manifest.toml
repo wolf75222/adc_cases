@@ -5,10 +5,15 @@
 # longs (reproduction figures, gif) ou couteux restent hors CI et se lancent a la main.
 #
 # Categories :
-#   validation  : test numerique leger qui verifie des invariants par assert (coeur de la CI) ;
-#   tutoriel    : exemple pedagogique d'une capacite de l'API (lisible, leger) ;
-#   reproduction: reproduction d'un resultat publie, peut etre LONG (figures, gif) -> hors CI ;
-#   experimental: prototype / chemin non finalise (DSL interprete) -> hors CI par prudence.
+#   validation           : test numerique leger qui verifie des invariants par assert (coeur de la CI) ;
+#   tutoriel             : exemple pedagogique d'une capacite de l'API (lisible, leger) ;
+#   reproduction         : reproduction ETABLIE d'un resultat publie, peut etre LONG (figures, gif) -> hors CI ;
+#   reproduction-candidate: ecrit pour viser un resultat publie, mais reproduction quantitative PAS encore
+#                          etablie (table de validation PENDING) -> hors CI, ne PAS presenter comme reproduit ;
+#   experimental         : prototype / chemin non finalise (DSL interprete, mesure) -> hors CI par prudence.
+#
+# diag/ : les scripts de diagnostic (diag_polar_omega.py, petri_eigenvalue.py) ne sont PAS des cas du
+# manifeste ; ils se lancent a la main et servent les etudes de normalisation/spectre, hors CI.
 #
 # Champs :
 #   path     : script a lancer (relatif a la racine du depot) ;
@@ -113,3 +118,24 @@ category = "reproduction"
 ci = false
 needs = ["matplotlib"]
 desc = "Reproduction arXiv:2510.11808 (taux de croissance + figures + gif) : LONG, hors CI."
+
+[[case]]
+path = "hoffart_euler_poisson_dsl/check_model.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Oracle analytique du modele magnetique Euler-Poisson (Hoffart) en formules : flux, source Lorentz/electrique, valeurs propres et rhs de Poisson par assert."
+
+[[case]]
+path = "hoffart_euler_poisson_dsl/run.py"
+category = "reproduction-candidate"
+ci = false
+needs = ["matplotlib"]
+desc = "Vise arXiv:2510.11808 (systeme Euler-Poisson magnetise complet, etage Schur) : reproduction quantitative PAS encore etablie (table PENDING), hors CI. Baseline cartesienne loin du papier, geometrie suspecte (cf. adc_cpp/docs/HOFFART_FIDELITY.md)."
+
+[[case]]
+path = "schur_magnetized_cartesian/run.py"
+category = "experimental"
+ci = false
+needs = ["cxx"]
+desc = "Effet temporel de l'etage source condense par Schur sur un fluide isotherme magnetise cartesien raide (balayage du dt stable explicite vs Schur)."
