@@ -1,4 +1,4 @@
-# `perf/` — campagne de mesure de performance
+# `perf/` - campagne de mesure de performance
 
 Deux axes, mesures uniquement en delta depuis `origin/master` des deux dépôts (`adc_cpp`,
 `adc_cases`). Le cas physique est le **cas sûr** : Euler compressible pur, périodique, bulle de
@@ -7,7 +7,7 @@ du cas : [`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) ;
 `adc_cpp/bench/frontend_cpp.cpp` (namespace `safecase`). La **validation** du cas (équivalence
 des fronts + invariants, sans mesure) est le cas registré [`safe_euler_periodic/`](../safe_euler_periodic).
 
-## Axe 1 — fronts : C++ direct vs Python briques vs Python DSL
+## Axe 1 - fronts : C++ direct vs Python briques vs Python DSL
 
 `frontend_compare.py` joue la **même** physique avec les **mêmes** réglages numériques
 (minmod / rusanov / reconstruction conservative / SSPRK2 / `dt` FIXE) sur trois fronts ; le seul
@@ -41,7 +41,7 @@ détail 7-phases (poisson/aux/halos/transport/réduction/fence/alloc, via la mac
 `profile_step`), les fronts Python ne donnent que `total + solve_fields`. La comparaison croisée
 reste valide sur le **temps total cold-cache** et le **hot ms/pas**.
 
-## Axe 2 — scaling CPU/GPU/MPI
+## Axe 2 - scaling CPU/GPU/MPI
 
 Piloté côté `adc_cpp/bench/scaling_step.cpp` via `bench/run_scaling.sh` (multi-box, vrais halos
 MPI). Charges : `transport` (4096²), `poisson` (1024²), `amr` (non câblé dans ce binaire → ligne de
@@ -50,7 +50,7 @@ diagnostic explicite). Le JSONL produit (un par point du balayage) est tracé pa
 
 ## Local vs cluster
 
-- **Mac (série)** : validation/plomberie SEULEMENT — vérifie le câblage des API, la compilation DSL
+- **Mac (série)** : validation/plomberie SEULEMENT - vérifie le câblage des API, la compilation DSL
   `production`, l'identité numérique, les invariants, le schéma JSONL, les figures. Les temps série
   sont étiquetés `machine=<mac>, backend=serial` et **exclus** de toute affirmation de scaling.
 - **ROMEO (GH200/MPI/OpenMP)** : SEULE source de chiffres de scaling valides (CV<5%, cells/s,

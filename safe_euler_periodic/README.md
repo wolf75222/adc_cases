@@ -1,4 +1,4 @@
-# `safe_euler_periodic/` — cas sûr de référence (validation)
+# `safe_euler_periodic/` - cas sûr de référence (validation)
 
 Euler compressible **pur**, domaine périodique, **bulle de pression lisse** de faible amplitude :
 
@@ -22,7 +22,7 @@ des fronts à calcul identique.
 ## Source de vérité
 
 Le modèle (briques & DSL), les CI, le `dt` et les réglages vivent dans
-[`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) — partagés avec
+[`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) - partagés avec
 `perf/frontend_compare.py`. Le pendant C++ direct est `adc_cpp/bench/frontend_cpp.cpp` (namespace
 `safecase`) : les constantes et le schéma numérique **doivent** y coïncider bit-à-bit.
 
@@ -33,4 +33,4 @@ PYTHONPATH=<adc_cpp>/build-master/python:. python3 safe_euler_periodic/run.py --
 ```
 
 Nécessite un compilateur C++20 (`needs = ["cxx"]`) pour la compilation DSL `production`/`aot`. La
-**mesure** de performance (3 fronts, temps, figures) n'est PAS ici — voir [`perf/`](../perf).
+**mesure** de performance (3 fronts, temps, figures) n'est PAS ici - voir [`perf/`](../perf).
