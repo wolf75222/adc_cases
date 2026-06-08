@@ -131,7 +131,7 @@ def fit_growth(times, amplitudes, mode):
     return float(np.polyfit(times[mask], np.log(amplitudes[mask]), 1)[0])
 
 
-def build_uniform(compiled, rho, params):
+def build_uniform(compiled, rho, params, geometry="square"):
     n = rho.shape[0]
     sim = adc.System(n=n, L=params.length, periodic=False)
     sim.set_poisson(
@@ -141,6 +141,22 @@ def build_uniform(compiled, rho, params):
         wall="circle",
         wall_radius=params.radius,
     )
+    # GEOMETRIE DU TRANSPORT FV (chantier disc-discriminator). Par defaut 'square' :
+    # le transport tourne sur le carre cartesien complet (cote L = 2R), comportement
+    # historique BIT-IDENTIQUE (aucun appel a set_disc_domain). 'staircase' appelle
+    # set_disc_domain(L/2, L/2, R) pour materialiser le masque de domaine disque en
+    # escalier (contrat T2 #216, masque 0/1 cellule-centre reutilisant le level set du
+    # mur conducteur). Le centre du disque est le centre du carre (L/2, L/2) et son
+    # rayon est params.radius (= R), pour coincider exactement avec le mur Poisson
+    # circulaire deja pose ci-dessus. ATTENTION (cf. followupNeeded du chantier) :
+    # set_disc_domain construit le masque mais ne le BRANCHE PAS encore dans step() ;
+    # le routage du transport FV via assemble_rhs_masked reste un changement adc_cpp a
+    # cabler cote moteur. Cet appel pose donc le contrat geometrie cote cas ; le
+    # discriminant complet n'est actif qu'une fois ce routage moteur en place.
+    if geometry in ("staircase", "cutcell"):
+        sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
+    elif geometry != "square":
+        raise ValueError("geometry must be 'square', 'staircase' or 'cutcell', got %r" % geometry)
     # CondensedSchur requires B_z before set_source_stage is installed.
     sim.set_magnetic_field(params.omega * np.ones_like(rho))
     sim.add_equation(
@@ -152,7 +168,10 @@ def build_uniform(compiled, rho, params):
             variables="conservative",
         ),
         time=adc.Split(
-            hyperbolic=adc.Explicit(ssprk3=True),
+            # NOTE: ssprk2 (kind='explicit') car le chemin natif add_native_block
+            # n'accepte que 'explicit'|'imex' (pas 'ssprk3'). Suffisant pour le
+            # discriminant geometrie (la geometrie domine ; ssprk2 vs ssprk3 = O(dt)).
+            hyperbolic=adc.Explicit(method="ssprk2"),
             source=adc.CondensedSchur(theta=0.5, alpha=params.alpha),
         ),
     )
@@ -208,7 +227,7 @@ def potential(sim):
 def run_mode(mode, compiled, params, args):
     rho0 = paper_initial_density(args.n, mode, params)
     if args.engine == "system-schur":
-        sim = build_uniform(compiled, rho0, params)
+        sim = build_uniform(compiled, rho0, params, geometry=args.geometry)
     else:
         sim = build_amr(compiled, rho0, params, args)
 
@@ -284,7 +303,10 @@ def write_mode_outputs(result, out, params, engine, make_gif):
         for t, a in zip(result.times, result.amplitudes):
             writer.writerow([t, a, a / a0])
 
-    import matplotlib
+    try:
+        import matplotlib
+    except ImportError:
+        return  # figures optionnelles : sans matplotlib on garde les CSV (amplitude.csv ci-dessus + growth_rates.csv en aval)
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -416,6 +438,13 @@ def write_summary(results, out, params, args):
         "paper": "https://arxiv.org/abs/2510.11808",
         "engine": args.engine,
         "engine_label": engine_label(args.engine),
+        "geometry": args.geometry,
+        "geometry_note": (
+            "square: full Cartesian square transport (historical default, "
+            "bit-identical). staircase: set_disc_domain(L/2, L/2, R) builds the T2 "
+            "disc mask (#216); the engine-side routing of FV transport through "
+            "assemble_rhs_masked is a separate adc_cpp change (see followup)."
+        ),
         "normalization": "raw (no 2pi, no rhobar): full-model slope vs paper directly; "
                          "the 2pi/rhobar factor belongs ONLY to the reduced ExB-scalar "
                          "path (diag/diag_polar_omega.py, engine=reduced-ExB)",
@@ -452,7 +481,10 @@ def write_summary(results, out, params, args):
     with open(os.path.join(out, "metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2, sort_keys=True)
 
-    import matplotlib
+    try:
+        import matplotlib
+    except ImportError:
+        return  # growth_rates.csv + metadata.json deja ecrits ci-dessus ; la figure est optionnelle
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     modes = [r[0] for r in rows]
@@ -473,6 +505,15 @@ def write_summary(results, out, params, args):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", choices=("system-schur", "amr-imex"), default="system-schur")
+    parser.add_argument(
+        "--geometry",
+        choices=("square", "staircase", "cutcell"),
+        default="square",
+        help="FV transport sub-domain (system-schur only). 'square' (default) keeps the "
+             "historical full-square Cartesian transport, bit-identical. 'staircase' calls "
+             "set_disc_domain(L/2, L/2, R) to confine the transport to the staircase disc "
+             "mask (T2 contract #216); see followup on the engine-side routing.",
+    )
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
     parser.add_argument("--n", type=int, default=192)
     parser.add_argument("--t-end", type=float, default=10.0)
@@ -501,6 +542,10 @@ def main():
         raise SystemExit("--modes must be selected from 3, 4, 5")
     if args.engine == "system-schur" and mpi_size() > 1:
         raise SystemExit("system-schur is a single-rank reference; use amr-imex under MPI")
+    if args.geometry in ("staircase", "cutcell") and args.engine != "system-schur":
+        # set_disc_domain est expose sur System (system-schur), pas sur AmrSystem :
+        # le masque disque n'a pas de point d'entree dans le chemin amr-imex.
+        raise SystemExit("--geometry staircase/cutcell is only available with --engine system-schur")
     if args.engine == "amr-imex" and not args.acknowledge_amr_approximation:
         raise SystemExit(
             "amr-imex uses the same PDE but not the paper Schur stage or initial drift. "
@@ -525,7 +570,14 @@ def main():
         final_time=args.t_end,
         temperature=args.temperature,
     )
-    out = case_output_dir("hoffart_euler_poisson_dsl_%s" % args.engine.replace("-", "_"))
+    # Le suffixe geometrie separe les sorties square vs staircase (chaque geometrie
+    # ecrit son propre growth_rates.csv), ce qui permet de mesurer le gain du seul
+    # masque escalier. 'square' garde le nom historique pour ne rien casser des
+    # sorties existantes ; seul 'staircase' ajoute un suffixe.
+    case_name = "hoffart_euler_poisson_dsl_%s" % args.engine.replace("-", "_")
+    if args.geometry != "square":
+        case_name += "_%s" % args.geometry
+    out = case_output_dir(case_name)
     compiled = compile_model(params, args.engine, out)
     if args.compile_only:
         if mpi_rank() == 0:
