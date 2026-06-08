@@ -403,7 +403,7 @@ Taux de croissance (Fig 5.4) :
 Convergence en resolution (erreur -> 0) :
 ![convergence](figures/convergence.png)
 
-Tutoriel complet de reproduction (physique, math, algorithmes, etape par etape) : `TUTORIAL.md`.
+Tutoriel complet de reproduction (installation, physique, math, code, run, figures) : `README.md`.
 
 NB : les snapshots/GIF sont la densite advectee par la derive ExB normalisee (le champ que le full
 system-schur advecte, `alpha/|Omega|=1/rho_max=1`), representation de la limite de derive magnetique du

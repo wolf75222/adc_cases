@@ -86,32 +86,56 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
     if source not in ("schur", "local"):
         raise ValueError("source must be 'schur' or 'local'")
 
+    # Tout le modele s'ecrit ici en SYMBOLES, une seule fois. adc.dsl en derive le solveur de
+    # Riemann, genere le noyau C++ device-ready et le compile : on n'ecrit jamais de boucle ni de
+    # flux numerique a la main. Le reste de la fonction ne fait que poser les formules du papier.
     m = dsl.Model("hoffart_magnetic_euler_poisson_%s" % source)
+
+    # 1. Les inconnues CONSERVATIVES, celles que le schema fait avancer : densite et les deux
+    #    composantes de la quantite de mouvement m = rho*u. Pas d'energie (modele barotrope,
+    #    fermeture isotherme p = theta*rho). Le role indique au moteur le sens physique du champ.
     rho, mx, my = m.conservative_vars(
         "rho", "rho_u", "rho_v",
         roles=["Density", "MomentumX", "MomentumY"],
     )
 
+    # 2. Les variables PRIMITIVES, definies a partir des conservatives. On ecrit la relation
+    #    physique (u = m_x/rho, p = theta*rho) ; le DSL gere les deux conversions prim<->cons.
     u = m.primitive("u", mx / rho)
     v = m.primitive("v", my / rho)
     pressure = m.primitive("p", params.temperature * rho)
     m.primitive_vars(rho, u, v)
     m.conservative_from([rho, rho * u, rho * v])
 
+    # 3. Le FLUX hyperbolique d'Euler, composante par composante, comme au tableau :
+    #      d_t rho      + div(m)             = 0       -> flux de masse = m
+    #      d_t (rho u)  + div(rho u u + p)   = source  -> flux de qdm   = m*u + p (et m*v en y)
+    #    On donne les colonnes x et y ; le DSL en fait un flux numerique conservatif.
     m.flux(
         x=[mx, mx * u + pressure, mx * v],
         y=[my, my * u, my * v + pressure],
     )
+
+    # 4. Les VALEURS PROPRES (vitesses d'onde u, u +/- c avec c = sqrt(theta)) : le solveur de
+    #    Riemann (Rusanov) s'en sert pour la dissipation. En limite froide theta=0 -> c=0 et les
+    #    trois valeurs propres degenerent en u (advection pure).
     sound_speed = dsl.sqrt(params.temperature)
     m.eigenvalues(
         x=[u - sound_speed, u, u + sound_speed],
         y=[v - sound_speed, v, v + sound_speed],
     )
 
+    # 5. Les champs AUXILIAIRES : le potentiel phi et son gradient. Ils ne sont pas avances par le
+    #    flux ; le solveur de champ (Poisson) les remplit a chaque pas et le modele y a acces.
     m.aux("phi")
     grad_x = m.aux("grad_x")
     grad_y = m.aux("grad_y")
 
+    # 6. La SOURCE : force electrique -rho*grad(phi) + force de Lorentz m x Omega = (omega*m_y, -omega*m_x).
+    #    Deux variantes du MEME modele :
+    #      - 'local' : la source est emise dans le noyau C++ (chemin AMR, etage IMEX cell-local) ;
+    #      - 'schur' : source nulle ici, l'etage CondensedSchur l'avance implicitement (chemin de
+    #        reference). La laisser non nulle l'avancerait deux fois.
     if source == "local":
         omega = m.param("omega", params.omega)
         m.source([
@@ -120,13 +144,15 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
             -rho * grad_y - omega * mx,
         ])
     else:
-        # CondensedSchur owns the complete electrostatic/Lorentz source stage.
-        # Keeping a non-zero local source here would advance it twice.
         m.source([0.0 * rho, 0.0 * mx, 0.0 * my])
 
+    # 7. La loi de GAUSS qui ferme le couplage : -Delta phi = alpha*rho. Le solveur resout
+    #    Delta(phi) = rhs, d'ou le signe negatif. alpha = beta^2/rho_max est le couplage du papier.
     alpha = m.param("alpha", params.alpha)
-    # ADC solves Delta(phi) = rhs.  The paper uses -Delta(phi) = alpha*rho.
     m.elliptic_rhs(-alpha * rho)
+
+    # 8. check() valide la coherence (roles, dimensions, flux/source). check_model.py compare ensuite
+    #    le noyau COMPILE aux formules a la main sur 2x2 cellules : residu exactement nul.
     m.check()
     return m
 
