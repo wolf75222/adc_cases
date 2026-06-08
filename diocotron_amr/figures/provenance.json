@@ -1,0 +1,39 @@
+{
+  "script": "diocotron_amr/make_figures.py",
+  "command": "PYTHONPATH=<adc_build>:<adc_cases> python diocotron_amr/make_figures.py",
+  "produces": [
+    "density_compare.png",
+    "patch_map.png",
+    "mass_conservation.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "7c7a340348d752c85a03bfc25f93e31f2d536f8a",
+  "backend": "natif (adc.AmrSystem + adc.System, composition models.diocotron, NoSlope+Rusanov, geometric_mg periodique)",
+  "matplotlib_backend": "Agg",
+  "resolution": "base 64x64 (AMR : + 1 niveau fin) ; uniforme 64x64",
+  "regrid_every": 10,
+  "nsteps": 40,
+  "cfl": 0.4,
+  "band_mode": 4,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "n_i0_background": 1.0886226925452758,
+  "refine_threshold": 1.2386226925452757,
+  "patches_observed": [
+    2
+  ],
+  "amr_mass0": 1.0886226925452738,
+  "amr_mass_drel_final": 8.158735122666824e-16,
+  "amr_mass_drel_max": 3.059525671000059e-15,
+  "uniform_mass0": 4458.998548665441,
+  "uniform_mass_drel_final": 4.6912726955334235e-15,
+  "uniform_mass_drel_max": 6.119051342000118e-15,
+  "amr_density_min": 1.0,
+  "amr_density_max": 1.9667965217217644,
+  "uniform_density_min": 1.0,
+  "uniform_density_max": 1.9201882852043084,
+  "gap_amr_vs_uniform_sup": 0.08682538451395483,
+  "tagged_cells_init": 512,
+  "t_final_amr": 6.6203513457969905,
+  "t_final_uniform": 6.732565005578241
+}

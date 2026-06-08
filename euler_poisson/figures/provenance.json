@@ -1,0 +1,59 @@
+{
+  "script": "euler_poisson/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "energy_vs_t.png",
+    "de_vs_eps.png",
+    "density_map.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "7c7a340348d752c85a03bfc25f93e31f2d536f8a",
+  "backend": "natif serie (adc.System, un bloc models.euler_poisson, Poisson geometric_mg)",
+  "resolution": "64x64",
+  "periodic": true,
+  "nsteps": 20,
+  "dt": 0.004,
+  "gamma": 1.4,
+  "four_pi_G": 1.0,
+  "rho0": 1.0,
+  "eps_ref": 0.01,
+  "eps_sweep": [
+    0.005,
+    0.01,
+    0.02,
+    0.04,
+    0.08
+  ],
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "measured": {
+    "dE_grav": -0.0005857667019881774,
+    "dE_plas": 0.0006137104646768421,
+    "dE_grav_eps0": 0.0,
+    "dE_plas_eps0": 0.0,
+    "slope_dE_grav_vs_eps": 1.9999828000179334,
+    "slope_dE_plas_vs_eps": 1.9999834839718822,
+    "abs_dE_grav_sweep": [
+      0.00014644176735600922,
+      0.0005857667019881774,
+      0.0023430609580827877,
+      0.00937214996520197,
+      0.03748709228420921
+    ],
+    "abs_dE_plas_sweep": [
+      0.0001534277071186807,
+      0.0006137104646768421,
+      0.0024548359397158492,
+      0.009819249193242285,
+      0.03927548130741343
+    ],
+    "rho_amp_ci": 0.01997590912410363,
+    "rho_amp_grav_final": 0.017590677104134977,
+    "rho_amp_plas_final": 0.01746884963798334,
+    "rho_std_in_y_grav": 3.7620178298380707e-16,
+    "max_rel_mass_grav": 2.5979218776228748e-14,
+    "max_rel_mass_plas": 2.0983215165415525e-14,
+    "max_mom_grav": 8.881784197001252e-16,
+    "max_mom_plas": 8.881784197001252e-16
+  }
+}
