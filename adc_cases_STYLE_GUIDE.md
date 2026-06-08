@@ -26,7 +26,7 @@ La regle de couplage : chaque section en aval ecrit en clair "justifie la clause
 
 ### 2.x Le ton de Ne prouve pas est dicte par la categorie
 
-- `reproduction` (ex. `diocotron/run.py`) : dire ce qui est reproduit (oracle analytique == papier a 3 chiffres) ET ce qui ne l'est pas (taux FV sous-estime de -22 a -27 %). Pas de pending : la reproduction est etablie pour la partie annoncee.
+- `reproduction` (ex. `diocotron/run.py`) : dire ce qui est reproduit (oracle analytique == papier a 3 chiffres) et ce qui ne l'est pas (taux FV sous-estime de -22 a -27 %). Pas de pending : la reproduction est etablie pour la partie annoncee.
 - `reproduction-candidate` (ex. `hoffart_euler_poisson_dsl/run.py`) : doit ecrire pending. La table de validation est explicitement non etablie ; interdiction de presenter comme reproduit.
 - `validation` (ex. `euler_poisson/run.py`) : doit dire "ce n'est pas une reproduction publiee". On verifie des invariants, pas une courbe du papier.
 - `tutoriel` (ex. `composition/run.py`) : la clause dit "demontre une capacite d'API, ne valide aucun resultat physique publie".
@@ -51,7 +51,7 @@ La prediction falsifiable est enoncee des le contrat (section 0) et l'artefact q
 
 - Validation d'invariant (`euler_poisson`, `multispecies`, `two_euler`, `plasma`, `diocotron_amr`) : prediction = un invariant structurel (masse conservee, impulsion nette nulle, signes opposes). La derivation math (4) explique pourquoi l'invariant tient (potentiel periodique -> somme de force nulle). Section physique allegee, section "pourquoi cet invariant" renforcee. La section 7 devient "ce que l'invariant ne capture pas".
 
-- Equivalence DSL-vs-natif (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`) : prediction = egalite de chemins bit-a-bit (`np.array_equal`). NE jamais reproduire la physique deja derivee dans le cas-parent : lier (`../diocotron/`), pas copier. Les sections 1/4/5 se reduisent a un renvoi ; le coeur devient "quelles conventions du coeur sont reproduites" (table ExBVelocity / BackgroundDensity ancree `include/adc/physics/*.hpp`) et "comment l'egalite bit est verifiee et ce qu'une divergence trahirait".
+- Equivalence DSL-vs-natif (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`) : prediction = egalite de chemins bit-a-bit (`np.array_equal`). ne jamais reproduire la physique deja derivee dans le cas-parent : lier (`../diocotron/`), pas copier. Les sections 1/4/5 se reduisent a un renvoi ; le coeur devient "quelles conventions du coeur sont reproduites" (table ExBVelocity / BackgroundDensity ancree `include/adc/physics/*.hpp`) et "comment l'egalite bit est verifiee et ce qu'une divergence trahirait".
 
 - Etude de timing (`schur_magnetized_cartesian`) : prediction = un facteur de gain (pas stable Schur / pas stable explicite) et la borne `dt*omega_c`. Le coeur est la methodologie de mesure (`largest_stable_dt`, balayage geometrique, critere de stabilite densite finie/bornee/positive) et les caveats plateforme (backend AOT, `set_source_stage` au lieu de `adc.Split`). Pas de figure physique : un tableau methode/dt_stable/gain.
 
@@ -61,7 +61,7 @@ La prediction falsifiable est enoncee des le contrat (section 0) et l'artefact q
 
 Regles dures :
 
-- Ancrage reel : citer `run.py:NN` (intervalle de lignes) ET le nom exact (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`). Une affirmation theorique sans ligne qui l'implemente est coupee. Aucune ligne non triviale sans son justificatif.
+- Ancrage reel : citer `run.py:NN` (intervalle de lignes) et le nom exact (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`). Une affirmation theorique sans ligne qui l'implemente est coupee. Aucune ligne non triviale sans son justificatif.
 - Ne jamais paraphraser une ligne triviale (`import numpy as np`, `sys.path.insert`). On glose uniquement les lignes porteuses de physique ou d'algorithme.
 - Inline vs lien : on montre inline les fonctions physique-cle (le flux, les valeurs propres, l'assemblage de l'operateur, la mesure du diagnostic) en blocs de 5 a 15 lignes du `run.py` reel, suivis de puces qui expliquent chaque variable non triviale (`rho`, `Om`, `Lmat`, `Q`, `dE_grav`). On lie (sans copier) la plomberie : le bloc try/except import `adc_cases`, la machinerie de fallback backend, l'argparse.
 - Granularite selon le role : une fonction physique-cle (ex. `mode_l_amplitude`, `diocotron_eigenvalue`, `magnetized_model`) merite le commentaire ligne par ligne ; une fonction de plomberie (ex. `make_system` qui ne fait que `adc.System(...)`) merite une phrase.
@@ -161,7 +161,7 @@ Binaire, a cocher avant acceptation :
 6. [ ] La table 3 couches (Python compose / brique fige / noyau par cellule) est presente pour un cas a briques, chaque ligne pinnee a une ligne reelle.
 7. [ ] Les signes physiques sont verifies par le comportement asserte, pas par une convention de manuel plaquee.
 8. [ ] Chaque tolerance est justifiee par un ordre de grandeur (ratio bruit / magnitude physique).
-9. [ ] Chaque figure est embed ET suivie de 2 a 4 phrases d'analyse, partitionnees Prouve / Suggéré / Non montré.
+9. [ ] Chaque figure est embed et suivie de 2 a 4 phrases d'analyse, partitionnees Prouve / Suggéré / Non montré.
 10. [ ] Les diagnostics transitoires vont dans `out/<cas>/` (via `case_output_dir`) ; seules les figures de reproduction versionnees sont dans `<cas>/figures/` avec `provenance.json`.
 11. [ ] Chaque nombre cite a sa provenance (SHA, backend, resolution, cout mesure) et le caveat plateforme (signes/ordre de grandeur stables, derniers chiffres variables).
 12. [ ] Aucune section de recap ; aucun fait dit deux fois a deux altitudes.

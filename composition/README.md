@@ -15,7 +15,7 @@ demontre une capacite d'API, il ne valide aucun resultat physique publie.
 | Categorie (manifeste) | `tutoriel` (`cases_manifest.toml`, `composition/run.py`, `ci = true`, `needs = []`) |
 | Entrees | A : grille $48^2$, $L=1$, periodique ; electrons $\rho=1+0.02\cos(2\pi x/L)$ (Euler $\gamma=1.4$, $q=-1$), ions $\rho=1$ (isotherme $c_s^2=0.5$, $q=+1$) ; $dt=0.001$, 8 pas. B/D : grille $32^2$ periodique, diocotron ($B_0=1$, $\alpha=1$, fond $n_{i0}=\overline{\rho}$) ; B : $dt=0.002$, 12 pas ; D : $dt=0.001$, 20 pas Python |
 | Sorties | diagnostics imprimes (aucun fichier produit par `run.py`) ; les figures sont generees a part par `make_figures.py` dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | les `assert` de `run.py` : A masse electrons/ions $<$ `MASS_TOL=1e-10` ET $\|\phi\|_\infty>10^{-8}$ ET evolution electrons $>10^{-9}$ (`run.py:124-137`) ; B ecart deux compositions $==0$ exactement (`run.py:166`) ; C les 3 combinaisons invalides levent ET `n_species()==0` (`run.py:185-209`) ; D masse $<10^{-9}$ ET etat fini (`run.py:243-244`) |
+| Invariants garantis | les `assert` de `run.py` : A masse electrons/ions $<$ `MASS_TOL=1e-10` et $\|\phi\|_\infty>10^{-8}$ et evolution electrons $>10^{-9}$ (`run.py:124-137`) ; B ecart deux compositions $==0$ exactement (`run.py:166`) ; C les 3 combinaisons invalides levent et `n_species()==0` (`run.py:185-209`) ; D masse $<10^{-9}$ et etat fini (`run.py:243-244`) |
 | Prouve | (A) deux fluides au schema different coexistent dans un meme `adc.System`, chacun conserve sa masse ($2.7\times10^{-12}$ electrons, $1.8\times10^{-12}$ ions), le Poisson couple est actif ($\|\phi\|_\infty=5.06\times10^{-4}$), les electrons evoluent ($3.5\times10^{-5}$) ; (B) un meme modele compose deux fois donne un etat identique au bit (ecart $=0$, `np.array_equal` vrai) ; (C) HLLC sur transport scalaire, source fluide sur scalaire, et modele incoherent sont rejetes a la composition/a l'ajout, sans bloc ajoute ; (D) un integrateur SSPRK2 ecrit en Python conserve la masse ($2.3\times10^{-13}$) et reste fini |
 | Ne prouve pas | demontre une capacite d'API, ne valide aucun resultat physique publie. Aucun nombre n'est confronte a un article ; les CI sont des cosinus simples, les horizons sont courts (8/12/20 pas), aucune dynamique physique n'est interpretee. Le determinisme bit (B, D) est une propriete d'implementation (memes briques C++ figees, memes operations flottantes dans le meme ordre), pas une garantie cross-plateforme : il peut casser entre BLAS, ordre de sommation ou architecture. La conservation de masse mesuree n'est pas une validation de schema : c'est le minimum attendu d'un volumes-finis conservatif |
 | Provenance | adc_cpp `01873299`, adc_cases (deeptut) `a9541ba4`, backend natif serie, $48^2$ (A) / $32^2$ (B,D), ~1 s 1 coeur CPU ; `figures/provenance.json` |
@@ -208,7 +208,7 @@ Generees par `python make_figures.py` (memes parametres que `run.py`), versionne
   rien ici ne reproduit ni ne valide un regime publie. C'est un tutoriel : les cartes montrent que
   la composition produit des champs couples, pas qu'ils sont physiquement significatifs.
 
-### `determinism.png` : egalite bit, composition (B) ET pas Python (D)
+### `determinism.png` : egalite bit, composition (B) et pas Python (D)
 
 ![Deux heatmaps |a-b| identiquement noires (B compose, D pas Python) + histogramme du residu a zero](figures/determinism.png)
 

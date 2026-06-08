@@ -71,7 +71,7 @@ Lecture :
 
 - l = 4 : g_2pi = 0.9127 (n=128) et 0.9100 (n=192), exact contre le papier
   (0.911) aux deux resolutions. Stable en resolution.
-- l = 3 : g_2pi = 0.971 (+26 %) a n=128 ET n=192 contre 0.772 (stable, mais
+- l = 3 : g_2pi = 0.971 (+26 %) a n=128 et n=192 contre 0.772 (stable, mais
   decale).
 - l = 5 : oscille selon la fenetre de fit : g_2pi = 0.482 a n=128 (-29 % contre
   0.683, fenetre [2.12, 12.58]) et 0.866 a n=192 (+27 %, fenetre [2.12, 5.96]).
@@ -88,7 +88,7 @@ ratio analytique Im/Re (~ 0.33 a 0.20) precisement parce que Omega_raw ~ 0 a r0
 pas la). Cela confirme que la rotation locale n'est pas l'echelle pertinente.
 
 Le scatter l=3 (+26 %) et l=5 (oscillation -29 % -> +27 %) provient de la
-sensibilite A LA fenetre de fit du regime exponentiel, pas d'un deficit de
+sensibilite A la fenetre de fit du regime exponentiel, pas d'un deficit de
 physique : la pente log|c_l| n'est exponentielle pure que sur un intervalle borne
 (apres le transitoire initial, avant la saturation), et la pente extraite depend
 de cet intervalle. l = 4, dont la fenetre exponentielle est la plus nette, est

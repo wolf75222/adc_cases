@@ -1,15 +1,15 @@
-# Hoffart diocotron -- premiere mesure quantitative sur le chemin `system-schur`
+# Hoffart diocotron : premiere mesure quantitative sur le chemin `system-schur`
 
 Premiere table de taux de croissance produite sur le chemin **fidele au papier**
 (arXiv:2510.11808, section 5.3) : volumes finis uniformes, **Strang(SSPRK3 + CondensedSchur,
 theta=0.5)**, source electrostatique/Lorentz condensee par Schur, vitesse de derive initiale du
-papier. **Statut : reproduction non etablie -- deficit structurel confirme.**
+papier. **Statut : reproduction non etablie, deficit structurel confirme.**
 
 ## Setup
 - Moteur : `system-schur` (System uniforme, mono-rang), geometrie `square` (cartesienne pleine ;
   le verdict adc_cpp acte que la cut-cell est **sans effet** sur le taux).
 - Schema temporel : `adc.Strang(hyperbolic=adc.Explicit(method="ssprk3"),
-  source=adc.CondensedSchur(theta=0.5, alpha=alpha))` -- splitting symetrique d'ordre 2 du papier
+  source=adc.CondensedSchur(theta=0.5, alpha=alpha))`, splitting symetrique d'ordre 2 du papier
   + RK3 peu dissipatif (le chemin production accepte ssprk3 via adc_cpp PR #230).
 - Spatial : WENO5-Z + Rusanov, variables conservatives. `dt = 1e-3`. Limite froide (`theta_p=0`).
 - Parametres papier : `R=16, r0=6, r1=8, rho_max=1, rho_min=1e-6, beta=1e6, delta=0.1`,
@@ -59,25 +59,25 @@ phase precoce, puis s'accelere graduellement sans atteindre le taux papier.
 ## Verdict
 
 Le deficit est **structurel**, pas un artefact de :
-- **resolution** -- gamma_3 converge vers ~0.035 (ne tend pas vers 0.77 quand n croit) ; **concorde
-  avec le verdict GH200 du depot** (`adc_cpp docs/HOFFART_GEOMETRY_VERDICT.md`, #236 : -95% a n=256 ET
+- **resolution** : gamma_3 converge vers ~0.035 (ne tend pas vers 0.77 quand n croit) ; **concorde
+  avec le verdict GH200 du depot** (`adc_cpp docs/HOFFART_GEOMETRY_VERDICT.md`, #236 : -95% a n=256 et
   n=384, plateau ~0.037 resolution-independant). Cette mesure laptop reproduit donc le resultat GH200.
-- **geometrie** -- #236 acte que square == staircase == cutcell donnent le même taux (cut-cell sans effet) ;
-- **fenetre / timing** -- meme en fenetre tardive [1.0, 1.4] ou glissante jusqu'a t=2.5, le taux
+- **geometrie** : #236 acte que square == staircase == cutcell donnent le même taux (cut-cell sans effet) ;
+- **fenetre / timing** : meme en fenetre tardive [1.0, 1.4] ou glissante jusqu'a t=2.5, le taux
   reste ~10x sous le papier.
 
 Causes écartées par ce travail (donnees nouvelles vs #236, qui ne testait ni Gauss ni temperature) :
-1. ~~**Politique de Gauss (R0)**~~ -- **écartée** (section 4 : `evolve ~= restart`).
-2. ~~**Limite froide**~~ (`theta_p`) -- **écartée** : scan temperature (l=3, n=128) `theta_p=0 -> 0.0321`,
+1. ~~**Politique de Gauss (R0)**~~, **écartée** (section 4 : `evolve ~= restart`).
+2. ~~**Limite froide**~~ (`theta_p`), **écartée** : scan temperature (l=3, n=128) `theta_p=0 -> 0.0321`,
    `0.25 -> 0.0290`, `1.0 -> 0.0280` : ajouter de la pression empire legerement, ne recupere rien.
 
 Cause restante : **sur-amortissement de l'operateur spatial** sur le chemin cartesien (pas une
-non-positivite -- distinction importante vs le chemin polaire). Diagnostic complet :
+non-positivite, distinction importante vs le chemin polaire). Diagnostic complet :
 `adc_cpp docs/HOFFART_SPATIAL_DIAGNOSTICS.md` (#238, workflow + revue adversariale).
 
 correction (vs version precedente de ce doc qui parlait de "reconstruction non positive") : sur le
 chemin cartesien, **min(rho) reste positif** au cours du run (mesure : 6.7e-7 au plancher 1e-6, jamais
-negatif, jamais NaN). Le cartesien NE diverge pas -- il est sur-amorti. La non-positivite / le blow-up
+negatif, jamais NaN). Le cartesien ne diverge pas, il est sur-amorti. La non-positivite / le blow-up
 appartiennent au chemin polaire (`IsothermalFluxPolar`, metrique `1/r`, source `1/rho`), pas ici.
 Consequence (preuve dans #238 section 3) : un correctif de positivite (plancher / Zhang-Shu) est
 **inerte sur le taux cartesien** (les cellules sont deja positives ; Zhang-Shu ne mord que sur le fond
@@ -85,7 +85,7 @@ sans signal). Le candidat reel du sur-amortissement = **dissipation Rusanov** `~
 proportionnelle au saut 1e6 au contact d'anneau (le flux numerique, pas la reconstruction WENO5-Z qui
 ne s'effondre pas). Tester un flux moins dissipatif a 3-var = chantier C++ (`hll` non expose par le
 DSL ; hllc/roe exigent une pression absente en isotherme froid). Le modele réduit ExB scalaire
-reproduit la cible (+0.2% l=4) car il n'a NI reconstruction de moment NI Rusanov sur le moment.
+reproduit la cible (+0.2% l=4) car il n'a ni reconstruction de moment ni Rusanov sur le moment.
 **Reserve metrologique** : un facteur 2 pi est omis sur le chemin cartesien-Schur (`NORMALIZATION.md`)
 -> une part du deficit pourrait etre non physique, a clore avant toute conclusion causale.
 
@@ -96,7 +96,7 @@ Le finding R0 du design (`adc_cpp docs/AMR_CONDENSED_SCHUR_DESIGN.md`, qualifie 
 (`-Delta phi = alpha rho`) et **ecrase** le `phi` evolue par l'etage Schur, tuant la dynamique
 restart-free `-Delta phi` du papier. On a implemente le mecanisme `System.set_gauss_policy` :
 - `restart` (defaut) : re-resout Gauss a chaque pas (historique, bit-identique) ;
-- `evolve` : apres `phi^0`, `solve_fields` NE re-resout plus le Poisson -- l'etage Schur fait evoluer
+- `evolve` : apres `phi^0`, `solve_fields` ne re-resout plus le Poisson, l'etage Schur fait evoluer
   `phi` in-place dans `ell_phi()`, reproduisant l'evolution `-Delta phi` sans restart du papier.
 
 Mesure (n=128, fenetres papier ; cf. `adc_cpp` PR GaussPolicy) :
@@ -111,7 +111,7 @@ Mesure (n=128, fenetres papier ; cf. `adc_cpp` PR GaussPolicy) :
 ~10-20x sous le papier. La contrainte de Gauss discrete est approximativement conservee par le
 transport, donc la re-imposer (`restart`) est quasi un no-op vs l'evolution `-Delta phi`. **Le
 deficit structurel n'est pas la politique de Gauss.** Consequence forte : **conditionner la Phase C
-(Schur-sur-AMR) a R0 etait mal oriente -- l'AMR-Schur ne corrigera pas le taux**. Note : `restart`
+(Schur-sur-AMR) a R0 etait mal oriente, l'AMR-Schur ne corrigera pas le taux**. Note : `restart`
 est bit-identique a la baseline sans GaussPolicy (gamma_3=0.0321 a l'identique) -> NO-default-change.
 
 **Verdict R0 : écarté** (ne corrige pas le taux).
@@ -132,7 +132,7 @@ pas la valeur absolue** (la cible 0.772 ne vaut que pour les parametres papier).
 
 gamma_3 ne remonte pas quand le contraste baisse (plat, voire plus bas), et **min(rho) reste positif**.
 Reserve (revue #238) : ce scan est confondu (monter rho_min change aussi la charge de fond
-`alpha*rho_min`) -- mais le resultat plat + positif confirme : **pas de non-positivite cartesienne**.
+`alpha*rho_min`), mais le resultat plat + positif confirme : **pas de non-positivite cartesienne**.
 
 **Beta** (omega=alpha=beta^2 ; `w=theta*dt*omega`, le det de Lorentz est `1+w^2`) :
 
@@ -145,7 +145,7 @@ Reserve (revue #238) : ce scan est confondu (monter rho_min change aussi la char
 
 gamma_3 **exactement plat** sur 4 ordres de grandeur d'omega (w^2 de 25 a 2.5e17, ce dernier au bord
 de la precision float64). -> la **raideur / omega / precision de l'eliminateur de Lorentz est écartée**
-comme cause. Le deficit est invariant aux deux parametres extremes du probleme (contraste ET omega).
+comme cause. Le deficit est invariant aux deux parametres extremes du probleme (contraste et omega).
 
 ## Synthese des causes écartées (cette session + #236)
 
@@ -175,7 +175,7 @@ Mesure system-schur cartesien (n=128, Strang+Schur, fenetres papier) :
 **HLL ~= Rusanov** (a ~2% pres, dans les deux sens). Le candidat "dissipation Rusanov au contact"
 (hypothese n1 du playbook #238) est donc **écarté** : reduire la dissipation de flux ne recupere pas
 le taux. Le plateau ~0.032 est invariant au flux comme au contraste, a beta, a la politique de Gauss
-et a la temperature -- une robustesse remarquable qui pointe vers une cause non locale au flux/recon.
+et a la temperature, une robustesse remarquable qui pointe vers une cause non locale au flux/recon.
 
 ## Verrou restant (apres 9 causes ecartees)
 
@@ -183,7 +183,7 @@ Le deficit cartesien n'est ni temporel, ni geometrique, ni Gauss/R0, ni temperat
 raideur/omega, ni non-positivite, ni dissipation de flux. Suspects restants (branche "HLL ne change
 rien" du plan user) :
 1. **Couplage Schur** : la facon dont l'etage source condense reconstruit/applique la derive E×B
-   (vs le ExB reduit qui advecte rho directement) -- le full transporte un moment compressible re-derive
+   (vs le ExB reduit qui advecte rho directement), le full transporte un moment compressible re-derive
    a chaque pas, le reduit non.
 2. **Observable / normalisation 2 pi** : reserve metrologique (`NORMALIZATION.md`). partielle au mieux :
    meme x2pi (~6.28), 0.035 -> 0.22, encore 3-4x sous 0.772. Ne ferme pas le facteur seul.
@@ -215,9 +215,9 @@ ExB scalaire sur grille carree.
   bien que la grille polaire. Le cut-cell (#236) et la resolution (converge 0.035) ne corrigent pas ce
   facteur geometrique -> limitation fondamentale du FV cartesien pour cette instabilite d'anneau tournant.
 
-### 7bis. Ratio Im/Re (scale-invariant) -> LE mecanisme : rotation captee, croissance etouffee
-Mesure du complexe c_l(t) sur r0 (cartesien, full ET reduit) : on extrait gamma_raw (pente de log|c_l|)
-ET Omega_raw (pente de la phase = frequence de rotation azimutale du mode), fenetres papier, n=128.
+### 7bis. Ratio Im/Re (scale-invariant) -> le mecanisme : rotation captee, croissance etouffee
+Mesure du complexe c_l(t) sur r0 (cartesien, full et reduit) : on extrait gamma_raw (pente de log|c_l|)
+et Omega_raw (pente de la phase = frequence de rotation azimutale du mode), fenetres papier, n=128.
 
 | l | gamma_raw | Omega_raw | ratio gamma/Om |
 |---|---|---|---|
@@ -225,7 +225,7 @@ ET Omega_raw (pente de la phase = frequence de rotation azimutale du mode), fene
 | 4 | -0.004 | **0.664** | -0.01 |
 | 5 | 0.107 | **0.706** | 0.15 |
 
-(full ~= reduit, encore.) LE fait decisif : **Omega_raw ~ 0.5-0.7** -- le mode tourne fortement (la
+(full ~= reduit, encore.) le fait decisif : **Omega_raw ~ 0.5-0.7** : le mode tourne fortement (la
 derive E×B azimutale autour de l'anneau est captee par la grille carree), mais **gamma_raw ~ 0.03**
 (vs ~0.77 attendu). **Le cartesien capte la rotation mais etouffe la croissance** (facteur ~15-25x).
 L'instabilite diocotron croit du cisaillement radial d_rho/d_r aux bords d'anneau r0/r1 ; sur grille
@@ -241,7 +241,7 @@ bord d'anneau qui pilote la croissance** (+ normalisation 2 pi). commun a tous l
 (full = reduit). Ce n'est aucun knob fixable du moteur (10 causes ecartees : resolution, geometrie de
 bord, temps, Gauss, temperature, contraste, beta/omega, non-positivite, dissipation de flux, structure
 du modele ; + ratio Im/Re : rotation OK, croissance etouffee). **La repro N'est pas atteignable
-proprement en FV cartesien** -- il faut un maillage qui resout le cisaillement radial de l'anneau (polaire).
+proprement en FV cartesien** : il faut un maillage qui resout le cisaillement radial de l'anneau (polaire).
 
 Voies de repro restantes (toutes hors cartesien) :
 1. **ExB reduit polaire + 2 pi** : reproduit l=4 exact, l=3/l=5 partiels. **Voie credible etablie** (l'objet

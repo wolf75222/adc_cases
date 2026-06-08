@@ -95,7 +95,7 @@ de la grille principale heritee de PR-0.)
 > (t0 ~ 6.5) a tout n : il passe de -10.3 % (n=256) a -8.6 % (n=384) puis -8.8 % (n=512), soit un
 > aplatissement net autour de -9 % a haute resolution. Voir le verdict prudent plus bas.
 
-### Tracabilite : fenetre de fit des points O5 l=4 (basse ET haute resolution)
+### Tracabilite : fenetre de fit des points O5 l=4 (basse et haute resolution)
 
 Le CSV (`out/diocotron/sweep_results.csv`) ecrit pour chaque ligne les bornes de la fenetre de
 `fit_linear_phase` : indices `fit_i0..fit_i1` et temps `fit_t0..fit_t1`. Voici ces bornes pour les
@@ -171,7 +171,7 @@ d'anneau cartesien advecte sur grille pleine, cf. `docs/PAPER_ROADMAP.md`).
   plancher structurel ni par une diffusion residuelle. **Verdict : aucun gap notable a refermer ;
   ni l'ordre ni la haute resolution ne font apparaitre de plancher sur l=5.**
 
-**Conclusion globale (avec l'axe O5 ET la confirmation haute resolution ROMEO).** La mesure
+**Conclusion globale (avec l'axe O5 et la confirmation haute resolution ROMEO).** La mesure
 n=384/512 (job ROMEO 639912, x64cpu) reverse la lecture optimiste que PR-0 tirait des deux points
 propres basse resolution. PR-0 lisait : "l=4 O5 tombe a ~-4 % -> le residu est de la diffusion, pas
 un plancher". **La haute resolution ne reproduit pas ce -4 %.** Sur les deux modes ou la mesure est
@@ -201,7 +201,7 @@ preuve definitive. Cette lecture re-ouvre l'hypothese de plancher de PR-0 (que l
 resolution avait semble affaiblir), en situant sa taille plausible vers ~9-10 % a l'ordre 5 (contre
 ~12 % vus a O2), sous reserve des deux limites ci-dessous.
 
-Ce verdict reste a confirmer et NE justifie a lui seul aucune reecriture de la roadmap papier :
+Ce verdict reste a confirmer et ne justifie a lui seul aucune reecriture de la roadmap papier :
 (1) le plateau l=3 ne tient pour l'instant que sur un cran plat (n=384 -> n=512) ; il faudrait soit
 un n=768/1024, soit deux horizons `t_end` differents, pour exclure une convergence simplement tres
 lente ; (2) les points l=4 haute resolution sont biaises par leur fenetre de fit precoce - avant de
