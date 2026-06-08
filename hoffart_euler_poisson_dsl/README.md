@@ -344,38 +344,6 @@ des patchs AMR petits), peu parallélisable à ces tailles. Le même constat est
 ROMEO (`HERO_RESULTS.md`) : à ces tailles, le pas tourne mieux en CPU multi-cœur modéré qu'en
 saturant beaucoup de cœurs ou un GPU. Pour scaler fort, il faut des problèmes bien plus gros.
 
-### ROMEO : AMR 3 niveaux (démonstration)
-
-L'exemple C++ `diocotron_amr3` produit un AMR à 3 niveaux dont les patchs raffinés suivent
-dynamiquement l'instabilité. La configuration de cet exemple est planaire (couche de
-cisaillement diocotron), distincte de l'anneau du papier : c'est une démonstration de la machinerie
-AMR + HPC, pas la reproduction annulaire. Les niveaux 1 (cyan) et 2 (vert) se déplacent avec la
-couche ; déterminisme OpenMP == série (drift ~1e-14).
-
-![AMR 3 niveaux, frame](figures/amr3_frame.png)
-
-![AMR 3 niveaux, animation](figures/diocotron_amr3_romeo.gif)
-
-Run qualité : res 256, 600 pas, 96 threads, 14.4 s (31 frames).
-
-### ROMEO : anneau haute résolution (le modèle papier)
-
-Le modèle papier (anneau, `system-schur` uniforme) tourne aussi sur ROMEO à haute résolution
-effective (WENO5-Z + SSPRK3, OMP 96, ~1 h), résolutions effectives 256 / 512 / 1024
-(`HERO_RESULTS.md`, job 613961) :
-
-| mode l | papier | eff 256 | eff 512 | eff 1024 |
-|---|---|---|---|---|
-| 3 | 0.772 | 0.838 | 0.850 | 0.853 |
-| 4 | 0.911 | 0.985 | 0.988 | 0.987 |
-| 5 | 0.683 | 0.730 | 0.731 | 0.729 |
-
-Ce chemin C++ sur-tire de ~+8 % (uniforme, plat en résolution), attribué dans le journal au bord
-cartésien en escalier. C'est une métrologie différente de celle du chemin Python T3 de ce dépôt
-(fenêtres mappées + `2pi/rhobar`), qui donne −2 % et converge vers le papier (section 9). Les deux
-mesurent le même anneau ; l'écart entre +8 % et −2 % est une différence de métrologie entre les
-deux drivers, pas de physique. La reproduction quantitative la plus serrée reste le chemin T3.
-
 ## 11. Carte des fichiers
 
 - `model.py` : le modèle Euler-Poisson magnétisé en DSL (commenté étape par étape), les paramètres, la

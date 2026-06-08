@@ -124,18 +124,9 @@
         "96": "7.4s"
       },
       "source": "ROMEO job 648140"
-    },
-    "amr3_frame.png": {
-      "what": "frame de l'AMR 3 niveaux (exemple C++ diocotron_amr3, config PLANAIRE, distincte de l'anneau)",
-      "reading": "niveau 1 (cyan) et 2 (vert) suivent la couche de cisaillement ; demo machinerie AMR",
-      "source": "ROMEO job 648139"
-    },
-    "diocotron_amr3_romeo.gif": {
-      "what": "animation AMR 3 niveaux (diocotron planaire), ROMEO 96 coeurs x64cpu, drift ~1e-14",
-      "source": "ROMEO job 648139 (res 256, 600 pas, 14.4s)"
     }
   },
   "paper": "https://arxiv.org/abs/2510.11808",
   "python": "3.12 (anaconda3, macOS arm64)",
-  "reproduction_status": "REPRODUCTION FV cartesienne ETABLIE a <10% (T3, juin 2026) : full system-schur l=3 -9.1%, l=4 -1.9%, l=5 +0.04% apres mesure paper-faithful (fenetres mappees + 2pi/rhobar). Metrologie PARTIELLE (residu grille/resolution/fenetre). Le 'PENDING -95%' precedent etait un artefact de metrologie. | PERF : local 1 coeur (n=96 120s ... n=192 490s) ; ROMEO scaling threads ~1.6x a 24 (diocotron AMR petit noyau) ; ROMEO AMR 3 niveaux (config planaire) demo ; ROMEO anneau haute-res hero +8% (metrologie C++ differente du T3 Python -2%)."
+  "reproduction_status": "REPRODUCTION FV cartesienne ETABLIE a <10% (T3, juin 2026) : full system-schur l=3 -9.1%, l=4 -1.9%, l=5 +0.04% apres mesure paper-faithful (fenetres mappees + 2pi/rhobar). Metrologie PARTIELLE (residu grille/resolution/fenetre). Le 'PENDING -95%' precedent etait un artefact de metrologie. | PERF : local 1 coeur (n=96 120s ... n=192 490s) ; ROMEO scaling threads ~1.6x a 24 (diocotron AMR petit noyau)."
 }
