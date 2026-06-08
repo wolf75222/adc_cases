@@ -185,6 +185,37 @@ def build_uniform(compiled, rho, params, geometry="square"):
     return sim
 
 
+def amr_initial_drift(params, rho):
+    """Vitesse de derive initiale du papier ``v0 = -(grad phi0 x Omega)/|Omega|^2`` pour semer l'etat
+    conservatif de l'AMR (Phase B). Resout le Poisson initial ``-Delta phi = alpha rho`` (meme paroi
+    circulaire, resolution = niveau grossier AMR) sur un System uniforme JETABLE, via un compile
+    target='system' du meme modele (le chemin AMR ne resout pas le Poisson au build, et son modele
+    compile cible 'amr_system' n'est pas chargeable dans un System).
+
+    SOLVE UNIQUE : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
+    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite SINGLE-PASS, signalee distinctement
+    dans les metadonnees. Renvoie (u0, v0) ; leve si le solve echoue (l'appelant retombe sur set_density).
+    """
+    n = rho.shape[0]
+    probe_model = magnetic_euler_poisson_model(params, source="schur")  # source nulle : seul le Poisson importe
+    compiled_sys = probe_model.compile(backend="production", target="system",
+                                       name="hoffart_amr_drift_probe")
+    probe = adc.System(n=n, L=params.length, periodic=False)
+    probe.set_poisson(
+        rhs="composite", solver="geometric_mg", bc="dirichlet",
+        wall="circle", wall_radius=params.radius,
+    )
+    probe.add_equation(
+        "electrons", model=compiled_sys,
+        spatial=adc.FiniteVolume(limiter="weno5", riemann="rusanov", variables="conservative"),
+        time=adc.Explicit(method="ssprk2"),
+    )
+    zeros = np.zeros_like(rho)
+    probe.set_primitive_state("electrons", rho=rho, u=zeros, v=zeros)
+    probe.solve_fields()
+    return drift_velocity_from_potential(np.asarray(probe.potential()), params)
+
+
 def build_amr(compiled, rho, params, args):
     sim = adc.AmrSystem(
         n=rho.shape[0],
@@ -212,7 +243,23 @@ def build_amr(compiled, rho, params, args):
         wall_radius=params.radius,
     )
     sim.set_refinement(args.refine_threshold)
-    sim.set_density("electrons", rho)
+    # Phase B (Probleme 2) : demarrer l'AMR depuis l'etat de DERIVE du papier (rho, rho*u0, rho*v0)
+    # au lieu de m=0. set_conservative_state pose l'etat conservatif COMPLET sur le grossier (prolonge
+    # aux niveaux fins). Tout echec -- solve degenere, OU un adc anterieur a set_conservative_state --
+    # RETOMBE proprement sur set_density (comportement historique m=0) : aucune regression de robustesse.
+    try:
+        u0, v0 = amr_initial_drift(params, rho)
+        # Modele isotherme 3-var : conservatif = [rho, rho*u, rho*v] (pas d'energie). On valide le
+        # NOMBRE de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
+        state = np.stack([rho, rho * u0, rho * v0])
+        if state.shape[0] != compiled.n_vars:
+            raise ValueError("etat de derive a %d composantes mais le bloc compile en a %d"
+                             % (state.shape[0], compiled.n_vars))
+        sim.set_conservative_state("electrons", state)
+    except Exception as exc:  # noqa: BLE001 -- fallback robuste, jamais de regression du build
+        if mpi_rank() == 0:
+            print("[amr-imex] seed de derive indisponible (%s) -> fallback set_density (m=0)" % exc)
+        sim.set_density("electrons", rho)
     return sim
 
 
@@ -472,7 +519,12 @@ def write_summary(results, out, params, args):
                 else [
                     "finite-volume AMR spatial discretisation",
                     "cell-local IMEX rather than condensed Schur",
-                    "zero initial momentum rather than the drift state",
+                    # Phase B : l'AMR demarre desormais a l'etat de derive (set_conservative_state),
+                    # mais via UN SEUL solve Poisson (probe uniforme), pas la relaxation a deux passes
+                    # du chemin system-schur. Sur un adc anterieur a set_conservative_state, le seed
+                    # retombe sur m=0 (avertissement imprime au run).
+                    "single-pass drift initialization (one Poisson solve, not the two-pass relaxation "
+                    "of system-schur)",
                     "Cartesian transport outside the circular Poisson wall",
                 ]
             ),
