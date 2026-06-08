@@ -157,9 +157,9 @@ def build_uniform(compiled, rho, params, geometry="square"):
     # 'staircase'/'cutcell' : set_disc_domain(L/2, L/2, R, mode=...) materialise le
     # masque disque (meme level set que le mur Poisson circulaire) ET est branche dans
     # System::step depuis adc_cpp #224 -- le transport FV est confine au disque.
-    # NB : experience geometrie (verdict adc_cpp "cut-cell sans effet, deficit
-    # structurel") -- cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
-    # le deficit vient du schema temporel, pas de la geometrie.
+    # NB : cut-cell n'a pas d'effet mesurable sur le taux. Le "deficit -95%" historique
+    # etait un artefact de metrologie (fenetre + horloge), pas la geometrie ni le schema :
+    # mesure paper-faithful, le full reproduit a <10% et converge (RESULTS sections 9-11, T3).
     if geometry in ("staircase", "cutcell"):
         sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
     elif geometry != "square":
