@@ -1,14 +1,14 @@
 # magnetic_isothermal_dsl : fluide isotherme magnetise ecrit en formules, valide sans oracle natif
 
-Un fluide d'Euler ISOTHERME (fermeture $p=c_s^2\rho$) couple a Poisson, avec une force de Lorentz
-pilotee par un champ $B_z$ constant lu dans le canal auxiliaire ETENDU (indice 3). Toute la physique
-est DECLAREE en expressions symboliques (`adc.dsl.Model`) ; le DSL genere le C++, le compile en `.so`
-et l'installe via `add_equation(...)`. Particularite : AUCUN modele natif de reference n'existe pour
-ce modele (pas de brique nommee "magnetic_isothermal" cote coeur). La correction n'est donc PAS
+Un fluide d'Euler isotherme (fermeture $p=c_s^2\rho$) couple a Poisson, avec une force de Lorentz
+pilotee par un champ $B_z$ constant lu dans le canal auxiliaire etendu (indice 3). Toute la physique
+est declaree en expressions symboliques (`adc.dsl.Model`) ; le DSL genere le C++, le compile en `.so`
+et l'installe via `add_equation(...)`. Particularite : aucun modele natif de reference n'existe pour
+ce modele (pas de brique nommee "magnetic_isothermal" cote coeur). La correction n'est donc pas
 prouvee contre un oracle natif. Elle l'est par (1) parite inter-backend production/aot quand les deux
-se lient, et (2) un oracle de Lorentz ANALYTIQUE en numpy. Sur macOS, le backend `production` ne se
+se lient, et (2) un oracle de Lorentz analytique en numpy. Sur macOS, le backend `production` ne se
 lie pas (ABI des en-tetes du module pre-construit) : seul `aot` est exerce, et c'est (2) qui porte la
-preuve. La physique de la force de Lorentz et la fermeture isotherme ne sont pas re-derivees ici :
+preuve. La physique de la force de Lorentz et la fermeture isotherme ne sont pas re-derivees ici,
 elles renvoient aux briques du coeur et au cas magnetise complet
 [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/).
 
@@ -20,12 +20,12 @@ elles renvoient aux briques du coeur et au cas magnetise complet
 | Entrees | grille $32^2$, $L=1$, **periodique** ; CI $\rho=1+0.05\cos(2\pi x)$, $m_x=0.3\rho$ ($u=0.3$), $m_y=0$ ; $c_s^2=1$, $q=-1$, $B_z=2$ (constant) ; schema minmod + Rusanov, SSPRK2, 40 pas a CFL$=0.4$ |
 | Sorties | etat `(3,n,n)=[\rho,m_x,m_y]` via `get_state("plasma")` ; `eval_rhs("plasma")` (residu local) ; 2 figures dans `figures/` + `figures/provenance.json` ; les `.so` DSL sous `out/magnetic_isothermal_dsl/` |
 | Invariants garantis | les `assert` de `run.py` : oracle Lorentz `err_x == 0 and err_y == 0` (`run.py:217`) et canal densite `max\|dR[0]\| == 0` (`run.py:221`) ; `lor_contrib > 0` (`run.py:222`) ; parite inter-backend `np.array_equal` SI $\geq 2$ backends (`run.py:196`) ; masse `drift < 1e-9` (`run.py:240`) ; rotation `\|\langle m_y\rangle\| > 1e-6` (`run.py:242`) |
-| PROUVE | le terme magnetique compile vaut EXACTEMENT $(B_z m_y,\,-B_z m_x)$ : `err_x = err_y = 0.000e+00` (egalite bit, numpy) ; $B_z$ ne touche jamais la densite (`dR[0]==0`) ; il est non nul ($\max\|dR\|=6.299\times10^{-1}$) ; la masse derive de $2.887\times10^{-15}$ ; la quantite de mouvement moyenne TOURNE de $\langle m\rangle=(0.3,0)\to(0.2162,-0.2080)$, angle $-43.88^\circ$, a comparer a $\omega_c t=-43.88^\circ$ |
-| NE PROUVE PAS | **pas une reproduction publiee** et **pas de parite DSL-vs-natif** ici (aucune brique native "magnetic_isothermal" n'existe ; le `MagneticLorentzForce` du coeur n'est pas branche en Python dans ce cas). Sur macOS le backend `production` ne se lie pas (ABI en-tetes) : la **parite inter-backend est SAUTEE**, un seul chemin (`aot`) est verifie. L'oracle ne teste QUE le terme magnetique (difference $B_z\!=\!B_0$ moins $B_z\!=\!0$), pas le flux ni l'electrostatique. Regime EXPLICITE (pas le Schur condense raide) ; $B_z$ uniforme |
+| PROUVE | le terme magnetique compile vaut exactement $(B_z m_y,\,-B_z m_x)$ : `err_x = err_y = 0.000e+00` (egalite bit, numpy) ; $B_z$ ne touche jamais la densite (`dR[0]==0`) ; il est non nul ($\max\|dR\|=6.299\times10^{-1}$) ; la masse derive de $2.887\times10^{-15}$ ; la quantite de mouvement moyenne tourne de $\langle m\rangle=(0.3,0)\to(0.2162,-0.2080)$, angle $-43.88^\circ$, a comparer a $\omega_c t=-43.88^\circ$ |
+| NE PROUVE PAS | pas une reproduction publiee, et pas de parite DSL-vs-natif ici (aucune brique native "magnetic_isothermal" n'existe ; le `MagneticLorentzForce` du coeur n'est pas branche en Python dans ce cas). Sur macOS le backend `production` ne se lie pas (ABI en-tetes) : la parite inter-backend est sautee, un seul chemin (`aot`) est verifie. L'oracle ne teste que le terme magnetique (difference $B_z\!=\!B_0$ moins $B_z\!=\!0$), pas le flux ni l'electrostatique. Regime explicite (pas le Schur condense raide) ; $B_z$ uniforme |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend DSL `aot` (production non lie), $32^2$, ~19 s temps mur (2 figures, recompile la `.so` deux fois), macOS arm64 ; `figures/provenance.json` |
 
 A la fin tu sauras : quelles conventions du coeur les formules DSL reproduisent (table ancree
-`physics/*.hpp`), comment la correction est etablie SANS oracle natif (oracle analytique + parite
+`physics/*.hpp`), comment la correction est etablie sans oracle natif (oracle analytique + parite
 inter-backend), pourquoi `production` echoue sur cette plateforme, et ce qu'une divergence de
 l'oracle trahirait.
 
@@ -33,13 +33,13 @@ l'oracle trahirait.
 
 ## 1. Renvoi : la physique n'est pas re-derivee ici
 
-C'est un cas d'EQUIVALENCE DSL. La derivation du systeme Euler-isotherme magnetise (flux, fermeture,
+C'est un cas d'equivalence DSL. La derivation du systeme Euler-isotherme magnetise (flux, fermeture,
 force de Lorentz, etage source) appartient au cas magnetise complet
 [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/) (vise arXiv:2510.11808, Schur
 condense). Le mecanisme de la rotation cyclotron est celui de toute force $q\,v\times B$ : $v\times B$
-est PERPENDICULAIRE a $v$, donc la force ne fait pas de travail ($F\cdot v=0$) et la quantite de
-mouvement TOURNE a la pulsation cyclotron sans changer de module. Ce cas ne re-derive pas cela : il
-VERIFIE que le terme compile depuis les formules a la bonne forme. Le coeur du tutoriel est donc la
+est perpendiculaire a $v$, donc la force ne fait pas de travail ($F\cdot v=0$) et la quantite de
+mouvement tourne a la pulsation cyclotron sans changer de module. Ce cas ne re-derive pas cela : il
+verifie que le terme compile depuis les formules a la bonne forme. Le coeur du tutoriel est donc la
 table des conventions (section 2) et le protocole de preuve sans oracle natif (sections 3-4).
 
 Equations resolues (variables conservatives $U=(\rho, m_x, m_y)$, $m=\rho v$) :
@@ -55,10 +55,10 @@ sur l'energie (absente ici : modele isotherme, 3 variables).
 
 ## 2. Les conventions du coeur reproduites, ancrees `include/adc/physics/*.hpp`
 
-Le DSL ne nomme aucune brique : il REDECLARE leurs formules. L'egalite bit (quand 2 backends se
-lient) et l'oracle analytique ne tiennent que parce que chaque formule reproduit EXACTEMENT la
+Le DSL ne nomme aucune brique : il redeclare leurs formules. L'egalite bit (quand 2 backends se
+lient) et l'oracle analytique ne tiennent que parce que chaque formule reproduit exactement la
 convention C++ correspondante. La couche du milieu d'un cas DSL n'est pas une brique nommee mais les
-EXPRESSIONS que `adc.dsl` compile :
+expressions que `adc.dsl` compile :
 
 | Ligne `run.py` (expression DSL) | Convention du coeur reproduite | Formule |
 |---|---|---|
@@ -70,16 +70,16 @@ EXPRESSIONS que `adc.dsl` compile :
 
 Trois subtilites de convention, verifiees sur le code, pas plaquees :
 
-- **Signe de la force electrostatique.** `PotentialForce` (`source.hpp:37`) pose `Ex = -a.grad_x` puis
+- Signe de la force electrostatique. `PotentialForce` (`source.hpp:37`) pose `Ex = -a.grad_x` puis
   `s[1] = qom*u[0]*Ex`. La formule DSL ecrit `q*rho*(-gx)` : meme signe, $q\rho(-\partial_x\phi)$. Ici
   `q = -1` (charge electronique, comme la brique).
-- **Le canal aux ETENDU.** `B_z` est la composante canonique 3 de `adc::Aux` ; `MagneticLorentzForce`
+- Le canal aux etendu. `B_z` est la composante canonique 3 de `adc::Aux` ; `MagneticLorentzForce`
   declare `n_aux = 4` (`source.hpp:82`) pour que `load_aux` la remplisse. Cote DSL, `m.aux("B_z")`
   (`run.py:96`) declare la 4e composante ; `add_equation` elargit le canal partage et
   `sim.set_magnetic_field(B0*ones)` (`run.py:146`) la peuple. C'est ce que les deux autres
-  demonstrateurs DSL (mono-espece, multi-espece) ne couvraient pas : une SOURCE qui lit au-dela du
+  demonstrateurs DSL (mono-espece, multi-espece) ne couvraient pas : une source qui lit au-dela du
   contrat de base $\phi/\nabla\phi$ (indices 0/1/2).
-- **Travail nul du terme magnetique.** `MagneticLorentzForce` laisse `s[3]` a $0$ meme a 4 variables
+- Travail nul du terme magnetique. `MagneticLorentzForce` laisse `s[3]` a $0$ meme a 4 variables
   (`source.hpp:91`) car $v\times B\perp v$. Le modele isotherme n'a que 3 variables (pas d'energie) :
   la question ne se pose pas ici, mais la rotation a module conserve (figure 2) en est la consequence
   directe.
@@ -91,22 +91,22 @@ effective est $\omega_c=q_{om}B_z=q B_z=(-1)(2)=-2$, signe negatif (giration hor
 
 ## 3. La prediction falsifiable : egalite bit + oracle analytique (justifie PROUVE / NE PROUVE PAS)
 
-Le cas calcule la prediction par DEUX voies independantes, parce qu'il n'a PAS d'oracle natif :
+Le cas calcule la prediction par deux voies independantes, parce qu'il n'a pas d'oracle natif :
 
-**(A) Parite inter-backend** (`run.py:188-200`). Si `production` ET `aot` se lient, leurs `eval_rhs`
+**(A) Parite inter-backend** (`run.py:188-200`). Si `production` et `aot` se lient, leurs `eval_rhs`
 sont confrontes par `np.array_equal` : `assert np.array_equal(r_b, r_ref)` (`run.py:196`), sans
-tolerance. Les deux backends inlinent le MEME chemin de production sur le MEME modele genere ; toute
+tolerance. Les deux backends inlinent le meme chemin de production sur le meme modele genere ; toute
 divergence trahirait un non-determinisme du codegen ou une difference de marshaling host. Sur macOS,
-`production` ne se lie pas (section 5) : cette voie est SAUTEE et le `run.py` l'imprime explicitement
+`production` ne se lie pas (section 5) : cette voie est sautee et le `run.py` l'imprime explicitement
 (`run.py:199-200`).
 
-**(B) Oracle Lorentz analytique** (`run.py:202-222`). On lie le modele DEUX fois : $B_z=B_0=2$ et
-$B_z=0$. Flux et electrostatique sont identiques entre les deux runs ; la SEULE difference est le
+**(B) Oracle Lorentz analytique** (`run.py:202-222`). On lie le modele deux fois : $B_z=B_0=2$ et
+$B_z=0$. Flux et electrostatique sont identiques entre les deux runs ; la seule difference est le
 terme magnetique. Donc le residu
 
 $$\Delta R=\texttt{eval\_rhs}(B_z{=}B_0)-\texttt{eval\_rhs}(B_z{=}0)$$
 
-doit valoir EXACTEMENT, canal par canal, la forme analytique calculee en numpy :
+doit valoir exactement, canal par canal, la forme analytique calculee en numpy :
 
 ```python
 lorentz_x = B0 * my0     # +B_z m_y sur la qte de mvt x (run.py:206)
@@ -122,18 +122,18 @@ assert lor_contrib > 0.0                        # B_z bien lu, terme non nul (ru
 Mesure (backend `aot`) : `err_x = 0.000e+00`, `err_y = 0.000e+00`, `max|dR| = 6.299e-01`. Comme
 $m_y(0)=0$ partout (CI), $\texttt{lorentz\_x}=B_0 m_y(0)\equiv 0$ et le canal $m_x$ de $\Delta R$ est
 identiquement nul ; tout le terme magnetique vit dans $\Delta R[2]=-B_0 m_x(0)$, dans
-$[-0.6299,-0.5701]$ (car $m_x(0)=0.3\rho_0$, $\rho_0=1\pm0.05$). L'egalite est SANS tolerance : le
+$[-0.6299,-0.5701]$ (car $m_x(0)=0.3\rho_0$, $\rho_0=1\pm0.05$). L'egalite est sans tolerance : le
 codegen lit `B_z` au bon indice et applique la bonne forme.
 
 Pourquoi $== 0.0$ exactement et non $\sim10^{-16}$ : $\Delta R$ soustrait deux `eval_rhs` qui ne
-different QUE par le terme magnetique ; les contributions flux et electrostatique, IDENTIQUES entre
-les deux runs, s'annulent bit-a-bit, et le terme magnetique restant est la MEME expression
+different que par le terme magnetique ; les contributions flux et electrostatique, identiques entre
+les deux runs, s'annulent bit-a-bit, et le terme magnetique restant est la meme expression
 `bz*my - ...` que la forme analytique (meme ordre d'operations flottantes). Aucun arrondi residuel.
 
 Les deux autres tolerances ne sont pas des egalites bit mais des bornes justifiees par un ordre de
 grandeur. `drift < 1e-9` (`run.py:240`) : le schema volumes finis est conservatif, la masse est un
 invariant exact et la seule derive est l'arithmetique flottante ; mesure $2.887\times10^{-15}$, ~6
-ordres sous la borne. `|<m_y>| > 1e-6` (`run.py:242`) : borne BASSE separant le bruit machine du
+ordres sous la borne. `|<m_y>| > 1e-6` (`run.py:242`) : borne basse separant le bruit machine du
 signal physique ; $m_y(0)=0$ exactement, donc toute valeur au-dessus de $10^{-6}$ ne peut venir que
 du terme de Lorentz ; mesure $|\langle m_y\rangle|=0.208$, ~5 ordres au-dessus de la borne.
 
@@ -141,7 +141,7 @@ du terme de Lorentz ; mesure $|\langle m_y\rangle|=0.208$, ~5 ordres au-dessus d
 
 ## 4. Ce qu'une divergence trahirait
 
-L'oracle est un test de NON-REGRESSION du codegen DSL sur le canal aux etendu. Une valeur non nulle
+L'oracle est un test de non-regression du codegen DSL sur le canal aux etendu. Une valeur non nulle
 de chaque assert pointe une faute precise :
 
 - `err_x != 0` ou `err_y != 0` : le terme compile n'est pas $(B_z m_y, -B_z m_x)$. Causes : mauvais
@@ -149,10 +149,10 @@ de chaque assert pointe une faute precise :
   ou $q_{om}$ applique deux fois.
 - `max|dR[0]| != 0` : le terme magnetique a contamine la densite, ce qui est physiquement impossible
   (Lorentz n'agit que sur la quantite de mouvement). Trahirait un melange de composantes au codegen.
-- `lor_contrib == 0` : `B_z` n'est PAS lu (canal aux non elargi, `set_magnetic_field` sans effet, ou
+- `lor_contrib == 0` : `B_z` n'est pas lu (canal aux non elargi, `set_magnetic_field` sans effet, ou
   `m.aux("B_z")` oublie) ; le terme est partout nul et le modele est sans Lorentz.
 - parite `np.array_equal` False (quand 2 backends) : non-determinisme entre `production` (natif
-  zero-copie) et `aot` (host-marshale) sur le MEME modele : marshaling fautif ou ordre de sommation
+  zero-copie) et `aot` (host-marshale) sur le meme modele : marshaling fautif ou ordre de sommation
   divergent. Ici non teste (un seul backend).
 
 ---
@@ -160,7 +160,7 @@ de chaque assert pointe une faute precise :
 ## 5. Pourquoi `production` ne se lie pas sur macOS
 
 `bind_backends` (`run.py:151-169`) tente `production` puis `aot` et ne garde que ceux effectivement
-LIES. La sortie reelle :
+lies. La sortie reelle :
 
 ```
 backend 'production' indisponible (RuntimeError), essai suivant
@@ -168,8 +168,8 @@ backends DSL lies : 'aot'
 parite inter-backend SAUTEE (un seul backend lie ... 'aot') ; correction prouvee par l'oracle ...
 ```
 
-La cause N'EST PAS le namespace a deux niveaux du dlopen : c'est une **incompatibilite d'ABI des
-en-tetes**. Le loader natif (`add_native_block`) verifie que la signature des en-tetes contre
+La cause n'est pas le namespace a deux niveaux du dlopen : c'est une incompatibilite d'ABI des
+en-tetes. Le loader natif (`add_native_block`) verifie que la signature des en-tetes contre
 lesquels la `.so` est compilee correspond a celle du module `_adc` deja charge. Message exact capture :
 
 ```
@@ -177,14 +177,14 @@ add_native_block : ABI incompatible -- cle du loader 'compiler=Apple LLVM 21.0.0
 headers=079c02c0...' != cle du module 'compiler=Apple LLVM 21.0.0;std=202302L;headers=f8273719...'.
 ```
 
-Le module `build-master` est PRE-CONSTRUIT : sa signature d'en-tetes (`f8273719...`) differe de
+Le module `build-master` est pre-construit : sa signature d'en-tetes (`f8273719...`) differe de
 l'arbre `include/` courant (`079c02c0...`) que la `.so` DSL embarque. La compilation `production`
-REUSSIT ; c'est le BRANCHEMENT qui rejette le loader. Le backend `aot` n'a pas cette garde (pas de cle
+reussit ; c'est le branchement qui rejette le loader. Le backend `aot` n'a pas cette garde (pas de cle
 d'ABI verifiee) et reste fonctionnel. Avec un module `_adc` rebati contre les memes en-tetes que
 `include/`, `production` se lierait et la parite inter-backend serait alors exercee. Comportement
 identique a celui documente pour [`../diocotron_dsl/`](../diocotron_dsl/).
 
-Consequence honnete : sur cette plateforme la preuve repose ENTIEREMENT sur la voie (B) (oracle
+Consequence honnete : sur cette plateforme la preuve repose entierement sur la voie (B) (oracle
 analytique) plus les invariants masse/rotation (section 6). C'est suffisant pour ce qu'on affirme (le
 terme magnetique a la bonne forme et est exerce), pas pour une parite de chemins.
 
@@ -200,14 +200,14 @@ versionnees avec `figures/provenance.json`. Commande exacte en section 8.
 ![Trois cartes du residu err_rho, err_mx, err_my, toutes blanches a l'echelle eps machine](figures/lorentz_oracle.png)
 
 - **PROUVE** (asserte `run.py:217,221`) : les trois cartes du residu ($\Delta R_\rho-0$,
-  $\Delta R_{m_x}-B_0 m_y$, $\Delta R_{m_y}-(-B_0 m_x)$) sont IDENTIQUEMENT au centre neutre (blanc),
+  $\Delta R_{m_x}-B_0 m_y$, $\Delta R_{m_y}-(-B_0 m_x)$) sont identiquement au centre neutre (blanc),
   `max|.| = 0.0e+00` partout. L'echelle de couleur est ancree a $\pm\epsilon_{\text{mach}}=2.22\times
-  10^{-16}$ : tout pixel non nul (au-dela du dernier bit) SATURERAIT en bleu ou rouge. Aucun ne
+  10^{-16}$ : tout pixel non nul (au-dela du dernier bit) saturerait en bleu ou rouge. Aucun ne
   sature : le terme magnetique compile egale la forme numpy au bit pres, et la densite (panneau
   gauche) n'est jamais touchee.
 - **SUGGERE (non assere)** : rien. L'egalite est exacte, pas approchee ; il n'y a pas de structure a
   lire au-dela du zero.
-- **NON MONTRE** : la figure ne couvre QUE la difference $B_z\!=\!B_0$ moins $B_z\!=\!0$, donc le seul
+- **NON MONTRE** : la figure ne couvre que la difference $B_z\!=\!B_0$ moins $B_z\!=\!0$, donc le seul
   terme magnetique. Elle ne teste ni le flux isotherme, ni l'electrostatique, ni la parite
   inter-backend (un seul backend lie). Un residu sur le flux passerait inapercu ici.
 
@@ -216,12 +216,12 @@ versionnees avec `figures/provenance.json`. Commande exacte en section 8.
 ![A gauche la trajectoire de (m_x, m_y) sur le cercle cyclotron ; a droite le module conserve](figures/cyclotron_trajectory.png)
 
 - **PROUVE / mesure** (asserte `run.py:240,242`) : partant de $\langle m\rangle=(0.3,0)$ (purement
-  longitudinal, $m_y=0$), la quantite de mouvement moyenne TOURNE vers $(0.2162,-0.2080)$ apres 40
+  longitudinal, $m_y=0$), la quantite de mouvement moyenne tourne vers $(0.2162,-0.2080)$ apres 40
   pas ($t=0.3829$). L'angle final mesure $-43.88^\circ$ coincide avec la prediction cyclotron
   $\omega_c t=(-2)(0.3829)=-43.88^\circ$ (rapport $1.00006$). Le module $|\langle m\rangle|$ (panneau
   droit) est conserve : derive relative $-1.3\times10^{-7}$ sur l'horizon. La masse derive de
   $2.887\times10^{-15}$. Comme $m_y(0)=0$, toute composante transverse apparue ($\langle m_y\rangle=
-  -0.2080$) vient EXCLUSIVEMENT du terme de Lorentz : la physique magnetique est exercee.
+  -0.2080$) vient exclusivement du terme de Lorentz : la physique magnetique est exercee.
 - **SUGGERE (non assere)** : le tres leger ecart au cercle analytique (rapport $1.00006$) et la
   legere variation du module ($\sim10^{-7}$) sont la signature de la discretisation en temps finie
   (SSPRK2, $\omega_c\,dt$ non infinitesimal) et de la dynamique de pression/Poisson superposee a la
@@ -234,18 +234,18 @@ versionnees avec `figures/provenance.json`. Commande exacte en section 8.
 
 ## 7. Limites (ce que ce cas ne capture pas)
 
-- **Pas de parite DSL-vs-natif.** Contrairement a [`../diocotron_dsl/`](../diocotron_dsl/) qui
-  confronte le DSL a `models.diocotron` (briques natives), il n'existe AUCUN modele natif assemble
+- Pas de parite DSL-vs-natif. Contrairement a [`../diocotron_dsl/`](../diocotron_dsl/) qui
+  confronte le DSL a `models.diocotron` (briques natives), il n'existe aucun modele natif assemble
   "magnetic_isothermal" branche cote Python ici. La brique `MagneticLorentzForce` existe
   (`source.hpp`) mais n'est pas composee en oracle dans ce cas : la reference est analytique, pas
   native.
-- **Parite inter-backend conditionnelle.** Elle n'est exercee que si $\geq 2$ backends se lient ; sur
+- Parite inter-backend conditionnelle. Elle n'est exercee que si $\geq 2$ backends se lient ; sur
   macOS (module pre-construit) un seul (`aot`) se lie, la voie est sautee.
-- **L'oracle ne teste qu'un terme.** Par construction (difference de deux runs), il isole le terme
+- L'oracle ne teste qu'un terme. Par construction (difference de deux runs), il isole le terme
   magnetique ; le flux isotherme et l'electrostatique sont identiques entre les deux et s'annulent.
   Leur correction repose sur la fidelite des formules aux conventions du coeur (table section 2),
   non sur cet oracle.
-- **Regime explicite, $B_z$ uniforme, horizon court.** Pas de raideur cyclotron (Schur), champ
+- Regime explicite, $B_z$ uniforme, horizon court. Pas de raideur cyclotron (Schur), champ
   magnetique constant, 40 pas. On observe la rotation et l'exactitude du terme, pas une dynamique
   longue ni un benchmark publie.
 
@@ -261,9 +261,9 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json, ~19 s
 ```
 
-Prerequis : `numpy`, **compilateur C++20** (`needs = ["cxx"]` : le DSL compile une `.so` a la volee),
+Prerequis : `numpy`, un compilateur C++20 (`needs = ["cxx"]` : le DSL compile une `.so` a la volee),
 les en-tetes du coeur adc_cpp accessibles (`$ADC_INCLUDE` sinon defaut), et `matplotlib` pour les
-figures. Le module `adc` doit etre importe avec le MEME interpreteur que celui qui l'a compile
+figures. Le module `adc` doit etre importe avec le meme interpreteur que celui qui l'a compile
 (suffixe ABI `cpython-312`). Le premier chemin du `PYTHONPATH` fournit le module C++, le second rend
 `adc_cases` importable (le cas a aussi un fallback `sys.path`, `run.py:63-67`).
 
@@ -280,8 +280,8 @@ OK magnetic_isothermal_dsl (Lorentz exerce, B_z = 2.0 pilote depuis Python, back
 ```
 
 Cout : `run.py` ~2 s (compile 4 `.so` : production+aot pour $B_z\!=\!B_0$ et $B_z\!=\!0$, puis 40 pas
-$32^2$) ; `make_figures.py` ~19 s (recompile les `.so` et avance la trajectoire). **Caveat
-plateforme** : les egalites exactes (`err_x = err_y = 0`, `dR[0]=0`), les signes et l'ordre de
+$32^2$) ; `make_figures.py` ~19 s (recompile les `.so` et avance la trajectoire). Caveat
+plateforme : les egalites exactes (`err_x = err_y = 0`, `dR[0]=0`), les signes et l'ordre de
 grandeur ($\max|dR|\sim0.63$, angle $\sim-44^\circ$) sont stables ; le backend reellement lie depend
 de la coherence ABI des en-tetes du module (`aot` si pre-construit, `production`+parite si rebati) ;
 les derniers chiffres de $t$ et de la masse varient avec la BLAS et l'ordre de sommation (cf.

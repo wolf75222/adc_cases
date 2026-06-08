@@ -1,13 +1,13 @@
 # hoffart_euler_poisson_dsl : Euler-Poisson magnetise complet en formules (DSL), vise arXiv:2510.11808
 
-Le systeme Euler-Poisson MAGNETISE complet (continuite + quantite de mouvement + force de
+Le systeme Euler-Poisson magnetise complet (continuite + quantite de mouvement + force de
 Lorentz, fermeture barotrope) ecrit entierement en formules symboliques avec `adc.dsl.Model`,
 compile en C++ (backend `production`), puis pousse dans les volumes finis WENO5-Z + Rusanov d'ADC.
 Le cas vise les taux de croissance diocotron de Hoffart, Maier, Shadid & Tomas
 ([arXiv:2510.11808](https://arxiv.org/abs/2510.11808), Section 5.3). Categorie manifeste :
-`reproduction-candidate`. La reproduction quantitative n'est PAS etablie : sur la baseline
+`reproduction-candidate`. La reproduction quantitative n'est pas etablie : sur la baseline
 cartesienne, le taux mesure est a $-82$ a $-95\%$ de la cible papier (table section 7), a $n=256$
-ET $n=384$. Ce qui EST prouve : un oracle analytique (`check_model.py`) qui verifie par `assert`
+et $n=384$. Ce qui est prouve : un oracle analytique (`check_model.py`) qui verifie par `assert`
 que le modele symbolique compile genere le bon flux, la bonne source Lorentz/electrique, les bonnes
 valeurs propres et le bon second membre de Poisson.
 
@@ -16,17 +16,17 @@ valeurs propres et le bon second membre de Poisson.
 | Champ | Contenu |
 |---|---|
 | Categorie (manifeste) | `check_model.py` : `validation` (CI, oracle analytique, `needs=[]`). `run.py` : `reproduction-candidate` (hors CI, `needs=["matplotlib"]`, vise arXiv:2510.11808, table PENDING/MEASURED). `results.py` : self-test pur Python en CI |
-| Entrees | grille carree $n^2$ ($n=192$ defaut, $256/384$ mesures), $L=2R=32$, **non periodique**, paroi Poisson Dirichlet cercle $R=16$ ; anneau $r_0{:}r_1=6{:}8$, perturbation $\rho=\rho_{max}(1-\delta+\delta\sin l\theta)$, $\delta=0.1$ ; $\rho_{min}{:}\rho_{max}=10^{-6}{:}1$ ; $\beta=10^6$, $\alpha=\beta^2/\rho_{max}=10^{12}$, $\omega=\beta^2=10^{12}$ ; fermeture $p=\theta\rho$, defaut **limite froide $\theta=0$** ; modes $l\in\{3,4,5\}$, $t_f=10$, $dt=10^{-3}$ |
+| Entrees | grille carree $n^2$ ($n=192$ defaut, $256/384$ mesures), $L=2R=32$, non periodique, paroi Poisson Dirichlet cercle $R=16$ ; anneau $r_0{:}r_1=6{:}8$, perturbation $\rho=\rho_{max}(1-\delta+\delta\sin l\theta)$, $\delta=0.1$ ; $\rho_{min}{:}\rho_{max}=10^{-6}{:}1$ ; $\beta=10^6$, $\alpha=\beta^2/\rho_{max}=10^{12}$, $\omega=\beta^2=10^{12}$ ; fermeture $p=\theta\rho$, defaut limite froide $\theta=0$ ; modes $l\in\{3,4,5\}$, $t_f=10$, $dt=10^{-3}$ |
 | Sorties | `check_model.py` : verdict `assert` (EXIT=0). `run.py` : $\gamma_l$ brut fitte par mode, sous `out/hoffart_euler_poisson_dsl_<engine>/` (`amplitude.csv/.png`, `snapshots.png`, GIF, `growth_rates.csv/.png`, `metadata.json`, `measurement_record.csv/.json`). 2 figures honnetes versionnees dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | `check_model.py` : `np.testing.assert_allclose` sur flux x/y, source `[0, -rho*gx + omega*my, -rho*gy - omega*mx]`, `elliptic_rhs = -alpha*rho`, `max_wave_speed > 0` (tol par defaut `assert_allclose`, $\mathrm{rtol}=10^{-7}$). `run.py` : `verify_paper_windows` (fenetres de fit verbatim), garde MPI mono-rang, aveu `--acknowledge-amr-approximation`, `FloatingPointError` si phi/amplitude non finis. `results.py` : self-test (fenetres, labels moteur, `err_pct`, PENDING) |
-| PROUVE | le modele symbolique compile == les formules analytiques sur 2x2 cellules, **bit-exact** : flux x/y, source Lorentz+electrique, valeurs propres ($>0$), rhs Poisson, residu $=0.0$ exactement (figure 2, `check_model.py:27-41`). Le harnais de mesure ne fabrique aucun nombre : `PENDING` tant qu'un run n'a pas tourne (`results.py:147-153`) |
-| NE PROUVE PAS | **reproduction quantitative PENDING.** La table de validation est explicitement non etablie : baseline cartesienne MEASURED a $l{=}3$ $-95\%$, $l{=}4$ $-94/-93\%$, $l{=}5$ $-82\%$ ($n=256$ et $384$ ; l'erreur **n'ameliore pas** avec $n$, donc pas un probleme de resolution). Geometrie cartesienne+paroi cercle **suspecte** (transport sur grille carree, bord d'anneau diffuse). Splitting de **Lie** (Godunov 1er ordre), pas Strang. Poisson **une fois par pas** (cadence Gauss `OncePerStep`), qui rend l'evolution phi couplee a la source **inerte** pour la trajectoire. La variante `amr-imex` (backward-Euler cell-local, AMR/Kokkos/MPI) = ROMEO, **jamais** une reproduction (source IMEX, quantite de mouvement initiale nulle). Le facteur $2\pi/\bar\rho$ de `NORMALIZATION.md` appartient au modele REDUIT ExB scalaire, PAS a ce modele complet |
-| Provenance | adc_cpp `dec3f18`, adc_cases `abd4791`, oracle backend natif serie (macOS arm64, python 3.12 anaconda3), `check_model.py` << 1 s. Mesures $\gamma$ : runs hors CI documentes dans `adc_cpp/docs/HOFFART_FIDELITY.md` ; `run.py` complet LONG, non lance ici. `figures/provenance.json` |
+| PROUVE | le modele symbolique compile == les formules analytiques sur 2x2 cellules, bit-exact : flux x/y, source Lorentz+electrique, valeurs propres ($>0$), rhs Poisson, residu $=0.0$ exactement (figure 2, `check_model.py:27-41`). Le harnais de mesure ne fabrique aucun nombre : `PENDING` tant qu'un run n'a pas tourne (`results.py:147-153`) |
+| NE PROUVE PAS | reproduction quantitative PENDING. La table de validation est explicitement non etablie : baseline cartesienne MEASURED a $l{=}3$ $-95\%$, $l{=}4$ $-94/-93\%$, $l{=}5$ $-82\%$ ($n=256$ et $384$ ; l'erreur ne s'ameliore pas avec $n$, donc pas un probleme de resolution). Geometrie cartesienne+paroi cercle suspecte (transport sur grille carree, bord d'anneau diffuse). Splitting de Lie (Godunov 1er ordre), pas Strang. Poisson une fois par pas (cadence Gauss `OncePerStep`), qui rend l'evolution phi couplee a la source inerte pour la trajectoire. La variante `amr-imex` (backward-Euler cell-local, AMR/Kokkos/MPI) = ROMEO, jamais une reproduction (source IMEX, quantite de mouvement initiale nulle). Le facteur $2\pi/\bar\rho$ de `NORMALIZATION.md` appartient au modele reduit ExB scalaire, pas a ce modele complet |
+| Provenance | adc_cpp `dec3f18`, adc_cases `abd4791`, oracle backend natif serie (macOS arm64, python 3.12 anaconda3), `check_model.py` << 1 s. Mesures $\gamma$ : runs hors CI documentes dans `adc_cpp/docs/HOFFART_FIDELITY.md` ; `run.py` complet long, non lance ici. `figures/provenance.json` |
 
 A la fin tu sauras : ce que le DSL ecrit reellement (les 4 equations magnetisees et leur traduction
 en `m.flux/m.source/m.eigenvalues/m.elliptic_rhs`), pourquoi l'etage source est un Schur condense
-(la source est raide), ce que l'oracle analytique etablit, et **pourquoi la reproduction
-quantitative n'est pas montree** (geometrie, splitting, cadence Poisson).
+(la source est raide), ce que l'oracle analytique etablit, et pourquoi la reproduction
+quantitative n'est pas montree (geometrie, splitting, cadence Poisson).
 
 ---
 
@@ -35,24 +35,24 @@ quantitative n'est pas montree** (geometrie, splitting, cadence Poisson).
 Une couche de charge (electrons) en anneau, $\rho(r)$ nulle au centre et au bord, dans un fort champ
 magnetique axial uniforme $\mathbf{B}=\omega\,\hat z$ ($\omega=\beta^2=10^{12}$). La charge cree son
 potentiel $\phi$ par Poisson ; le gradient $-\nabla\phi$ et le champ magnetique pilotent une derive
-$\mathbf{E}\times\mathbf{B}$ azimutale a vitesse angulaire **fonction de $r$**. Bord interne et bord
-externe ne tournent pas a la meme vitesse : **cisaillement**. Une ondulation azimutale du bord (mode
+$\mathbf{E}\times\mathbf{B}$ azimutale a vitesse angulaire fonction de $r$. Bord interne et bord
+externe ne tournent pas a la meme vitesse, d'ou un cisaillement. Une ondulation azimutale du bord (mode
 $l$) est entrainee differemment par les deux bords, s'enroule, et croit exponentiellement : c'est
 l'instabilite diocotron (Kelvin-Helmholtz d'un anneau de vorticite). L'anneau developpe $l$ lobes.
 
-Ce cas resout le **systeme Euler-Poisson magnetise complet** : il evolue la densite ET la quantite
+Ce cas resout le systeme Euler-Poisson magnetise complet : il evolue la densite et la quantite
 de mouvement $m=(\rho u,\rho v)$ sous la force de Lorentz, pas seulement une derive ExB scalaire. Le
-cas-parent [`../diocotron/`](../diocotron/) resout la **limite de derive ExB reduite** (une seule
+cas-parent [`../diocotron/`](../diocotron/) resout la limite de derive ExB reduite (une seule
 variable conservee $n_e$ advectee par $\mathbf{v}=\hat z\times\nabla\phi/B_0$), avec un oracle
-analytique de relation de dispersion qui colle au papier a 3 chiffres ; il **sous-estime** le taux
+analytique de relation de dispersion qui colle au papier a 3 chiffres ; il sous-estime le taux
 mesure de $-22$ a $-27\%$ par diffusion de bord cartesienne. Ce cas-ci porte un modele plus riche
-(momentum + Lorentz + fermeture barotrope) mais sur la **meme** geometrie cartesienne suspecte, et
+(momentum + Lorentz + fermeture barotrope) mais sur la meme geometrie cartesienne suspecte, et
 la reproduction quantitative y est encore plus loin (section 7). Le derive du taux analytique
-(probleme aux valeurs propres radial) est dans `../diocotron/README.md` section 4 : il n'est PAS
+(probleme aux valeurs propres radial) est dans `../diocotron/README.md` section 4, il n'est pas
 recopie ici.
 
 Simplifications nommees : fermeture barotrope $p=\theta\rho$ (l'equation d'energie de l'Euler complet
-n'est PAS evoluee ; l'etat conservatif est exactement $(\rho,\rho u,\rho v)$, `model.py:90-99`) ;
+n'est pas evoluee ; l'etat conservatif est exactement $(\rho,\rho u,\rho v)$, `model.py:90-99`) ;
 limite froide $\theta=0$ par defaut (vitesse du son nulle, flux de pression nul) car le papier ne
 donne pas de valeur numerique pour $\theta$ (`model.py:43`, `run.py:483-484`) ; tout est sans unites
 ($\alpha,\omega$ portent $\beta^2$).
@@ -71,7 +71,7 @@ $$\partial_t m+\nabla\cdot\!\left(\frac{m\,m^{\mathsf T}}{\rho}+p\,I\right)=-\rh
 $$-\Delta\phi=\alpha\,\rho,\qquad p=\theta\,\rho.$$
 
 En 2D, le produit vectoriel de Lorentz donne $m\times\Omega=(\omega\,m_y,\,-\omega\,m_x)$ : c'est le
-**couplage magnetique** qui distingue ce modele de l'Euler-Poisson electrostatique non magnetise de
+couplage magnetique qui distingue ce modele de l'Euler-Poisson electrostatique non magnetise de
 [`../euler_poisson/`](../euler_poisson/). Convention de signe Poisson : ADC resout
 $\Delta\phi=\text{rhs}$ alors que le papier ecrit $-\Delta\phi=\alpha\rho$, donc le modele pose
 $\text{elliptic\_rhs}=-\alpha\rho$ (`model.py:127-129`).
@@ -90,39 +90,39 @@ calcule quoi", chaque ligne pinnee a une ligne reelle (chemin de reference `syst
 
 | Ligne `run.py` | Couche | Ce qui se passe |
 |---|---|---|
-| `sim.add_equation("electrons", model=compiled, spatial=adc.FiniteVolume(weno5,rusanov,conservative), time=adc.Split(Explicit(ssprk3), CondensedSchur(theta=0.5,alpha)))` (`run.py:146-158`) | Python **compose** et DIAGNOSTIQUE | choix du modele compile, du schema (WENO5-Z + Rusanov), de l'integrateur (SSPRK3 transport, Schur condense source) ; lecture de phi/amplitude |
-| les EXPRESSIONS `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` que `adc.dsl` compile en `.so` (`model.py:101-129`) | brique C++ **figee** (DSL compile) | la convention exacte du flux, des valeurs propres $(u\mp c,u,u+c)$, de la source $(-\rho\nabla\phi+m\times\Omega)$, du rhs $-\alpha\rho$ |
-| `assemble_rhs<weno5,rusanov>` + Poisson de systeme (`geometric_mg`) + `CondensedSchur` BiCGStab/MG (`run.py:137-143,156`) | noyau **par cellule** (device) | le calcul reel, sans callback Python dans le hot path |
+| `sim.add_equation("electrons", model=compiled, spatial=adc.FiniteVolume(weno5,rusanov,conservative), time=adc.Split(Explicit(ssprk3), CondensedSchur(theta=0.5,alpha)))` (`run.py:146-158`) | Python compose et diagnostique | choix du modele compile, du schema (WENO5-Z + Rusanov), de l'integrateur (SSPRK3 transport, Schur condense source) ; lecture de phi/amplitude |
+| les expressions `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` que `adc.dsl` compile en `.so` (`model.py:101-129`) | brique C++ figee (DSL compile) | la convention exacte du flux, des valeurs propres $(u\mp c,u,u+c)$, de la source $(-\rho\nabla\phi+m\times\Omega)$, du rhs $-\alpha\rho$ |
+| `assemble_rhs<weno5,rusanov>` + Poisson de systeme (`geometric_mg`) + `CondensedSchur` BiCGStab/MG (`run.py:137-143,156`) | noyau par cellule (device) | le calcul reel, sans callback Python dans le hot path |
 
-Pour un cas DSL, la couche du milieu n'est plus une brique nommee mais les **expressions
-symboliques** que `adc.dsl` compile ; c'est ce qui distingue ce cas de la brique native
-`models.euler_poisson` (qu'il **n'utilise pas**, `model.py` construit son propre modele magnetise).
+Pour un cas DSL, la couche du milieu n'est plus une brique nommee mais les expressions
+symboliques que `adc.dsl` compile ; c'est ce qui distingue ce cas de la brique native
+`models.euler_poisson` (qu'il n'utilise pas, `model.py` construit son propre modele magnetise).
 
 ---
 
 ## 3. Pourquoi un etage source condense par Schur (justifie : la source est raide)
 
-La source $-\rho\nabla\phi+m\times\Omega$ est **raide** : $\alpha=\omega=10^{12}$. Un traitement
+La source $-\rho\nabla\phi+m\times\Omega$ est raide : $\alpha=\omega=10^{12}$. Un traitement
 explicite de la rotation de Lorentz exigerait $dt\,\omega\ll 1$, soit $dt\ll 10^{-12}$, impraticable.
 Le chemin de reference confie donc l'etage source a `adc.CondensedSchur(theta=0.5, alpha)`
 (`run.py:154-157`), branche via `adc.Split(hyperbolic=Explicit(ssprk3), source=CondensedSchur)` : le
 transport reste explicite (SSPRK3), la source raide est resolue implicitement par une reduction de
-Schur du systeme couple potentiel/vitesse. Le modele DSL pose alors une source locale **nulle**
+Schur du systeme couple potentiel/vitesse. Le modele DSL pose alors une source locale nulle
 (`source="schur"` -> `m.source([0,0,0])`, `model.py:122-125`) precisement pour que le Schur porte
-**tout** l'etage et ne l'avance pas deux fois.
+tout l'etage et ne l'avance pas deux fois.
 
 L'operateur condense, son second membre et la reconstruction de $v^{n+\theta}$ correspondent verbatim
 aux equations (3.7)-(3.8) du papier (`adc_cpp/.../condensed_schur_source_stepper.hpp:233-280`,
 verifie ligne par ligne dans `HOFFART_FIDELITY.md`). C'est pourquoi `set_magnetic_field(omega)` doit
-etre appele AVANT l'installation du stage (`run.py:144-145`) : le Schur lit $B_z$ pour assembler
+etre appele avant l'installation du stage (`run.py:144-145`) : le Schur lit $B_z$ pour assembler
 $A=I+c\,\rho\,B^{-1}$.
 
-**Limite documentee (cadence Poisson).** Il y a exactement un `solve_fields()` par pas, en tete,
-AVANT le transport (`system_stepper.hpp:110`). Le pas suivant rouvre par un `solve_fields()` qui
-RE-resout le Poisson electrostatique nu sur $\rho^{n+1}$ et **ecrase** le $\phi^{n+1}$ produit par le
+Limite documentee (cadence Poisson). Il y a exactement un `solve_fields()` par pas, en tete,
+avant le transport (`system_stepper.hpp:110`). Le pas suivant rouvre par un `solve_fields()` qui
+re-resout le Poisson electrostatique nu sur $\rho^{n+1}$ et ecrase le $\phi^{n+1}$ produit par le
 Schur (`HOFFART_STEP_SEQUENCE.md`, headline finding). Consequence : l'evolution de $\phi$ couplee a la
-source (eq. 3.2 du papier, $\partial_t(-\Delta\phi)=-\alpha\nabla\cdot m$) est **fonctionnellement
-inerte** pour la trajectoire ; le $\phi$ que lit le transport au pas suivant est le potentiel
+source (eq. 3.2 du papier, $\partial_t(-\Delta\phi)=-\alpha\nabla\cdot m$) est fonctionnellement
+inerte pour la trajectoire ; le $\phi$ que lit le transport au pas suivant est le potentiel
 electrostatique re-resolu de $\rho^{n+1}$, pas le $\phi$ du Schur. Le $\phi$ du Schur ne survit que
 comme amorce (warm-start) du BiCGStab. C'est une divergence architecturale (cadence Gauss
 `OncePerStep`) face a l'evolution-source du papier, et l'un des suspects de la clause NE PROUVE PAS.
@@ -131,7 +131,7 @@ comme amorce (warm-start) du BiCGStab. C'est une divergence architecturale (cade
 
 ## 4. Maths : ce que le DSL ecrit, ligne par ligne (justifie PROUVE)
 
-On ne re-derive PAS la relation de dispersion (elle vit dans `../diocotron/`). Ce qui est specifique
+On ne re-derive pas la relation de dispersion (elle vit dans `../diocotron/`). Ce qui est specifique
 a ce cas, c'est la traduction du systeme magnetise en formules symboliques compilees. Le bloc
 porteur (`model.py:95-129`) :
 
@@ -155,14 +155,14 @@ m.elliptic_rhs(-alpha * rho)                           # -Delta phi = alpha rho 
   pression barotrope. A $\theta=0$ (defaut), $p=0$ et $c=0$ : flux purement convectif, valeurs
   propres degenerees $u,u,u$ (transport pur). La pression n'entre que si `--temperature > 0`.
 - `-rho*grad_x + omega*my` est la composante-x de $-\rho\nabla\phi+m\times\Omega$ : le terme
-  electrostatique $-\rho\,\partial_x\phi$ **plus** la composante-x du Lorentz $\omega\,m_y$. La
+  electrostatique $-\rho\,\partial_x\phi$ plus la composante-x du Lorentz $\omega\,m_y$. La
   composante-y porte le signe oppose $-\omega\,m_x$ : c'est la rotation $m\times(\omega\hat z)$.
-- `grad_x`, `grad_y` sont des **aux** (`model.py:112-113`), remplies par le solveur Poisson de
-  systeme ($\phi$ et son gradient), pas calculees par le modele : la source les LIT.
+- `grad_x`, `grad_y` sont des aux (`model.py:112-113`), remplies par le solveur Poisson de
+  systeme ($\phi$ et son gradient), pas calculees par le modele : la source les lit.
 - `-alpha*rho` encode la convention de signe (ADC resout $\Delta\phi=\text{rhs}$).
 
-L'oracle `check_model.py` confronte ces expressions compilees aux **memes formules ecrites a la
-main** sur une grille 2x2 (`check_model.py:13-41`, parametres test $\beta=3,\theta=0.25$ donc
+L'oracle `check_model.py` confronte ces expressions compilees aux memes formules ecrites a la
+main sur une grille 2x2 (`check_model.py:13-41`, parametres test $\beta=3,\theta=0.25$ donc
 $\alpha=\omega=9$, $c=0.5$) :
 
 ```python
@@ -174,7 +174,7 @@ np.testing.assert_allclose(src, np.stack([np.zeros_like(rho),
 np.testing.assert_allclose(model._elliptic.eval(env), -p.alpha * rho)     # rhs Poisson (check_model.py:39)
 assert model.max_wave_speed(U, aux, 0) > 0.0             # vitesse d'onde finie (check_model.py:40)
 ```
-C'est l'oracle qui **est** la clause PROUVE. Il utilise `source="local"` (`check_model.py:11`) pour
+C'est l'oracle qui porte la clause PROUVE. Il utilise `source="local"` (`check_model.py:11`) pour
 que la source complete soit emise dans le `.so` et testable directement (le chemin `system-schur`
 met cette source a zero et la confie au Schur, donc ne serait pas testable de cette facon).
 
@@ -186,22 +186,22 @@ met cette source a zero et la confie au Schur, donc ne serait pas testable de ce
   $r_0\le r\le r_1$, $\rho=\rho_{max}(1-\delta+\delta\sin(l\theta))$ avec $\delta=0.1$ (eq. 35 du
   papier). La perturbation azimutale du mode $l$ est la graine de l'instabilite.
 - **Vitesse** (chemin `system-schur` uniquement, `run.py:160-165`) : derive ExB initiale calculee a
-  partir de la **premiere** resolution de Poisson, $u_0=-\partial_y\phi/\omega$,
+  partir de la premiere resolution de Poisson, $u_0=-\partial_y\phi/\omega$,
   $v_0=+\partial_x\phi/\omega$ (`drift_velocity_from_potential`, `model.py:155-168`), annulee hors du
   disque $R=16$. C'est l'etat de drift du papier. L'ordre est strict : poser $\rho$ a vitesse nulle,
   `solve_fields()`, lire $\phi$, calculer $(u_0,v_0)$, re-poser l'etat primitif, `solve_fields()`.
 - **Chemin `amr-imex`** (`run.py:196`) : seule la densite est initialisee (`set_density`) ; la facade
-  AMR n'expose pas l'etat primitif complet, donc la quantite de mouvement **demarre a zero** et relaxe
+  AMR n'expose pas l'etat primitif complet, donc la quantite de mouvement demarre a zero et relaxe
   vers la derive. Difference connue, qui exclut ce chemin de toute comparaison quantitative.
 
 ---
 
 ## 6. Figures (generees par `make_figures.py`, dans `figures/`)
 
-Deux figures, et seulement deux, parce que ce cas est `reproduction-candidate` : une qui MONTRE
-l'ecart au papier (le coeur honnete), une qui montre ce qui EST valide (l'oracle). Aucune figure ne
+Deux figures, et seulement deux, parce que ce cas est `reproduction-candidate` : une qui montre
+l'ecart au papier (le coeur honnete), une qui montre ce qui est valide (l'oracle). Aucune figure ne
 suggere une reproduction. Generation : `python make_figures.py` (memes parametres documentes que les
-runs ; les nombres mesures sont VERBATIM de la table section 7, ce script **ne relance pas** `run.py`).
+runs ; les nombres mesures sont verbatim de la table section 7, ce script ne relance pas `run.py`).
 
 ### `gap_to_paper.png` : l'ecart au papier
 
@@ -210,36 +210,36 @@ runs ; les nombres mesures sont VERBATIM de la table section 7, ce script **ne r
 - **PROUVE** (par la table section 7, runs documentes) : les barres noire/grise (mesure brute
   $n=256/384$) sont des slivers a cote des barres rouges (cible papier). $l{=}3$ : $0.0372/0.0385$ vs
   $0.772$ ($-95\%$) ; $l{=}4$ : $0.0489/0.0613$ vs $0.911$ ($-95/-93\%$) ; $l{=}5$ : $0.1211/0.1257$
-  vs $0.683$ ($-82\%$). La figure **montre que le cas NE reproduit PAS** le papier.
+  vs $0.683$ ($-82\%$). La figure montre que le cas ne reproduit pas le papier.
 - **SUGGERE (non assere)** : $l{=}5$ est le moins eloigne ($-82\%$ vs $-95\%$ a $l{=}3$) ; un effet
   geometrique dependant du mode est plausible (cf. `../diocotron/` ou l'ecart varie aussi avec $l$),
   mais aucun assert ne classe les modes ni ne teste une valeur de $\gamma$.
-- **NON MONTRE** : la **reproduction quantitative** elle-meme. Aucune barre mesuree n'approche sa
-  cible ; l'ecart **n'ameliore pas** de $n=256$ a $n=384$, ce qui exclut un simple manque de
+- **NON MONTRE** : la reproduction quantitative elle-meme. Aucune barre mesuree n'approche sa
+  cible ; l'ecart ne s'ameliore pas de $n=256$ a $n=384$, ce qui exclut un simple manque de
   resolution et pointe une cause structurelle (section 7).
 
-### `oracle_residual.png` : ce qui EST prouve
+### `oracle_residual.png` : ce qui est prouve
 
 ![Residu max entre le modele DSL compile et les formules analytiques sur 2x2 cellules : flux x, flux y, source, rhs Poisson, tous a 0.0 sous la ligne eps machine](figures/oracle_residual.png)
 
 - **PROUVE** (asserte `check_model.py:27-41`) : le residu max $|\text{DSL compile}-\text{analytique}|$
-  sur les 2x2 cellules est **exactement $0.0$** (bit-exact) pour les quatre blocs : flux x, flux y,
+  sur les 2x2 cellules est exactement $0.0$ (bit-exact) pour les quatre blocs : flux x, flux y,
   source Lorentz+electrique, rhs Poisson. Pas seulement sous l'eps machine ($2.22\times10^{-16}$,
-  ligne rouge) : exactement nul. Le modele symbolique compile **est** les formules a la main.
-- **NON MONTRE** : cet oracle ne teste **aucune** dynamique. Il valide la generation du modele (le
+  ligne rouge) : exactement nul. Le modele symbolique compile reproduit les formules a la main.
+- **NON MONTRE** : cet oracle ne teste aucune dynamique. Il valide la generation du modele (le
   bon flux, la bonne source, le bon rhs), pas que la simulation reproduit un taux de croissance.
   C'est la frontiere nette PROUVE (le modele genere) / NON PROUVE (la reproduction physique).
 
 ---
 
-## 7. Pourquoi la reproduction n'est PAS montree (analyse des ecarts, table de validation)
+## 7. Pourquoi la reproduction n'est pas montree (analyse des ecarts, table de validation)
 
 L'oracle est correct (le modele genere est bit-exact, section 6) ; ce n'est donc pas le modele
-symbolique qui est en cause. Les suspects sont dans la **discretisation et l'orchestration** du
+symbolique qui est en cause. Les suspects sont dans la discretisation et l'orchestration du
 chemin de reference `system-schur`, par ordre de gravite :
 
 1. **Geometrie cartesienne + paroi cercle (suspect principal).** Le domaine est une boite carree
-   $L=2R=32$ ; l'anneau circulaire n'est impose que par le **mur du Poisson** (Dirichlet sur un cercle
+   $L=2R=32$ ; l'anneau circulaire n'est impose que par le mur du Poisson (Dirichlet sur un cercle
    $R=16$ embarque dans la grille carree). Le transport volumes-finis tourne sur toute la grille
    carree, sans condition de non-penetration fluide sur le cercle (`HOFFART_FIDELITY.md`, ligne
    `BC: fluid/wall` marquee `non_verifie`). Le bord d'anneau diffuse. Le taux analytique ne depend que
@@ -251,13 +251,13 @@ chemin de reference `system-schur`, par ordre de gravite :
    Strang"`.
 3. **Poisson une fois par pas (cadence `OncePerStep`).** L'evolution-source de $\phi$ est inerte : le
    $\phi$ du Schur est ecrase par le re-solve electrostatique du pas suivant (section 3). Un Strang qui
-   reinjecterait le $\phi$ post-source dans un 2e demi-transport serait d'ailleurs **fatal** en l'etat
+   reinjecterait le $\phi$ post-source dans un 2e demi-transport serait d'ailleurs fatal en l'etat
    (aucun transport ne tourne entre le Schur et l'ecrasement).
 4. **$\theta$ non donne par le papier** : limite froide $\theta=0$ par defaut, une hypothese de
    fermeture non verifiee contre une valeur publiee.
 
-Table de validation (verbatim ; `system-schur` = modele complet, pente **BRUTE** sans $2\pi$ ;
-`reduced-ExB` = chemin reduit `NORMALIZATION.md`, **autre modele**, NE PAS confondre ; `amr-imex`
+Table de validation (verbatim ; `system-schur` = modele complet, pente brute sans $2\pi$ ;
+`reduced-ExB` = chemin reduit `NORMALIZATION.md`, autre modele, a ne pas confondre ; `amr-imex`
 reste experimental). Les cellules `gamma_numeric` sont des mesures de runs hors CI
 (`adc_cpp/docs/HOFFART_FIDELITY.md`) ou `PENDING` si non joue :
 
@@ -277,14 +277,14 @@ reste experimental). Les cellules `gamma_numeric` sont des mesures de runs hors 
 | 5 | 192 | PENDING | 0.683 | PENDING | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
 
 Tant que les cellules `system-schur` $n=512$ ne sont pas remplies et que les $n=256/384$ restent a
-$-82$ a $-95\%$, **aucune affirmation que le modele complet reproduit le papier n'est permise**.
+$-82$ a $-95\%$, aucune affirmation que le modele complet reproduit le papier n'est permise.
 
-**A ne PAS confondre : `NORMALIZATION.md` / `diag/diag_polar_omega.py`.** Cette etude valide un
-facteur global $2\pi/\bar\rho$ sur un chemin **polaire ExB scalaire**, un modele **REDUIT et
-DIFFERENT** (derive ExB scalaire type Petri, **sans** quantite de mouvement), PAS le systeme complet
+**A ne pas confondre : `NORMALIZATION.md` / `diag/diag_polar_omega.py`.** Cette etude valide un
+facteur global $2\pi/\bar\rho$ sur un chemin polaire ExB scalaire, un modele reduit et
+different (derive ExB scalaire type Petri, sans quantite de mouvement), pas le systeme complet
 ci-dessus. Sur ce modele reduit, seul $l{=}4$ colle exactement ($l{=}3$ $+26\%$, $l{=}5$ oscillant).
-Le facteur $2\pi/\bar\rho$ appartient **uniquement** au chemin reduit (`engine=reduced-ExB`) et n'est
-**jamais** applique au modele complet (`engine=full-system-schur`, pente BRUTE). Ni contre-exemple ni
+Le facteur $2\pi/\bar\rho$ appartient uniquement au chemin reduit (`engine=reduced-ExB`) et n'est
+jamais applique au modele complet (`engine=full-system-schur`, pente brute). Ni contre-exemple ni
 reproduction du modele complet. Le code interdit le melange : `engine_label` refuse tout moteur
 inconnu et le label reduit ne fuit jamais dans `run.py` (`results.py:62-71`).
 
@@ -292,20 +292,20 @@ inconnu et le label reduit ne fuit jamais dans `run.py` (`results.py:62-71`).
 
 ## 8. La variante `amr-imex` (ROMEO, jamais une reproduction)
 
-Le chemin `--engine amr-imex` (`run.py:169-197`) avance **la meme PDE** mais sur `adc.AmrSystem`
-(AMR dynamique, Kokkos, MPI), avec une source **IMEX backward-Euler cell-local** au lieu du Schur
+Le chemin `--engine amr-imex` (`run.py:169-197`) avance la meme PDE mais sur `adc.AmrSystem`
+(AMR dynamique, Kokkos, MPI), avec une source IMEX backward-Euler cell-local au lieu du Schur
 condense, car `CondensedSchur` n'est pas implemente sur AMR. Trois differences qui l'excluent de toute
 comparaison quantitative :
 
 1. source IMEX backward-Euler cell-local, pas le Schur condense du papier (`run.py:186`,
    `time=adc.IMEX(substeps)`) ;
-2. la facade AMR n'initialise que la densite -> quantite de mouvement initiale **nulle** (pas l'etat
+2. la facade AMR n'initialise que la densite -> quantite de mouvement initiale nulle (pas l'etat
    de drift, `run.py:196`) ; le transport AMR est forward-Euler 1er ordre quel que soit le
    `method=` demande (`HOFFART_STEP_SEQUENCE.md`) ;
 3. mur circulaire impose par le Poisson, transport toujours cartesien.
 
 Ce chemin exige `--acknowledge-amr-approximation` (`run.py:504-508`) : sans l'aveu, le runner leve.
-Il vise un build Kokkos/MPI (`build-kokkos/python`, `mpirun -np N`), donc **ROMEO** ; il n'est ni
+Il vise un build Kokkos/MPI (`build-kokkos/python`, `mpirun -np N`), donc ROMEO ; il n'est ni
 lance ni mesure ici, et `metadata.json` l'etiquette `amr-imex-experimental` avec
 `quantitative_paper_claim: False` (`run.py:438-449`).
 
@@ -313,7 +313,7 @@ lance ni mesure ici, et `metadata.json` l'etiquette `amr-imex-experimental` avec
 
 ## 9. Reproduire (commande exacte, cout)
 
-Oracle analytique (leger, CI, A LANCER pour valider le modele) :
+Oracle analytique (leger, CI, a lancer pour valider le modele) :
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/hoffart_euler_poisson_dsl
@@ -323,7 +323,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Sortie attendue (capturee, macOS arm64, EXIT=0) :
 `OK Hoffart DSL: flux, Lorentz/electric source, eigenvalues and Poisson rhs`. Cout : << 1 s (2x2
 cellules analytiques, le modele est compile a la volee). Self-test du harnais de mesure (pur Python,
-CI, n'importe meme pas `adc`) :
+CI, n'importe pas meme `adc`) :
 
 ```bash
 PYTHONPATH=/private/tmp/adc_cases-deeptut \
@@ -339,7 +339,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # gap_to_paper.png + oracle_residual.png + provenance.json
 ```
 
-Reproduction-candidate `system-schur` (LONG, hors CI -- NE PAS lancer pour valider) :
+Reproduction-candidate `system-schur` (long, hors CI, a ne pas lancer pour valider) :
 
 ```bash
 PYTHONPATH=/chemin/vers/adc_cpp/build-master/python \
@@ -347,13 +347,13 @@ PYTHONPATH=/chemin/vers/adc_cpp/build-master/python \
 # Fumee de compilation seule : --quick (n=48, t_end=0.02, mode 3) ou --compile-only
 ```
 Cout `run.py` complet (3 modes, $n=384$, $t_f=10$, $dt=10^{-3}$) : ~10000 pas de temps par mode plus
-un Poisson MG par pas, plus figures/GIF. **LONG**, non mesure ici (consigne : reproduction non
+un Poisson MG par pas, plus figures/GIF. Long, non mesure ici (consigne : reproduction non
 lancee). Chemin `amr-imex` : `mpirun -np N python ... --engine amr-imex
 --acknowledge-amr-approximation` sur un build Kokkos -> ROMEO.
 
-Prerequis : module `adc` (binding C++/pybind11) compile et importe **avec le meme interpreteur** que
+Prerequis : module `adc` (binding C++/pybind11) compile et importe avec le meme interpreteur que
 celui qui l'a compile (suffixe ABI `cpython-312`) ; un compilateur C++20 pour
-`Model.compile(backend="production")`. **Caveat plateforme** : le verdict de l'oracle (residu
+`Model.compile(backend="production")`. Caveat plateforme : le verdict de l'oracle (residu
 $=0.0$), les signes et l'ordre de grandeur de l'ecart ($-82$ a $-95\%$) sont stables ; les derniers
 chiffres des $\gamma$ mesures varient avec la BLAS et l'ordre de sommation (cf.
 `figures/provenance.json`, `adc_cpp/docs/HOFFART_FIDELITY.md`).
@@ -364,44 +364,44 @@ chiffres des $\gamma$ mesures varient avec la BLAS et l'ordre de sommation (cf.
 |---|---|
 | `model.py` | modele symbolique `adc.dsl` (flux, eigen, source Lorentz+E, elliptic_rhs) + `PaperParameters`, IC, drift (`l.70-168`) |
 | `check_model.py` | oracle analytique CI : `assert` flux/source/eigen/rhs sur 2x2 cellules (clause PROUVE) |
-| `run.py` | harnais cartesien reproduction-candidate (LONG, hors CI) : `build_uniform`/`build_amr`, fit du taux, sorties |
-| `run_polar.py` | harnais POLAIRE (anneau resolu) reproduction-candidate (LONG, hors CI) : modele complet sur `adc.PolarMesh` + Schur condense polaire + frozen-equilibrium (option c) + flag `--perturbation` |
-| `test_polar_assembly.py` | smoke BUILD-FREE de l'assemblage polaire (faux adc, CI) : ordre facade, routage Poisson polaire, fenetres de fit verbatim, point fixe frozen-eq |
-| `campaign_polar.sbatch` | campagne ROMEO modele complet POLAIRE l=3,4,5 (armgpu GH200, mono-rang) |
+| `run.py` | harnais cartesien reproduction-candidate (long, hors CI) : `build_uniform`/`build_amr`, fit du taux, sorties |
+| `run_polar.py` | harnais polaire (anneau resolu) reproduction-candidate (long, hors CI) : modele complet sur `adc.PolarMesh` + Schur condense polaire + frozen-equilibrium (option c) + flag `--perturbation` |
+| `test_polar_assembly.py` | smoke build-free de l'assemblage polaire (faux adc, CI) : ordre facade, routage Poisson polaire, fenetres de fit verbatim, point fixe frozen-eq |
+| `campaign_polar.sbatch` | campagne ROMEO modele complet polaire l=3,4,5 (armgpu GH200, mono-rang) |
 | `results.py` | emetteur d'enregistrements de mesure pur Python ; `PENDING` pour tout non mesure ; self-test CI |
 | `make_figures.py` | 2 figures honnetes (`gap_to_paper.png`, `oracle_residual.png`) + `figures/provenance.json` |
 | `figures/*.png`, `figures/provenance.json` | assets versionnes : l'ecart au papier et le residu de l'oracle |
-| `NORMALIZATION.md`, `diag/diag_polar_omega.py` | etude du facteur $2\pi/\bar\rho$ du modele REDUIT ExB scalaire (AUTRE modele, hors manifeste) |
+| `NORMALIZATION.md`, `diag/diag_polar_omega.py` | etude du facteur $2\pi/\bar\rho$ du modele reduit ExB scalaire (autre modele, hors manifeste) |
 | `../diocotron/` | limite de derive ExB reduite (oracle de dispersion + sous-estimation $-22$ a $-27\%$) |
-| `../euler_poisson/` | Euler-Poisson electrostatique NON magnetise (pas de Lorentz) |
+| `../euler_poisson/` | Euler-Poisson electrostatique non magnetise (pas de Lorentz) |
 
-## Chemin POLAIRE (`run_polar.py`) : modele complet sur l'anneau resolu
+## Chemin polaire (`run_polar.py`) : modele complet sur l'anneau resolu
 
-`run_polar.py` porte le **modele COMPLET** (Euler-Poisson isotherme magnetise + etage Schur
-condense) sur une **grille polaire annulaire** au lieu du carre cartesien. La direction radiale
-devient un **axe de grille** : les bords de l'anneau sont resolus, ce qui leve le verrou des bords
-d'anneau cartesiens (le chemin cartesien plafonne a $-82/-95\%$ INDEPENDAMMENT de la resolution,
+`run_polar.py` porte le modele complet (Euler-Poisson isotherme magnetise + etage Schur
+condense) sur une grille polaire annulaire au lieu du carre cartesien. La direction radiale
+devient un axe de grille : les bords de l'anneau sont resolus, ce qui leve le verrou des bords
+d'anneau cartesiens (le chemin cartesien plafonne a $-82/-95\%$ independamment de la resolution,
 cf. `adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md`). Le diagnostic reduit ExB scalaire
-(`diag/diag_polar_omega.py`) recupere deja $l=4$ EXACT sur cette geometrie.
+(`diag/diag_polar_omega.py`) recupere deja $l=4$ exact sur cette geometrie.
 
 Pile : `adc.System(mesh=adc.PolarMesh(...))` (anneau global), `IsothermalFluxPolar` (#209),
 WENO5-Z + Rusanov + SSPRK3, `adc.CondensedSchur` -> `PolarCondensedSchurSourceStepper` (#215),
-Poisson polaire direct (FFT-theta + Thomas-r, Dirichlet $\phi=0$ aux parois radiales). **MONO-RANG**
+Poisson polaire direct (FFT-theta + Thomas-r, Dirichlet $\phi=0$ aux parois radiales). Mono-rang
 (boite unique couvrant l'anneau). Observable : $\phi$ sur le cercle $r=r_0$ = colonne native
-`phi[:, i_r0]`, FFT-theta, fenetres de fit VERBATIM du papier, pente BRUTE -> `growth_rates.csv`
+`phi[:, i_r0]`, FFT-theta, fenetres de fit verbatim du papier, pente brute -> `growth_rates.csv`
 (engine `full-polar-schur`, jamais melange aux nombres reduits porteurs du facteur $2\pi$).
 
 **Option (c) frozen-equilibrium** (`--frozen-equilibrium`, defaut ON ; `--perturbation` regle
-$\delta$). On precalcule UNE FOIS le residu d'equilibre GELE $R_{eq}=\mathrm{step}(U_{eq})-U_{eq}$ sur
+$\delta$). On precalcule une fois le residu d'equilibre gele $R_{eq}=\mathrm{step}(U_{eq})-U_{eq}$ sur
 l'anneau axisymetrique, puis on avance la carte corrigee $U \leftarrow \mathrm{step}(U)-R_{eq}$ :
-$(\mathrm{step}-R_{eq})(U_{eq})=U_{eq}$ devient un POINT FIXE DISCRET EXACT. Auto-test
-`--check-equilibrium` (sous frozen) : stationarite a la PRECISION MACHINE de $U_{eq}$.
+$(\mathrm{step}-R_{eq})(U_{eq})=U_{eq}$ devient un point fixe discret exact. Auto-test
+`--check-equilibrium` (sous frozen) : stationarite a la precision machine de $U_{eq}$.
 
 ```bash
 # Smoke build-free (CI) : assertions reelles sur le contrat d'assemblage, aucun build.
 python hoffart_euler_poisson_dsl/test_polar_assembly.py
 
-# Run polaire complet (LONG, hors CI) : module adc construit avec le chemin polaire.
+# Run polaire complet (long, hors CI) : module adc construit avec le chemin polaire.
 PYTHONPATH=/chemin/vers/adc_cpp/build/python \
   python hoffart_euler_poisson_dsl/run_polar.py --modes 3 4 5 --nr 256 --ntheta 256 --t-end 2 \
   --frozen-equilibrium --dt 1e-3
@@ -411,11 +411,11 @@ python hoffart_euler_poisson_dsl/run_polar.py --quick   # nr=ntheta=16, t_end=0.
 
 ROMEO : `campaign_polar.sbatch` (armgpu, compte r250127, 1 GPU GH200, mono-rang).
 
-**VERDICT (cf. `adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md`, 4 campagnes GH200).** Le
-well-balancing AXISYMETRIQUE est RESOLU (frozen-eq : $U_{eq}$ point fixe discret exact, $\delta=0$
--> $4.15\times10^{-20}$). MAIS le chemin PERTURBE diverge a $t\sim0.01$, AVANT toute fenetre de fit.
-Diagnostic (delta/dt/N sweeps) : instabilite de l'OPERATEUR SPATIAL semi-discret a la raideur
+**Verdict (cf. `adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md`, 4 campagnes GH200).** Le
+well-balancing axisymetrique est resolu (frozen-eq : $U_{eq}$ point fixe discret exact, $\delta=0$
+-> $4.15\times10^{-20}$). Mais le chemin perturbe diverge a $t\sim0.01$, avant toute fenetre de fit.
+Diagnostic (delta/dt/N sweeps) : instabilite de l'operateur spatial semi-discret a la raideur
 papier (delta-independant ; aggravation $\sim1/N^2$ a nombre d'onde physique fixe), cause racine la
-plus probable = reconstruction NON POSITIVE au bord d'anneau a contraste $10^6$ (et/ou source de
-Lorentz raide). AUCUNE reproduction du modele complet revendiquee ; le redesign spatial (positivite
+plus probable = reconstruction non positive au bord d'anneau a contraste $10^6$ (et/ou source de
+Lorentz raide). Aucune reproduction du modele complet revendiquee ; le redesign spatial (positivite
 + WB/upwinding de source) est le prochain pas. Le reduit ExB reste la voie de reproduction credible.
