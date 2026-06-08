@@ -1,6 +1,6 @@
 """Cas "diocotron_amr" : instabilite diocotron sur grille AMR multi-patch.
 
-Compose GENERIQUEMENT depuis Python via `adc.AmrSystem` (le pendant raffine de
+Compose generiquement depuis Python via `adc.AmrSystem` (le pendant raffine de
 `adc.System`), sans solveur dedie : un bloc `diocotron` porte sur une hierarchie
 adaptative (grossier + un niveau fin suivi par regrid Berger-Rigoutsos, reflux
 conservatif). Toutes les `regrid_every` iterations, les patchs fins sont re-decoupes
@@ -8,11 +8,11 @@ pour suivre la bande de charge. Python compose la config et la CI (numpy), le ca
 reste en C++.
 
 Capacites verifiees (asserts) :
-  - VRAI raffinement adaptatif : la bande de charge est taggee et couverte par PLUSIEURS
+  - raffinement adaptatif : la bande de charge est taggee et couverte par plusieurs
     patchs fins (n_patches() >= 2 a chaque pas). Le seuil discrimine reellement : un run de
-    CONTROLE avec un seuil inatteignable (1e30) ne produit qu'un patch degenere (1), donc
+    controle avec un seuil inatteignable (1e30) ne produit qu'un patch degenere (1), donc
     strictement moins. Le raffinement vient bien du tagging, pas du build de la hierarchie ;
-  - EFFET sur la solution : la solution raffinee (projetee sur la grille de base) differe
+  - effet sur la solution : la solution raffinee (projetee sur la grille de base) differe
     mesurablement de celle du run de controle non raffine (ecart sup > seuil) ;
   - conservation de masse sur AMR (reflux) a l'arrondi machine : drel < 1e-9 ;
   - integrite numerique : densite finie partout.
@@ -44,7 +44,7 @@ MODE, REFINE_FRAC = 4, 0.15
 NSTEPS = 40
 TOL_MASS = 1e-9
 # Seuil inatteignable : aucune maille ne le depasse, le critere ne tagge donc jamais. Sert de
-# run de CONTROLE pour montrer que les patchs fins du run nominal viennent bien du tagging.
+# run de controle pour montrer que les patchs fins du run nominal viennent bien du tagging.
 NO_REFINE = 1e30
 # Le run raffine doit changer la solution projetee d'au moins cet ecart sup ; bien au-dessus du
 # bruit (l'ecart mesure vaut ~6e-2), assez bas pour rester robuste aux variations de schema.
@@ -83,7 +83,7 @@ def main():
         npatch = sim.n_patches()
         drel = relative_drift(mass, mass0)
         patches_seen.add(npatch)
-        # VRAI raffinement : la bande taggee est couverte par PLUSIEURS patchs fins (>= 2),
+        # raffinement : la bande taggee est couverte par plusieurs patchs fins (>= 2),
         # pas seulement un niveau fin present (n_patches() >= 1 etait verifie trivialement).
         assert npatch >= 2, "raffinement insuffisant au pas %d : n_patches()=%d (< 2)" % (k, npatch)
         assert drel < TOL_MASS, "masse non conservee au pas %d : drel=%.3e" % (k, drel)
@@ -98,9 +98,9 @@ def main():
     print("# densite : min=%.6e max=%.6e" % (float(dens.min()), float(dens.max())))
     assert min(patches_seen) >= 2, "AMR n'a jamais couvert la bande (< 2 patchs)"
 
-    # --- Run de CONTROLE : meme CI, mais seuil inatteignable -> aucun tagging ---
+    # --- Run de controle : meme CI, mais seuil inatteignable -> aucun tagging ---
     # Prouve que les patchs fins du run nominal viennent du critere de raffinement (pas du
-    # build de la hierarchie) et que le raffinement CHANGE la solution la ou il agit.
+    # build de la hierarchie) et que le raffinement change la solution la ou il agit.
     ctrl = build_sim(ne, n_i0, threshold=NO_REFINE)
     for _ in range(NSTEPS):
         ctrl.step_cfl(0.4)

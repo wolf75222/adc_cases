@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Figures de diagnostic du cas two_species_dsl (equivalence DSL <-> natif par espece).
 
-Re-joue EXACTEMENT la physique de run.py (memes modeles, meme CI, memes 15 pas, meme CFL, meme
-backend), puis trace, PAR ESPECE, UNE figure a 3 panneaux sur la composante DENSITE rho :
+Re-joue exactement la physique de run.py (memes modeles, meme CI, memes 15 pas, meme CFL, meme
+backend), puis trace, par espece, une figure a 3 panneaux sur la composante densite rho :
   [natif rho] | [DSL rho] | [|rho_DSL - rho_natif|]
-Les deux premiers panneaux (viridis) montrent le champ REEL structure (cosinus module advecte) ;
-le troisieme (inferno, echelle fixe) montre l'ecart. On VOIT alors deux densites identiques a l'oeil
-PUIS la preuve qu'elles matchent (ecart noir, max annote), plutot qu'un carre noir seul (qui aurait
+Les deux premiers panneaux (viridis) montrent le champ reel structure (cosinus module advecte) ;
+le troisieme (inferno, echelle fixe) montre l'ecart. On voit alors deux densites identiques a l'oeil
+puis la preuve qu'elles matchent (ecart noir, max annote), plutot qu'un carre noir seul (qui aurait
 l'air vide / casse).
 
 Lecture attendue (cf. README sec. 4) :
-  - ions  : rho_natif et rho_DSL identiques a l'oeil (modulation induite ~1e-4) ; ecart EXACTEMENT
+  - ions  : rho_natif et rho_DSL identiques a l'oeil (modulation induite ~1e-4) ; ecart exactement
     noir (max|d| = 0), comme tout l'etat ionique (bit-identique) ;
-  - electrons : rho_natif et rho_DSL identiques a l'oeil (cosinus +/-1.6 %) ; ecart sur rho EXACTEMENT
+  - electrons : rho_natif et rho_DSL identiques a l'oeil (cosinus +/-1.6 %) ; ecart sur rho exactement
     noir (rho bit-identique). L'epsilon machine 4.93e-32 de l'etat electron vit dans la composante
     rho_v (pas rho) ; on l'annote sur la figure (max|d| etat complet) pour qu'il reste documente.
 
@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 import adc  # noqa: E402
 
-# Import du cas lui-meme : on reutilise SES modeles et SA boucle, aucune divergence de parametre.
+# Import du cas lui-meme : on reutilise ses modeles et sa boucle, aucune divergence de parametre.
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import run as case  # noqa: E402
@@ -66,13 +66,13 @@ def _git_sha(path):
 
 def density_triptych(rho_native, rho_dsl, species_label, state_max_abs, png_path,
                      diff_vmax, backend):
-    """Figure a 3 panneaux sur la DENSITE rho d'une espece.
+    """Figure a 3 panneaux sur la densite rho d'une espece.
 
     Panneau 0 : rho natif (viridis, champ reel structure).
-    Panneau 1 : rho DSL  (viridis, MEME echelle -> identique a l'oeil).
+    Panneau 1 : rho DSL  (viridis, meme echelle -> identique a l'oeil).
     Panneau 2 : |rho_DSL - rho_natif| (inferno, echelle fixe 0..diff_vmax -> noir si bit-identique).
 
-    @p state_max_abs : max|DSL - natif| sur l'ETAT COMPLET de l'espece (toutes composantes), annote
+    @p state_max_abs : max|DSL - natif| sur l'etat complet de l'espece (toutes composantes), annote
     sur le panneau d'ecart pour exposer l'epsilon machine meme s'il vit hors de rho.
     Renvoie max|rho_DSL - rho_natif|.
     """
@@ -124,7 +124,7 @@ def density_triptych(rho_native, rho_dsl, species_label, state_max_abs, png_path
 def main():
     ne2d, ni2d = case.initial_conditions(N)
 
-    # Reference native + chemin DSL, EXACTEMENT comme run.py (meme fallback de backend).
+    # Reference native + chemin DSL, exactement comme run.py (meme fallback de backend).
     en, inn, me_n, mi_n = case.run_native(N, ne2d, ni2d, NSTEPS)
     ed, idd, me_d, mi_d, backend = case.run_dsl(N, ne2d, ni2d, NSTEPS)
 

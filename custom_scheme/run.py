@@ -1,8 +1,8 @@
-"""Cas "custom_scheme" : un schema numerique ecrit ENTIEREMENT en Python.
+"""Cas "custom_scheme" : un schema numerique ecrit entierement en Python.
 
-Le tuteur voulait pouvoir implementer sa propre methode numerique (spatiale ET
+Le tuteur voulait pouvoir implementer sa propre methode numerique (spatiale et
 temporelle) en Python, la lib ne fournissant que les briques couteuses. Ici on ne
-demande a `adc` QUE la resolution de Poisson (set_density + solve_fields + potential) ;
+demande a `adc` que la resolution de Poisson (set_density + solve_fields + potential) ;
 tout le transport diocotron (reconstruction, flux upwind, pas de temps SSPRK2) est ecrit
 en numpy.
 
@@ -58,7 +58,7 @@ def poisson_oracle(sim, n):
 
 
 def rhs(sim, n, dx, B0):
-    """Residu -div(n v) calcule EN PYTHON, le potentiel venant du solveur Poisson de adc."""
+    """Residu -div(n v) calcule en python, le potentiel venant du solveur Poisson de adc."""
     phi = poisson_oracle(sim, n)
     vx, vy = drift(phi, dx, B0)
     speed = float(np.hypot(vx, vy).max())
@@ -72,7 +72,7 @@ def main():
     n = band_density(nx, L, amp=1.0, width=0.05, mode=4, disp=0.02)
     n_i0 = float(n.mean())  # fond neutralisant : Poisson periodique a moyenne nulle
 
-    # adc.System sert UNIQUEMENT d'oracle de Poisson (un bloc diocotron, alpha (n - n_i0)).
+    # adc.System sert uniquement d'oracle de Poisson (un bloc diocotron, alpha (n - n_i0)).
     sim = adc.System(n=nx, L=L, periodic=True)
     sim.add_block("ne", model=models.diocotron(B0=B0, alpha=1.0, n_i0=n_i0))
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")

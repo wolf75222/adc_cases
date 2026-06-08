@@ -1,20 +1,20 @@
 """Compilation a la volee + chargement ctypes des scenarios C++ sur mesure.
 
-Certains cas portent leur propre C++ (un scenario qui n'est PAS une brique generique du coeur,
+Certains cas portent leur propre C++ (un scenario qui n'est pas une brique generique du coeur,
 p.ex. l'integrateur deux-fluides AP). Ce module factorise la mecanique commune :
 
   - localiser les en-tetes du coeur adc_cpp (`adc_include`) ;
-  - compiler le source en bibliotheque partagee, AVEC CACHE HORS SOURCE (`build_shared`) ;
+  - compiler le source en bibliotheque partagee, avec cache hors source (`build_shared`) ;
   - charger la lib et verifier la presence des symboles attendus (`load_symbols`).
 
 Deux exigences fortes, par rapport a un simple `c++ -shared` ad hoc :
 
-1. Le cache de build ne pollue JAMAIS l'arborescence source : la .so et sa cle d'ABI vont dans
+1. Le cache de build ne pollue jamais l'arborescence source : la .so et sa cle d'ABI vont dans
    `out/<cas>/build/` (cf. `adc_cases.common.io`), ignore par git. Aucun artefact compile ne
    reste a cote du .cpp.
 
-2. Une incompatibilite d'ABI est EXPLICITE, jamais silencieuse. La lib en cache est indexee par
-   une CLE d'ABI (hash du compilateur, des flags, des sources, ET de la signature de l'arbre
+2. Une incompatibilite d'ABI est explicite, jamais silencieuse. La lib en cache est indexee par
+   une cle d'ABI (hash du compilateur, des flags, des sources, et de la signature de l'arbre
    d'en-tetes du coeur). Si la cle change (en-tetes du coeur modifies = ABI potentiellement
    differente), la lib est recompilee ; on ne recharge jamais une lib perimee. Au chargement, on
    verifie que tous les symboles attendus existent : un symbole manquant leve une erreur claire
@@ -102,7 +102,7 @@ def _abi_key(cxx, flags, sources, include):
 
 
 def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
-    """Compile `sources` en bibliotheque partagee, avec CACHE HORS SOURCE indexe par cle d'ABI.
+    """Compile `sources` en bibliotheque partagee, avec cache hors source indexe par cle d'ABI.
 
     - `case_name` : nom du cas (sous-dossier de `out/`) ; le cache vit dans `out/<cas>/build/`.
     - `sources`   : liste de chemins .cpp/.hpp (le premier .cpp est compile, les autres servent
@@ -110,7 +110,7 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
     - `include`   : dossier include/ du coeur (defaut : `adc_include()`).
     - `flags`/`std` : flags de compilation et standard C++.
 
-    Recompile UNIQUEMENT si la lib en cache manque ou si sa cle d'ABI differe de la cle courante
+    Recompile uniquement si la lib en cache manque ou si sa cle d'ABI differe de la cle courante
     (compilateur, flags, sources, en-tetes du coeur). On ne recharge jamais une lib perimee en
     silence. Renvoie le chemin de la .so/.dylib.
     """
@@ -148,7 +148,7 @@ def load_symbols(lib_path, symbols):
     """Charge `lib_path` (ctypes) et verifie que tous les `symbols` attendus existent.
 
     Un symbole manquant signe une ABI incompatible (lib obsolete ou source divergent) : on leve
-    une RuntimeError EXPLICITE ici, au chargement, plutot qu'un AttributeError opaque au premier
+    une RuntimeError explicite ici, au chargement, plutot qu'un AttributeError opaque au premier
     appel. Renvoie l'objet CDLL charge.
     """
     lib = ctypes.CDLL(lib_path)

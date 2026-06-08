@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Figures du cas diocotron_dsl (equivalence DSL <-> natif).
 
-Rejoue la MEME configuration que run.py (memes grille / CI / Poisson / nombre de pas), recupere
-l'etat final des DEUX chemins (composition native de briques vs modele ecrit en formules adc.dsl),
-et trace UNE figure a 3 panneaux (densite natif, densite DSL, ecart |state_dsl - state_natif|) :
-les deux premiers montrent des champs reels identiques, le troisieme l'ecart qui DOIT etre noir
+Rejoue la meme configuration que run.py (memes grille / CI / Poisson / nombre de pas), recupere
+l'etat final des deux chemins (composition native de briques vs modele ecrit en formules adc.dsl),
+et trace une figure a 3 panneaux (densite natif, densite DSL, ecart |state_dsl - state_natif|) :
+les deux premiers montrent des champs reels identiques, le troisieme l'ecart qui doit etre noir
 (max = 0). Une seule cellule non noire = une formule DSL qui devie d'une brique du coeur. Ecrit
 aussi figures/provenance.json (nombres mesures du run).
 
@@ -42,7 +42,7 @@ def git_sha(path):
 
 
 def main():
-    # --- MEME configuration que run.main() ---
+    # --- meme configuration que run.main() ---
     n, L = 96, 1.0
     ne0 = case.band_density(n, L, amp=1.0, width=0.05, mode=2, disp=0.02)
     n_i0 = float(ne0.mean())
@@ -55,8 +55,8 @@ def main():
     max_abs = float(diff.max())
     identical = bool(np.array_equal(dd, dn))
 
-    # --- Figure unique : 3 panneaux (natif | DSL | ecart). On MONTRE les deux champs reels
-    # (structures, identiques a l'oeil) PUIS l'ecart, plutot qu'un carre noir seul (qui aurait
+    # --- Figure unique : 3 panneaux (natif | DSL | ecart). On montre les deux champs reels
+    # (structures, identiques a l'oeil) puis l'ecart, plutot qu'un carre noir seul (qui aurait
     # l'air vide / casse). Les deux premiers panneaux prouvent que les champs sont reels et de
     # meme dynamique ; le troisieme prouve qu'ils sont bit-identiques (max = 0). ---
     fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.4))
@@ -84,7 +84,7 @@ def main():
     plt.close(fig)
     p2 = p1  # une seule figure desormais (l'ancien final_density.png est fusionne ici)
 
-    # --- Provenance : nombres MESURES de ce run (rien d'invente) ---
+    # --- Provenance : nombres mesures de ce run (rien d'invente) ---
     amp0 = case.perturbation_amplitude(ne0)
     amp_dsl = case.perturbation_amplitude(dd)
     mass0 = float(ne0.sum())

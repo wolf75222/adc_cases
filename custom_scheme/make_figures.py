@@ -1,9 +1,9 @@
 """Figures du cas custom_scheme : transport ExB ecrit 100 % en numpy, Poisson par adc.
 
-Rejoue EXACTEMENT la physique de run.py (memes briques, memes parametres, meme schema
+Rejoue exactement la physique de run.py (memes briques, memes parametres, meme schema
 SSPRK2 + upwind ecrit en Python) en instrumentant l'evolution :
   - densite n a 4 instants (CI -> fin) : le transport numpy advecte la bande (mode 4) ;
-  - |phi| resolu par adc aux memes 4 instants : le SEUL appel a la lib (l'oracle Poisson) ;
+  - |phi| resolu par adc aux memes 4 instants : le seul appel a la lib (l'oracle Poisson) ;
   - series temporelles : derive de masse relative, |phi|_max, vitesse ExB max, max|dn|.
 
 Ecrit figures/{density_evolution,phi_evolution,diagnostics}.png + figures/provenance.json
@@ -38,7 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
-# Parametres IDENTIQUES a run.py.
+# Parametres identiques a run.py.
 NX, L, B0 = 96, 1.0, 1.0
 DX = L / NX
 CFL, NSTEPS = 0.4, 200
@@ -69,7 +69,7 @@ def main():
 
     for step in range(NSTEPS + 1):
         r1, speed, phi = rhs(sim, n)
-        # diagnostics AVANT le pas (etat courant)
+        # diagnostics avant le pas (etat courant)
         times.append(t)
         mass_drift.append(relative_drift(float(n.sum()) * DX * DX, mass0))
         phimax.append(float(np.abs(phi).max()))
@@ -114,7 +114,7 @@ def main():
         ax.set_xlabel("x")
     axes[0].set_ylabel("y")
     fig.colorbar(im, ax=axes, fraction=0.012, pad=0.02, label="|phi| (resolu par adc)")
-    fig.suptitle("custom_scheme : |phi| self-consistant resolu par adc (le SEUL appel a la lib)",
+    fig.suptitle("custom_scheme : |phi| self-consistant resolu par adc (le seul appel a la lib)",
                  fontsize=12)
     fig.savefig(os.path.join(FIGDIR, "phi_evolution.png"), dpi=110, bbox_inches="tight")
     plt.close(fig)
@@ -151,7 +151,7 @@ def main():
         "adc_cpp_sha": sha(adc.__file__.split("/python/adc/")[0]),
         "adc_cases_sha": sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.System : un bloc models.diocotron, Poisson geometric_mg)",
-        "role_adc": "oracle de Poisson UNIQUEMENT (set_density + solve_fields + potential)",
+        "role_adc": "oracle de Poisson uniquement (set_density + solve_fields + potential)",
         "resolution": "%dx%d" % (NX, NX),
         "mode_band": 4,
         "nsteps": NSTEPS,

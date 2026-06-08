@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Figures de diagnostic du cas `plasma` (validation : Poisson + ionisation + collision).
 
-Re-joue EXACTEMENT la physique de `run.py` (memes CI, meme recette, meme nombre de pas et meme
+Re-joue exactement la physique de `run.py` (memes CI, meme recette, meme nombre de pas et meme
 CFL) mais instrumente la boucle pas-a-pas pour enregistrer l'historique des diagnostics, puis
 trace trois figures sous `figures/` :
-  1. densities.png   : densites MOYENNES e / i / n vs t (la modulation e- a 5 % se moyenne).
+  1. densities.png   : densites moyennes e / i / n vs t (la modulation e- a 5 % se moyenne).
   2. ionization.png  : bilan d'ionisation (n_i monte, n_g descend, n_i + n_g plat) + erreur de
                        conservation en echelle log + impulsion totale (collision).
   3. density_map.png  : carte 2D de densite des trois especes a l'etat final.
@@ -12,7 +12,7 @@ trace trois figures sous `figures/` :
 Ecrit aussi figures/provenance.json (memes champs que diocotron/figures/provenance.json).
 
 Aucune figure n'est versionnee dans le depot : ce cas est `validation`, pas `reproduction`. Les
-PNG produits ici sont des DIAGNOSTICS du tutoriel (le guide autorise `<cas>/figures/` versionne
+PNG produits ici sont des diagnostics du tutoriel (le guide autorise `<cas>/figures/` versionne
 seulement pour une reproduction). On les ecrit neanmoins dans figures/ pour le tutoriel, avec
 provenance, en assumant qu'ils ne tournent pas en CI.
 """
@@ -70,7 +70,7 @@ def run_with_history():
             hist["mass"][s].append(float(sim.mass(s)))
         hist["phimax"].append(float(np.abs(np.array(sim.potential())).max()))
         # impulsion totale du systeme ferme ion+neutre (la collision ne fait que l'echanger ;
-        # le champ E agit aussi sur les ions, donc px_tot global n'est PAS conserve : on suit
+        # le champ E agit aussi sur les ions, donc px_tot global n'est pas conserve : on suit
         # le couple ion+neutre pour isoler la friction le mieux possible).
         pix, piy = total_momentum(sim, "ions")
         pnx, pny = total_momentum(sim, "neutrals")

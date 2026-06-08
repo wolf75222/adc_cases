@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-r"""Balayage ordre x resolution x mode du cas diocotron (mesure, PAS de nouvelle physique).
+r"""Balayage ordre x resolution x mode du cas diocotron (mesure, pas de nouvelle physique).
 
 But (Hoffart "PR-0") : quantifier quelle part de l'ecart de taux de croissance diocotron
-(numerique vs analytique de Petri) se REFERME en montant en resolution / en ordre de
-reconstruction (= diffusion numerique), et quelle part reste a PEU PRES PLATE en resolution
+(numerique vs analytique de Petri) se referme en montant en resolution / en ordre de
+reconstruction (= diffusion numerique), et quelle part reste a peu pres plate en resolution
 (= verrou structurel du bord d'anneau cartesien). C'est l'entree quantitative pour decider la
 PR-A "transport-wall".
 
-Ce script NE redefinit AUCUNE physique ni aucun observable : il reutilise tel quel le pipeline
+Ce script ne redefinit aucune physique ni aucun observable : il reutilise tel quel le pipeline
 de `diocotron/run.py` (CI anneau partagee, FFT azimutale du mode l de phi, ajustement de la
 phase lineaire `exp(gamma t)`, normalisation par omega_D, cible analytique de Petri en numpy).
 Il ne fait que balayer (n, limiteur, l) et reporter gamma_num + %ecart.
 
-Axe ORDRE : la facade `adc.System.add_block` (chemin du cas diocotron) expose les
+Axe ordre : la facade `adc.System.add_block` (chemin du cas diocotron) expose les
 reconstructions de la dispatch runtime `make_block` : `none` (ordre 1), `minmod` (ordre 2 TVD),
 `vanleer` (ordre 2, moins dissipatif), et depuis adc_cpp #88 (master `ca803dc`) `weno5`
 (WENO5-Z, ordre 5, stencil 5 points, 3 ghosts) appariee a SSPRK3 (`adc.Explicit(method="ssprk3")`,
 3 etages ordre 3). L'axe ordre balaye ici est donc {O1 none, O2 minmod, O2 vanleer, O5 weno5}.
-La cle d'ordre `weno5` aiguille a la fois la reconstruction (`adc.Spatial(limiter="weno5")`) ET
+La cle d'ordre `weno5` aiguille a la fois la reconstruction (`adc.Spatial(limiter="weno5")`) et
 l'integrateur temporel (SSPRK3) : O5 = WENO5-Z + SSPRK3, pour borner la diffusion residuelle et
 isoler le plancher structurel. Voir SWEEP_RESULTS.md.
 
@@ -26,7 +26,7 @@ physique final decroit avec n. A `nsteps=900` (calage de run.py) n=256 n'atteint
 (phase encore non saturee) et la fenetre d'ajustement (ancree sur 1.3 a0 -> 0.85 pic) sur-lit
 gamma. On tient donc le temps physique final ~ constant (`T_END`) en avancant jusqu'a t_end
 plutot qu'a un nsteps fixe. T_END = 48 est l'horizon du calage valide de run.py (n=192, 900 pas
--> t ~ 48) : a cet horizon le balayage REPRODUIT le README a n=192 (l=3 -22 %, l=4 -27 %,
+-> t ~ 48) : a cet horizon le balayage reproduit le README a n=192 (l=3 -22 %, l=4 -27 %,
 l=5 -5 %), ce qui ancre la mesure. C'est un reglage de boucle, pas un nouvel observable.
 
 Usage :
@@ -49,25 +49,25 @@ try:
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# On REUTILISE le pipeline du cas (CI, diagnostic, analytique) ; aucun observable reinvente.
+# On reutilise le pipeline du cas (CI, diagnostic, analytique) ; aucun observable reinvente.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import run as dioc  # noqa: E402  (diocotron/run.py : meme dossier)
 from adc_cases import models  # noqa: E402
 from adc_cases.common.io import case_output_dir  # noqa: E402
 
 # Ordres de reconstruction atteignables via add_block (make_block runtime). La cle 'weno5'
-# represente O5 = WENO5-Z (reconstruction) + SSPRK3 (temps) : elle aiguille les DEUX briques
+# represente O5 = WENO5-Z (reconstruction) + SSPRK3 (temps) : elle aiguille les deux briques
 # (cf. make_system : limiter='weno5' -> time=Explicit(method='ssprk3')).
 ORDER_LABEL = {"none": "O1", "minmod": "O2-minmod", "vanleer": "O2-vanleer", "weno5": "O5-weno5"}
 
 # Horizon physique commun. T_END = 48 = horizon du calage valide de run.py (n=192, 900 pas
-# -> t ~ 48) ; a cet horizon le balayage reproduit le README a n=192. On vise CE temps physique
+# -> t ~ 48) ; a cet horizon le balayage reproduit le README a n=192. On vise ce temps physique
 # (et non un nsteps fixe) pour que la fenetre lineaire couvre la meme phase de croissance partout.
 T_END = 48.0
 
 
 def make_system(n, l, limiter, delta):
-    """Compose le MEME systeme que run.py.make_ring_system, mais avec un limiteur parametrable.
+    """Compose le meme systeme que run.py.make_ring_system, mais avec un limiteur parametrable.
 
     Pour la cle d'ordre 'weno5' (O5), on apparie la reconstruction WENO5-Z a SSPRK3 (3 etages,
     ordre 3) : appairer un ordre eleve en espace a un integrateur d'ordre 1-2 en temps brides
@@ -92,7 +92,7 @@ def measure_growth(l, n, limiter, t_end=T_END, delta=0.01, cfl=0.4, max_steps=40
     pour rendre la fenetre d'ajustement comparable entre resolutions.
 
     Retourne (gamma_norm, win, t_final, nsteps, fit_i0, fit_i1, fit_t0, fit_t1) : les bornes
-    de la fenetre de fit (indices ET temps) sont remontees pour tracabilite dans le CSV.
+    de la fenetre de fit (indices et temps) sont remontees pour tracabilite dans le CSV.
     """
     sim = make_system(n, l, limiter, delta)
     rm = 0.5 * (dioc.R0 + dioc.R1)
@@ -113,7 +113,7 @@ def measure_growth(l, n, limiter, t_end=T_END, delta=0.01, cfl=0.4, max_steps=40
     amp = np.asarray(amp)
     gamma_raw, win = dioc.fit_linear_phase(ts, amp)
     gamma_norm = gamma_raw * 2.0 * math.pi / dioc.RHOBAR
-    # win = (t0, t1) = bornes TEMPORELLES de la fenetre de fit (dioc.fit_linear_phase). On
+    # win = (t0, t1) = bornes temporelles de la fenetre de fit (dioc.fit_linear_phase). On
     # retrouve les indices correspondants dans ts (premier echantillon a chaque borne) pour
     # tracer la fenetre dans le CSV (i0, i1, t0, t1) : c'est ce qui rend le point n=192 O5 l=4
     # verifiable (fenetre ouverte trop tot -> transitoire). Aucun observable nouveau.
@@ -185,7 +185,7 @@ def main():
 
     with open(csv_path, "w") as f:
         # Colonnes de fenetre de fit (fit_i0/i1 = indices, fit_t0/t1 = temps) ecrites pour
-        # CHAQUE ligne : c'est la tracabilite demandee a la revue (le point n=192 O5 l=4
+        # chaque ligne : c'est la tracabilite demandee a la revue (le point n=192 O5 l=4
         # s'explique par une fenetre ouverte trop tot, lisible directement dans le CSV).
         f.write("n,order,order_label,l,gamma_num,gamma_ana,err_pct,t_final,nsteps,"
                 "fit_i0,fit_i1,fit_t0,fit_t1\n")

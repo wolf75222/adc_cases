@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Cas "magnetic_isothermal_dsl" : un fluide ISOTHERME MAGNETISE ecrit ENTIEREMENT EN FORMULES
+"""Cas "magnetic_isothermal_dsl" : un fluide isotherme magnetise ecrit entierement en formules
 (adc.dsl.Model), avec force de Lorentz q rho E + (v x B) pilotee par un champ B_z constant.
 
 Pourquoi ce cas
 ---------------
 Troisieme demonstrateur du plan declaratif (apres diocotron_dsl mono-espece et two_species_dsl
-multi-espece). Il exerce ce que les deux autres ne couvraient pas : une SOURCE qui lit un champ
-auxiliaire ETENDU (B_z, au dela du contrat de base phi / grad phi). Toute la physique est ecrite
+multi-espece). Il exerce ce que les deux autres ne couvraient pas : une source qui lit un champ
+auxiliaire etendu (B_z, au dela du contrat de base phi / grad phi). Toute la physique est ecrite
 en expressions symboliques ; adc.dsl genere le C++, le compile et l'installe comme bloc via
 add_equation(...). Aucune brique nommee, aucun modele natif de reference n'existe pour ce modele :
 on prouve sa correction par equivalence inter-backend et par invariants physiques.
@@ -21,35 +21,35 @@ Physique (Euler isotherme + electrostatique + Lorentz, fermeture p = cs2 rho)
   second membre elliptique (densite de charge) : q rho, couple au Poisson du systeme.
 
 Le terme B_z my / -B_z mx est la projection 2D de (q rho/c) v x B avec B = B_z e_z (constantes
-absorbees dans B_z) : il fait TOURNER la quantite de mouvement sans changer la masse ni l'energie
+absorbees dans B_z) : il fait tourner la quantite de mouvement sans changer la masse ni l'energie
 cinetique. C'est la nouveaute de ce demonstrateur.
 
 Champ B_z : pilote 100% depuis Python
 -------------------------------------
-B_z est une composante CANONIQUE du canal adc::Aux (indice 3, au dela de phi/grad). Le modele DSL
+B_z est une composante canonique du canal adc::Aux (indice 3, au dela de phi/grad). Le modele DSL
 qui lit aux("B_z") declare n_aux = 4 ; add_equation elargit le canal aux partage ; on peuple B_z
-par sim.set_magnetic_field(tableau n x n). Ici B_z est un CHAMP CONSTANT (B0 partout). Aucune
+par sim.set_magnetic_field(tableau n x n). Ici B_z est un champ constant (B0 partout). Aucune
 modification du coeur adc_cpp n'est requise : set_magnetic_field existe deja (binding C++).
 
 Backend
 -------
-On compile en backend "production" (chemin natif zero-copie add_native_block, cible du plan) ET en
-"aot" (chemin de production host-marshale, numerique identique). Quand les DEUX se chargent sur la
-plateforme, on EXIGE qu'ils soient bit-identiques (eval_rhs ET etat apres quelques pas : dmax == 0),
+On compile en backend "production" (chemin natif zero-copie add_native_block, cible du plan) et en
+"aot" (chemin de production host-marshale, numerique identique). Quand les deux se chargent sur la
+plateforme, on exige qu'ils soient bit-identiques (eval_rhs et etat apres quelques pas : dmax == 0),
 exactement comme diocotron_dsl prouve l'equivalence DSL <-> natif. Sur une plateforme ou le chemin
 natif ne peut pas etre charge (macOS, espace de noms a deux niveaux), seul "aot" se lie : la parite
 inter-backend est alors sautee, mais la correction reste prouvee par l'oracle analytique ci-dessous.
 
 Validation (aucun modele natif de reference n'existe pour ce modele)
 --------------------------------------------------------------------
-  (1) PARITE INTER-BACKEND : si production ET aot se lient, leurs eval_rhs et leurs etats apres
-      quelques pas sont BIT-IDENTIQUES (np.array_equal, dmax == 0) ;
-  (2) ORACLE LORENTZ : la difference de residu entre B_z = B0 et B_z = 0 est, sur les composantes
-      de quantite de mouvement, EXACTEMENT (B0 my, -B0 mx) calcule en numpy (dmax == 0) : le terme
+  (1) parite inter-backend : si production et aot se lient, leurs eval_rhs et leurs etats apres
+      quelques pas sont bit-identiques (np.array_equal, dmax == 0) ;
+  (2) oracle lorentz : la difference de residu entre B_z = B0 et B_z = 0 est, sur les composantes
+      de quantite de mouvement, exactement (B0 my, -B0 mx) calcule en numpy (dmax == 0) : le terme
       magnetique compile lit bien B_z et a la bonne forme ; a B_z = 0 il s'annule (controle) ;
-  (3) EVOLUTION : run court stable, fini, densite positive, masse conservee ;
-  (4) ROTATION : avec B_z != 0, la quantite de mouvement transverse (my) initialement nulle devient
-      non nulle -> le terme de Lorentz DEVIE bien l'ecoulement (la physique magnetique est exercee).
+  (3) evolution : run court stable, fini, densite positive, masse conservee ;
+  (4) rotation : avec B_z != 0, la quantite de mouvement transverse (my) initialement nulle devient
+      non nulle -> le terme de Lorentz devie bien l'ecoulement (la physique magnetique est exercee).
 """
 
 import os
@@ -76,7 +76,7 @@ B0 = 2.0      # champ magnetique de fond B_z (constant) ; != 0 -> Lorentz actif
 
 
 def magnetic_isothermal_model():
-    """Fluide isotherme magnetise ECRIT EN FORMULES (adc.dsl.Model). Variables conservatives rho,
+    """Fluide isotherme magnetise ecrit en formules (adc.dsl.Model). Variables conservatives rho,
     mx = rho u, my = rho v ; flux isotherme ; source electrostatique q rho E + Lorentz v x B_z ;
     second membre elliptique q rho (couplage Poisson). Reproduit l'API cible de l'utilisateur."""
     m = dsl.Model("magnetic_isothermal")
@@ -89,13 +89,13 @@ def magnetic_isothermal_model():
     v = m.primitive("v", my / rho)
     p = m.primitive("p", CS2 * rho)  # fermeture isotherme
 
-    # Champs auxiliaires fournis par le solveur : potentiel, son gradient, ET B_z (canal etendu).
+    # Champs auxiliaires fournis par le solveur : potentiel, son gradient, et B_z (canal etendu).
     m.aux("phi")
     gx = m.aux("grad_x")
     gy = m.aux("grad_y")
     bz = m.aux("B_z")
 
-    cs2 = m.param("cs2", CS2)      # constante NOMMEE, inlinee au codegen
+    cs2 = m.param("cs2", CS2)      # constante nommee, inlinee au codegen
     q = m.param("charge", Q)
 
     # Flux isotherme (convention IsothermalFlux du coeur) : pas de composante energie.
@@ -123,7 +123,7 @@ def magnetic_isothermal_model():
 
 def initial_state(n):
     """Etat initial : densite perturbee par un cosinus le long de x, quantite de mouvement
-    PUREMENT longitudinale (mx > 0, my = 0). my initialement nul rend la rotation de Lorentz
+    purement longitudinale (mx > 0, my = 0). my initialement nul rend la rotation de Lorentz
     visible (toute composante transverse apparue vient du terme magnetique)."""
     x = (np.arange(n) + 0.5) / n
     rho0 = 1.0 + 0.05 * np.cos(2.0 * np.pi * x)[None, :] * np.ones((n, n))
@@ -149,7 +149,7 @@ def _build_sim(n, compiled, state0, bz_value):
 
 
 def bind_backends(n, state0, bz_value):
-    """Compile le modele en "production" PUIS "aot" et tente de LIER chaque .so a un System (le
+    """Compile le modele en "production" puis "aot" et tente de lier chaque .so a un System (le
     chemin natif peut compiler mais echouer au dlopen selon la plateforme). Renvoie un dict
     {backend: sim} des backends effectivement lies (au moins "aot")."""
     include = adc_include()
@@ -160,7 +160,7 @@ def bind_backends(n, state0, bz_value):
             compiled = magnetic_isothermal_model().compile(
                 os.path.join(so_dir, "magnetic_isothermal_%s.so" % cand), include, backend=cand)
             sim = _build_sim(n, compiled, state0, bz_value)
-        except Exception as exc:  # noqa: BLE001 (diagnostic : compilation OU dlopen indisponible)
+        except Exception as exc:  # noqa: BLE001 (diagnostic : compilation ou dlopen indisponible)
             print("backend %r indisponible (%s), essai suivant" % (cand, type(exc).__name__))
             continue
         bound[cand] = sim
@@ -184,7 +184,7 @@ def main():
     backends = sorted(bound)
     print("backends DSL lies : %s" % ", ".join(repr(b) for b in backends))
 
-    # --- (1) PARITE INTER-BACKEND : si production ET aot se lient, ils sont BIT-IDENTIQUES ---
+    # --- (1) parite inter-backend : si production et aot se lient, ils sont bit-identiques ---
     if len(backends) >= 2:
         ref = backends[0]
         r_ref = np.array(bound[ref].eval_rhs("plasma"))
@@ -196,13 +196,13 @@ def main():
             assert np.array_equal(r_b, r_ref), (
                 "backends %r et %r non bit-identiques sur eval_rhs (dmax = %.3e)" % (b, ref, dmax))
     else:
-        print("parite inter-backend SAUTEE (un seul backend lie sur cette plateforme :"
+        print("parite inter-backend sautee (un seul backend lie sur cette plateforme :"
               " %r) ; correction prouvee par l'oracle analytique de Lorentz" % backends[0])
 
-    # --- (2) ORACLE LORENTZ : difference de residu B_z=B0 moins B_z=0 == (B0 my, -B0 mx) exactement.
+    # --- (2) oracle lorentz : difference de residu B_z=B0 moins B_z=0 == (B0 my, -B0 mx) exactement.
     # Le flux et l'electrostatique sont identiques entre les deux runs ; la seule difference est le
     # terme magnetique. On le compare a sa forme analytique en numpy : dmax == 0 attendu (lecture
-    # exacte de B_z et bonne forme du terme). On verifie sur CHAQUE backend lie.
+    # exacte de B_z et bonne forme du terme). On verifie sur chaque backend lie.
     lorentz_x = B0 * my0     # +B_z my sur la qte de mvt x
     lorentz_y = -B0 * mx0    # -B_z mx sur la qte de mvt y
     lor_contrib = 0.0
@@ -221,7 +221,7 @@ def main():
         assert float(np.max(np.abs(dR[0]))) == 0.0, "B_z modifie la composante densite (impossible)"
     assert lor_contrib > 0.0, "le terme de Lorentz est partout nul (B_z non lu ?)"
 
-    # --- (3) EVOLUTION + (4) ROTATION : sur le premier backend lie, B_z = B0 ---
+    # --- (3) evolution + (4) rotation : sur le premier backend lie, B_z = B0 ---
     sim = bound[backends[0]]
     mass0 = float(state0[0].sum())
     my_mean0 = float(my0.mean())

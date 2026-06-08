@@ -1,24 +1,24 @@
-"""Emetteur d'enregistrements de mesure pour le modele COMPLET system-schur (T3).
+"""Emetteur d'enregistrements de mesure pour le modele complet system-schur (T3).
 
 But
 ---
-Rendre la mesure du modele complet HONNETE et PRE-ENREGISTREE :
+Rendre la mesure du modele complet honnete et pre-enregistree :
 
-1. Pre-enregistrer et VERIFIER les fenetres de fit verbatim du papier
+1. Pre-enregistrer et verifier les fenetres de fit verbatim du papier
    (Fig. 5.4, arXiv:2510.11808) : l=3 [0.40,0.70], l=4 [0.60,0.75],
    l=5 [1.15,1.35]. Aucune fenetre adaptative n'est introduite pour la
-   comparaison du modele complet (cf. ``verify_paper_windows``).
+   comparaison du modele complet (cf. `verify_paper_windows`).
 
-2. Reporter la pente exp BRUTE du modele complet system-schur DIRECTEMENT
-   contre 0.772/0.911/0.683, SANS facteur 2 pi et SANS facteur rhobar. C'est
+2. Reporter la pente exp brute du modele complet system-schur directement
+   contre 0.772/0.911/0.683, sans facteur 2 pi et sans facteur rhobar. C'est
    la normalisation resolue (cf. docs/HOFFART_FIDELITY.md, ligne |Omega|) : le
-   2 pi / rhobar appartient UNIQUEMENT au chemin reduit ExB scalaire
+   2 pi / rhobar appartient uniquement au chemin reduit ExB scalaire
    (diag/diag_polar_omega.py), jamais au chemin complet.
 
 3. Distinguer sans ambiguite les moteurs :
-       engine = 'full-system-schur'  -> pente brute, AUCUN facteur
+       engine = 'full-system-schur'  -> pente brute, aucun facteur
        engine = 'reduced-ExB'        -> 2 pi / rhobar (NORMALIZATION.md)
-   pour que les nombres reduits porteurs du 2 pi ne soient JAMAIS melanges avec
+   pour que les nombres reduits porteurs du 2 pi ne soient jamais melanges avec
    les nombres bruts du modele complet.
 
 4. Emettre un enregistrement par run (CSV + JSON) capturant : SHA adc_cpp, SHA
@@ -26,11 +26,11 @@ Rendre la mesure du modele complet HONNETE et PRE-ENREGISTREE :
    fit, gamma_numeric, gamma_paper, err_pct. C'est la graine de la table de
    validation de la Phase 2.
 
-Ce module NE fabrique AUCUN nombre : il mesure et enregistre ce qu'un run
-produit (gamma_numeric vient du fit ; PENDING si le run n'a pas tourne).
+Ce module ne fabrique aucun nombre : il mesure et enregistre ce qu'un run
+produit (gamma_numeric vient du fit ; pending si le run n'a pas tourne).
 
-Ce module est PUR PYTHON (aucune dependance au binding ``adc`` ni a un build) :
-son auto-test ``python results.py`` tourne en CI sans compiler le coeur.
+Ce module est pur python (aucune dependance au binding `adc` ni a un build) :
+son auto-test `python results.py` tourne en CI sans compiler le coeur.
 """
 
 import csv
@@ -39,29 +39,29 @@ import os
 import subprocess
 
 # Fenetres de fit verbatim du papier (Fig. 5.4, arXiv:2510.11808). Dupliquees ici
-# en tant que VERITE PRE-ENREGISTREE : ``verify_paper_windows`` confronte les
+# en tant que verite pre-enregistree : `verify_paper_windows` confronte les
 # fenetres effectivement utilisees par run.py (model.PAPER_FIT_WINDOWS) a celles-ci
 # et leve si elles divergent. C'est le verrou contre toute fenetre adaptative qui
 # se glisserait dans la comparaison du modele complet.
 PAPER_FIT_WINDOWS_VERBATIM = {3: (0.40, 0.70), 4: (0.60, 0.75), 5: (1.15, 1.35)}
 
-# Etiquettes de moteur. La cle est l'``--engine`` du runner ; la valeur est le label
-# explicite porte par l'enregistrement. 'full-system-schur' = pente BRUTE (aucun
+# Etiquettes de moteur. La cle est l'`--engine` du runner ; la valeur est le label
+# explicite porte par l'enregistrement. 'full-system-schur' = pente brute (aucun
 # facteur) ; 'reduced-ExB' (hors run.py, cf. diag) = 2 pi / rhobar.
 ENGINE_LABELS = {
     "system-schur": "full-system-schur",
     "amr-imex": "amr-imex-experimental",
-    # Modele COMPLET (Euler-Poisson isotherme magnetise + etage Schur condense) porte
-    # sur la GRILLE POLAIRE (anneau resolu : la direction radiale est un axe de grille,
+    # Modele complet (Euler-Poisson isotherme magnetise + etage Schur condense) porte
+    # sur la grille polaire (anneau resolu : la direction radiale est un axe de grille,
     # ce qui leve le verrou des bords d'anneau cartesiens). Comme le chemin cartesien,
-    # la pente reportee est BRUTE (aucun facteur 2 pi / rhobar : ce facteur n'appartient
+    # la pente reportee est brute (aucun facteur 2 pi / rhobar : ce facteur n'appartient
     # qu'au chemin reduit ExB scalaire diag/diag_polar_omega.py, engine='reduced-ExB').
     "polar-schur": "full-polar-schur",
 }
 
-# Le facteur 2 pi / rhobar n'appartient QU'au chemin reduit. Conserve ici comme
+# Le facteur 2 pi / rhobar n'appartient qu'au chemin reduit. Conserve ici comme
 # constante nommee pour rendre explicite, dans le code et les tests, que le chemin
-# complet ne l'applique PAS (normalization_factor == 1.0 pour full-system-schur).
+# complet ne l'applique pas (normalization_factor == 1.0 pour full-system-schur).
 REDUCED_EXB_LABEL = "reduced-ExB"
 
 
@@ -78,11 +78,11 @@ def engine_label(engine):
 
 
 def verify_paper_windows(windows):
-    """Verifie que ``windows`` EST exactement les fenetres verbatim du papier.
+    """Verifie que `windows` est exactement les fenetres verbatim du papier.
 
-    Appele au demarrage du run complet (run.py) AVANT toute mesure : c'est le
+    Appele au demarrage du run complet (run.py) avant toute mesure : c'est le
     pre-enregistrement. Toute fenetre manquante, en trop, ou differente leve une
-    ``AssertionError`` explicite. Empeche d'introduire des fenetres adaptatives
+    `AssertionError` explicite. Empeche d'introduire des fenetres adaptatives
     pour la comparaison du modele complet.
     """
     got = {int(k): (float(v[0]), float(v[1])) for k, v in windows.items()}
@@ -97,7 +97,7 @@ def verify_paper_windows(windows):
 
 
 def _git_sha(path):
-    """SHA court du depot git contenant ``path`` (ou 'unknown' hors git/sans binaire)."""
+    """SHA court du depot git contenant `path` (ou 'unknown' hors git/sans binaire)."""
     if not path:
         return "unknown"
     directory = path if os.path.isdir(path) else os.path.dirname(path)
@@ -121,8 +121,8 @@ def adc_cases_sha():
 def adc_cpp_sha(adc_module=None):
     """SHA court du depot adc_cpp.
 
-    Localise le depot via le module ``adc`` importe (son ``__file__`` vit dans
-    ``<adc_cpp>/build-*/python/adc/``) ; ``$ADC_CPP_SHA`` surcharge si defini ;
+    Localise le depot via le module `adc` importe (son `__file__` vit dans
+    `<adc_cpp>/build-*/python/adc/`) ; `$ADC_CPP_SHA` surcharge si defini ;
     'unknown' si rien n'est resolvable (pas de build importe).
     """
     env = os.environ.get("ADC_CPP_SHA")
@@ -137,7 +137,7 @@ def err_pct(gamma_numeric, gamma_paper):
     """err_pct = 100*(gamma_numeric - gamma_paper)/gamma_paper, ou None si non mesure.
 
     Ne fabrique rien : renvoie None des que gamma_numeric n'est pas un nombre fini
-    (run non joue, fit echoue) ; l'enregistrement portera alors 'PENDING'.
+    (run non joue, fit echoue) ; l'enregistrement portera alors 'pending'.
     """
     if gamma_numeric is None:
         return None
@@ -151,22 +151,22 @@ def err_pct(gamma_numeric, gamma_paper):
 
 
 def _fmt(value):
-    """Cellule texte : 'PENDING' si None/non-fini, sinon le nombre tel quel."""
+    """Cellule texte : 'pending' si None/non-fini, sinon le nombre tel quel."""
     if value is None:
-        return "PENDING"
+        return "pending"
     if isinstance(value, float) and value != value:
-        return "PENDING"
+        return "pending"
     return value
 
 
 # Colonnes de l'enregistrement, dans l'ordre. C'est la graine de la table de
-# validation Phase 2 ; ne PAS reordonner sans mettre a jour les consommateurs.
+# validation Phase 2 ; ne pas reordonner sans mettre a jour les consommateurs.
 RECORD_FIELDS = (
     "engine",          # label explicite : full-system-schur / reduced-ExB / amr-imex-experimental
     "mode",            # l
-    "gamma_numeric",   # pente exp BRUTE mesuree (PENDING si non mesuree)
+    "gamma_numeric",   # pente exp brute mesuree (pending si non mesuree)
     "gamma_paper",     # cible papier (0.772 / 0.911 / 0.683)
-    "err_pct",         # 100*(num - paper)/paper (PENDING si gamma_numeric absent)
+    "err_pct",         # 100*(num - paper)/paper (pending si gamma_numeric absent)
     "normalization",   # 'raw (no 2pi, no rhobar)' pour full ; documente le facteur
     "fit_window",      # 'lo,hi' verbatim papier
     "n",               # resolution
@@ -198,13 +198,13 @@ def build_record(
 ):
     """Construit un enregistrement de mesure pour un (engine, mode).
 
-    ``gamma_numeric=None`` (ou NaN) => l'enregistrement porte 'PENDING' pour
-    gamma_numeric et err_pct : aucune valeur n'est inventee. ``engine`` est
+    `gamma_numeric=None` (ou NaN) => l'enregistrement porte 'pending' pour
+    gamma_numeric et err_pct : aucune valeur n'est inventee. `engine` est
     converti en son label explicite ; un moteur inconnu leve.
     """
     label = engine_label(engine)
     # Le facteur de normalisation est explicite et code en dur par moteur : le
-    # chemin complet est BRUT (1.0), jamais 2 pi / rhobar.
+    # chemin complet est brut (1.0), jamais 2 pi / rhobar.
     normalization = "raw (no 2pi, no rhobar)"
     lo, hi = fit_window
     return {
@@ -227,7 +227,7 @@ def build_record(
 
 
 def write_records(records, out_dir, basename="measurement_record"):
-    """Ecrit les enregistrements en CSV ET JSON sous ``out_dir``.
+    """Ecrit les enregistrements en CSV et JSON sous `out_dir`.
 
     Renvoie (csv_path, json_path). Le CSV porte l'entete RECORD_FIELDS ; le JSON
     est une liste d'objets (None -> null, gere par json).
@@ -249,7 +249,7 @@ def write_records(records, out_dir, basename="measurement_record"):
 
 
 def _selftest():
-    """Auto-test pur Python (CI) : assertions REELLES, aucun build requis."""
+    """Auto-test pur Python (CI) : assertions reelles, aucun build requis."""
     import math
     import tempfile
 
@@ -277,14 +277,14 @@ def _selftest():
     else:
         raise AssertionError("engine_label aurait du refuser le label reduit pour run.py")
 
-    # 3. err_pct exact, et None (=> PENDING) pour les entrees non mesurees.
+    # 3. err_pct exact, et None (=> pending) pour les entrees non mesurees.
     assert abs(err_pct(0.911, 0.911) - 0.0) < 1e-12
     assert abs(err_pct(0.772 * 1.1, 0.772) - 10.0) < 1e-9
     assert err_pct(None, 0.772) is None
     assert err_pct(float("nan"), 0.772) is None
 
     # 4. Enregistrement mesure : pente brute reportee telle quelle, err_pct calcule,
-    #    facteur de normalisation BRUT (jamais 2 pi).
+    #    facteur de normalisation brut (jamais 2 pi).
     rec = build_record(
         engine="system-schur", mode=4, gamma_numeric=0.9, gamma_paper=0.911,
         fit_window=(0.60, 0.75), n=384, dt=1e-3, splitting="Lie", schur_theta=0.5,
@@ -300,14 +300,14 @@ def _selftest():
     assert rec["adc_cpp_sha"] == "abc1234"
     assert "2pi" not in str(rec["normalization"]).replace("no 2pi", "")  # pas de 2pi residuel
 
-    # 5. Enregistrement PENDING : gamma_numeric non mesure => 'PENDING', err_pct 'PENDING'.
+    # 5. Enregistrement pending : gamma_numeric non mesure => 'pending', err_pct 'pending'.
     pend = build_record(
         engine="system-schur", mode=3, gamma_numeric=float("nan"), gamma_paper=0.772,
         fit_window=(0.40, 0.70), n=512, dt=1e-3, splitting="Lie", schur_theta=0.5,
         backend="kokkos-serial",
     )
-    assert pend["gamma_numeric"] == "PENDING"
-    assert pend["err_pct"] == "PENDING"
+    assert pend["gamma_numeric"] == "pending"
+    assert pend["err_pct"] == "pending"
 
     # 6. Ecriture CSV + JSON : round-trip JSON, entete CSV exacte.
     with tempfile.TemporaryDirectory() as d:
@@ -315,7 +315,7 @@ def _selftest():
         with open(json_path) as f:
             loaded = json.load(f)
         assert loaded[0]["engine"] == "full-system-schur"
-        assert loaded[1]["gamma_numeric"] == "PENDING"
+        assert loaded[1]["gamma_numeric"] == "pending"
         with open(csv_path) as f:
             header = f.readline().strip().split(",")
         assert header == list(RECORD_FIELDS)
@@ -325,7 +325,7 @@ def _selftest():
     assert math.isclose(2.0 * math.pi, 6.283185307, rel_tol=1e-6)  # sanity du facteur reduit
     assert rec["normalization"] != "%g" % (2.0 * math.pi)
 
-    print("OK results.py: fenetres verbatim, labels moteur, err_pct, record brut, PENDING, IO")
+    print("OK results.py: fenetres verbatim, labels moteur, err_pct, record brut, pending, IO")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ derive.
 
 Architecture (nouvelle API "composition par blocs")
 ----------------------------------------------------
-Il n'existe plus de DiocotronSolver dedie : on reconstruit la MEME physique a
+Il n'existe plus de DiocotronSolver dedie : on reconstruit la meme physique a
 partir du systeme generique adc.System, en lui ajoutant un seul bloc de modele
 "diocotron" (1 variable, la densite ne). Le systeme :
 
@@ -32,7 +32,7 @@ Une bande horizontale de charge, perturbee sinusoidalement le long de x :
     ne(x, y) = 1 + band_amp * exp(-(y - y0)^2 / band_width^2)
     y0       = 0.5*L + band_disp * cos(2*pi*band_mode*x/L)
 
-Le domaine est PERIODIQUE : Poisson exige un second membre a moyenne nulle, donc
+Le domaine est periodique : Poisson exige un second membre a moyenne nulle, donc
 on neutralise la bande par un fond ionique n_i0 = moyenne(ne). Sans ce fond, le
 probleme elliptique periodique n'est pas soluble (compatibilite de Fredholm).
 

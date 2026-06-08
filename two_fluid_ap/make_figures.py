@@ -4,15 +4,15 @@
 Re-joue la physique du cas (meme solveur C++ compile a la volee que run.py) et produit :
 
   1. ap_vs_explicit.png : balayage de la raideur s = dt*omega_pe. Le schema AP
-     (stabilize=True) reste BORNE quand s -> infini (limite asymptotique preservee) ;
-     le schema explicite (stabilize=False) reste fini sous s ~ 1 puis EXPLOSE (NaN).
+     (stabilize=True) reste borne quand s -> infini (limite asymptotique preservee) ;
+     le schema explicite (stabilize=False) reste fini sous s ~ 1 puis explose (NaN).
   2. final_state.png : etat final des deux fluides au run raide de reference
      (n_e, n_i, charge nette n_i - n_e) a s = dt*omega_pe = 5.
 
 Ecrit figures/*.png + figures/provenance.json (versionnes : ce sont les assets du cas).
 
-ATTENTION : le diagnostic C++ tfap_max_dev fait std::fmax sur le champ et propage mal les
-NaN (un champ explose peut rendre 0.0). On NE s'y fie PAS pour le schema explicite : on lit le
+attention : le diagnostic C++ tfap_max_dev fait std::fmax sur le champ et propage mal les
+NaN (un champ explose peut rendre 0.0). On ne s'y fie pas pour le schema explicite : on lit le
 champ via density_e()/density_i() cote Python et on teste np.isfinite (detection robuste de
 l'explosion). C'est l'observable qui distingue "borne" de "explose".
 """
@@ -51,7 +51,7 @@ def _field_diag(solver):
     """Lit n_e, n_i cote Python et calcule (finite, max|n_e-1|, max|n_i-n_e|).
 
     Robuste a l'explosion : si un champ contient un NaN/Inf, finite=False et les deviations
-    valent +inf. NE PAS utiliser le tfap_max_dev C++ (fmax sur NaN = non fiable)."""
+    valent +inf. ne pas utiliser le tfap_max_dev C++ (fmax sur NaN = non fiable)."""
     ne = solver.density_e()
     ni = solver.density_i()
     finite = bool(np.isfinite(ne).all() and np.isfinite(ni).all())

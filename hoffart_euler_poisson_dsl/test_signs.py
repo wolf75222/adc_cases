@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Tests de convention de signe pour les helpers purement numpy de model.py.
 
-Ce fichier ne depend PAS de l'extension C++ adc (Kokkos/AMReX). Il installe un
-faux module ``adc`` minimal (un sous-module ``adc.dsl`` suffisant pour satisfaire
+Ce fichier ne depend pas de l'extension C++ adc (Kokkos/AMReX). Il installe un
+faux module `adc` minimal (un sous-module `adc.dsl` suffisant pour satisfaire
 l'import de model.py) puis teste directement les fonctions numpy.
 
 Conventions verifiees
@@ -17,7 +17,7 @@ drift_velocity_from_potential
 paper_initial_density
     Anneau de densite avec perturbation azimutale sin(l*theta), eq. (35).
 
-Poisson (signe -- documente uniquement, sans import adc lourd)
+Poisson (signe, documente uniquement, sans import adc lourd)
     Le papier pose -Delta(phi) = alpha*rho. ADC resout Delta(phi) = rhs.
     model.py emet donc rhs = -alpha*rho (cf. model.py:129).
 
@@ -54,7 +54,7 @@ def _import_model():
 
 
 # ---------------------------------------------------------------------------
-# (a) drift_velocity_from_potential -- verification du signe ExB
+# (a) drift_velocity_from_potential, verification du signe ExB
 # ---------------------------------------------------------------------------
 
 def test_drift_phi_linear_x():
@@ -74,8 +74,8 @@ def test_drift_phi_linear_x():
     # Region interieure au disque, loin des bords (evite l'erreur de gradient aux bords)
     margin = 3
     disc = np.hypot(X, Y) < params.radius - margin * h
-    # On compare la derive ECHELONNEE u*omega / v*omega (~O(1)). A omega=1e12, 1/omega~1e-12 est
-    # SOUS l'atol par defaut (1e-8) de allclose : comparer u/v bruts serait un no-op (un zero ou un
+    # On compare la derive echelonnee u*omega / v*omega (~O(1)). A omega=1e12, 1/omega~1e-12 est
+    # sous l'atol par defaut (1e-8) de allclose : comparer u/v bruts serait un no-op (un zero ou un
     # signe inverse passerait). u*omega doit valoir 0, v*omega doit valoir +1.
     assert np.allclose(u[disc] * params.omega, 0.0, atol=1e-3), (
         "phi=x : u*omega doit etre ~0 dans le disque, max|u*omega|=%g"
@@ -103,7 +103,7 @@ def test_drift_phi_linear_y():
 
     margin = 3
     disc = np.hypot(X, Y) < params.radius - margin * h
-    # derive ECHELONNEE (cf. test_drift_phi_linear_x) : u*omega = -1, v*omega = 0.
+    # derive echelonnee (cf. test_drift_phi_linear_x) : u*omega = -1, v*omega = 0.
     assert np.allclose(u[disc] * params.omega, -1.0, rtol=1e-3, atol=1e-6), (
         "phi=y : u*omega doit etre ~-1 dans le disque, max|u*omega+1|=%g"
         % np.abs(u[disc] * params.omega + 1.0).max()
@@ -134,7 +134,7 @@ def test_drift_zero_outside_disc():
 
 
 # ---------------------------------------------------------------------------
-# (b) paper_initial_density -- structure azimutale et bornes
+# (b) paper_initial_density, structure azimutale et bornes
 # ---------------------------------------------------------------------------
 
 def test_paper_initial_density_outside_ring():
@@ -236,7 +236,7 @@ def test_paper_initial_density_azimuthal_structure():
 
 
 # ---------------------------------------------------------------------------
-# (c) Poisson sign -- documente ici, assertion legere sans import lourd
+# (c) Poisson sign, documente ici, assertion legere sans import lourd
 # ---------------------------------------------------------------------------
 # Le papier pose -Delta(phi) = alpha*rho.
 # ADC resout Delta(phi) = rhs.

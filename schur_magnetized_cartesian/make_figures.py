@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Figures de TIMING pour schur_magnetized_cartesian (categorie experimental).
+"""Figures de timing pour schur_magnetized_cartesian (categorie experimental).
 
-Pas de figure physique : un cas de TIMING ne montre pas un champ mais le PLUS GRAND
+Pas de figure physique : un cas de timing ne montre pas un champ mais le plus grand
 dt stable par methode (explicite vs Schur condense). Deux panneaux :
 
   (1) timing_dt_stable.png : barres log du dt_stable par methode au point de
@@ -10,11 +10,11 @@ dt stable par methode (explicite vs Schur condense). Deux panneaux :
       cyclotronique dt*omega_c ~ O(0.3) ; les barres Schur la franchissent.
 
   (2) timing_vs_omega.png : dt_stable et dt*omega_c vs omega_c pour explicite et
-      Schur, depuis une mesure FRAICHE ciblee (3 valeurs de omega_c, t_end court).
+      Schur, depuis une mesure fraiche ciblee (3 valeurs de omega_c, t_end court).
       La courbe explicite suit dt ~ 1/omega_c (produit borne) ; la courbe Schur est
-      PLATE (independante de omega_c), calee sur le pas de transport.
+      plate (independante de omega_c), calee sur le pas de transport.
 
-Les nombres sont LUS, pas inventes :
+Les nombres sont lus, pas inventes :
   - panneau (1) <- dt_stable.csv (run complet documente, omega_c=1e3, t_end=1.0) ;
   - panneau (2) <- /tmp/schur_measure.json (mesure ciblee de ce passage).
 Si une source manque, le panneau correspondant est saute (pas de valeur fabriquee).

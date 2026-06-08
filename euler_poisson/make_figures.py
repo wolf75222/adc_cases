@@ -3,9 +3,9 @@
 Re-joue la physique du cas (memes parametres que run.py : N=64, L=1, gamma=1.4,
 four_pi_G=1, rho0=1, dt=0.004, 20 pas) et produit trois figures dans figures/ :
 
-  1. energy_vs_t.png   : E_tot(t) = U[3].sum() pour GRAVITE (sign=+1) et PLASMA
+  1. energy_vs_t.png   : E_tot(t) = U[3].sum() pour gravite (sign=+1) et PLASMA
                          (sign=-1) cote a cote. Lit visuellement le contraste de
-                         SIGNE asserte par run.py:177-180 (dE_grav<0, dE_plas>0).
+                         signe asserte par run.py:177-180 (dE_grav<0, dE_plas>0).
   2. de_vs_eps.png     : |dE| vs eps en log-log, balayage de l'amplitude de
                          perturbation. La prediction falsifiable de la
                          linearisation est |dE| ~ eps^2 : on ajuste la pente et on
@@ -123,8 +123,8 @@ for ax, (t, e, dE, title, col) in zip(
     ax.set_title(title, fontsize=10)
     ax.grid(alpha=0.3)
 fig.suptitle(
-    r"Contraste energetique : $E_{tot}$ DIMINUE pour la gravite, AUGMENTE pour le plasma"
-    "\n(signe asserte par run.py:177-180, PAS deduit du travail $v\\cdot g$ qui est >0 des deux cotes)",
+    r"Contraste energetique : $E_{tot}$ diminue pour la gravite, augmente pour le plasma"
+    "\n(signe asserte par run.py:177-180, pas deduit du travail $v\\cdot g$ qui est >0 des deux cotes)",
     fontsize=10,
 )
 fig.tight_layout(rect=(0, 0, 1, 0.93))
@@ -194,7 +194,7 @@ for ax, (field, title) in zip(
     axes,
     [
         (rho0_map, r"CI : $\rho_0(1+\epsilon\cos 2\pi x/L)$, $\epsilon=0.01$"),
-        (rho_g, "GRAVITE finale (t=0.08)"),
+        (rho_g, "gravite finale (t=0.08)"),
         (rho_p, "PLASMA finale (t=0.08)"),
     ],
 ):
@@ -210,7 +210,7 @@ amp_p = float(rho_p.max() - rho_p.min())
 fig.suptitle(
     "Densite finale : perturbation 1D en x (std-en-y ~ 3.8e-16). "
     f"Amplitude max-min : CI {amp_ci:.2e}, grav {amp_g:.2e}, plasma {amp_p:.2e}.\n"
-    "Les deux s'aplatissent ; le contraste de signe n'est PAS visible ici, il vit dans dE.",
+    "Les deux s'aplatissent ; le contraste de signe n'est pas visible ici, il vit dans dE.",
     fontsize=9,
 )
 fig.tight_layout(rect=(0, 0, 1, 0.95))

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Verification CI LEGERE du cas tutorial : le diocotron construit de TROIS facons (helper specialise,
-briques natives, formules DSL) donne un etat BIT-IDENTIQUE. Pas de figures (matplotlib non requis),
-moins de pas que run.py -- juste le coeur du cas, assez rapide pour la CI (needs = ["cxx"] pour le DSL).
+"""Verification CI legere du cas tutorial : le diocotron construit de trois facons (helper specialise,
+briques natives, formules DSL) donne un etat bit-identique. Pas de figures (matplotlib non requis),
+moins de pas que run.py, juste le coeur du cas, assez rapide pour la CI (needs = ["cxx"] pour le DSL).
 
-Reutilise les constructeurs de run.py (meme dossier) pour ne PAS dupliquer la physique : la verite du
-tutoriel et celle testee en CI sont alors le MEME code.
+Reutilise les constructeurs de run.py (meme dossier) pour ne pas dupliquer la physique : la verite du
+tutoriel et celle testee en CI sont alors le meme code.
 
 Lancement : PYTHONPATH=<build>/python:. python3 tutorial/equivalence.py
 """
@@ -16,7 +16,7 @@ import numpy as np
 
 import adc  # noqa: F401  (importe tot : echoue clairement si le module n'est pas sur le PYTHONPATH)
 
-# run.py vit dans CE dossier : on l'ajoute au chemin d'import pour reutiliser ses constructeurs.
+# run.py vit dans ce dossier : on l'ajoute au chemin d'import pour reutiliser ses constructeurs.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from run import (  # noqa: E402
     add_bricks_block, add_dsl_block, compile_dsl, diocotron_from_bricks, diocotron_from_dsl,

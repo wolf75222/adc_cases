@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Diagnostic de NORMALISATION du taux de croissance diocotron (chemin POLAIRE ExB).
+"""Diagnostic de normalisation du taux de croissance diocotron (chemin polaire ExB).
 
 But
 ---
-Mesurer, sur le chemin POLAIRE explicite d'ADC (anneau global, transport ExB
+Mesurer, sur le chemin polaire explicite d'ADC (anneau global, transport ExB
 scalaire, WENO5 + SSPRK3, Poisson polaire Dirichlet), le taux de croissance
-diocotron BRUT gamma_raw et la rotation BRUTE Omega_raw du mode azimutal l, puis
-montrer que la normalisation GLOBALE
+diocotron brut gamma_raw et la rotation brute Omega_raw du mode azimutal l, puis
+montrer que la normalisation globale
 
     gamma_norm = gamma_raw * (2 pi / rhobar)
 
@@ -15,7 +15,7 @@ normalisation "par rotation locale" (g_rot ci-dessous) echoue.
 
 Principe
 --------
-On suit le coefficient COMPLEXE c_l(t) du mode l de PHI sur le cercle interne
+On suit le coefficient complexe c_l(t) du mode l de PHI sur le cercle interne
 r = r0 :
 
     c_l(t) ~ exp(-i omega_l t)
@@ -25,21 +25,21 @@ Mesures de simulation :
     gamma_raw = pente de log|c_l|       (~ Im(omega) en unites ExB-naturelles)
     Omega_raw = -pente de arg(c_l)      (~ Re(omega))
 
-Le RAPPORT gamma_raw / Omega_raw = Im(omega)/Re(omega) est INVARIANT d'echelle
+Le rapport gamma_raw / Omega_raw = Im(omega)/Re(omega) est invariant d'echelle
 (propriete intrinseque du mode).
 
 Deux normalisations sont calculees et comparees a la cible papier :
 
 1. g_2pi  = gamma_raw * 2 pi / rhobar
-   LA TROUVAILLE. gamma_raw est deja Im(omega) en unites de temps ExB-naturelles
-   (aucun re-scaling beta) ; le facteur 2 pi / rhobar est le facteur GLOBAL qui
+   la trouvaille. gamma_raw est deja Im(omega) en unites de temps ExB-naturelles
+   (aucun re-scaling beta) ; le facteur 2 pi / rhobar est le facteur global qui
    amene les unites a celles du papier. Avec rhobar = rho_max = 1, c'est 2 pi.
 
 2. g_rot  = (gamma_raw / |Omega_raw|) * |Re(omega)|_ana * 2 pi
-   Normalisation "par rotation locale". Elle ECHOUE ici parce qu'au bord interne
+   Normalisation "par rotation locale". Elle echoue ici parce qu'au bord interne
    r0 la rotation mesuree Omega_raw est ~ 0 (pas de charge enfermee a l'interieur
    de l'anneau, donc pas de rotation de corps rigide a r0). Le ratio explose et
-   g_rot devient absurde : la normalisation correcte est le facteur GLOBAL
+   g_rot devient absurde : la normalisation correcte est le facteur global
    2 pi / rhobar, pas une rotation locale.
 
 Cibles analytiques (eigenmode complexe, echelle papier 6:8:16, top-hat) :
@@ -49,8 +49,8 @@ Cibles analytiques (eigenmode complexe, echelle papier 6:8:16, top-hat) :
 
 Conclusion attendue (cf. ../NORMALIZATION.md)
 ---------------------------------------------
-g_2pi reproduit le papier (l=4 EXACT a n=128 et n=192 ; l=3 +26% ; l=5 oscille
-selon la fenetre de fit -- c'est de la sensibilite a la fenetre, pas un deficit
+g_2pi reproduit le papier (l=4 exact a n=128 et n=192 ; l=3 +26% ; l=5 oscille
+selon la fenetre de fit, c'est de la sensibilite a la fenetre, pas un deficit
 de physique). g_rot diverge (Omega_raw ~ 0 a r0).
 
 Lancer
@@ -150,9 +150,9 @@ def measure(l, n):
     om_raw = -np.polyfit(ts[sl], ph, 1)[0]
     ratio = g_raw / abs(om_raw) if om_raw else float("nan")
 
-    # Normalisation GLOBALE 2pi/rhobar (LA TROUVAILLE) :
+    # Normalisation globale 2pi/rhobar (la trouvaille) :
     g_2pi = g_raw * 2.0 * math.pi / RHO_MAX
-    # Normalisation "par rotation locale" (ECHOUE : Omega_raw ~ 0 a r0) :
+    # Normalisation "par rotation locale" (echoue : Omega_raw ~ 0 a r0) :
     g_rot = (g_raw / abs(om_raw)) * RE_ANA[l] * 2.0 * math.pi if om_raw else float("nan")
 
     return dict(
@@ -163,7 +163,7 @@ def measure(l, n):
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 128
-    print("DIAG ROTATION POLAIRE n=%d (top-hat [%g,%g], R=%g, WENO5/SSPRK3)"
+    print("DIAG rotation polaire n=%d (top-hat [%g,%g], R=%g, WENO5/SSPRK3)"
           % (n, R0, R1, RW))
     print("  normalisation = gamma_raw * 2pi/rhobar (rhobar=%g) ; cible = g_pap" % RHO_MAX)
     print("%3s %9s %9s | %8s %8s | %9s %9s %9s"

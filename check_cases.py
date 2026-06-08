@@ -2,10 +2,10 @@
 """Garde-fous adc_cases : executes en CI (ci.yml), purs Python, rapides.
 
 Echoue (exit 1) sur :
-  1. un dossier contenant `run.py` SANS `README.md` (chaque cas doit etre documente) ;
+  1. un dossier contenant `run.py` sans `README.md` (chaque cas doit etre documente) ;
   2. une entree du manifeste `cases_manifest.toml` dont le `path` n'existe pas ;
   3. un `README.md` de cas qui contient un em-dash U+2014 (convention adc_cases : accents OK, mais
-     PAS d'em-dash -- le depot existant en a 0).
+     pas d'em-dash, le depot existant en a 0).
   4. une image `![](figures/...)` referencee par un README mais introuvable sur le disque.
 
 Lancement : python3 check_cases.py   (depuis la racine du depot). 0 = OK, 1 = violations.

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Cas "plasma" : electrons + ions + neutres couples (Poisson + ionisation + collision).
 
-Compose le scenario plasma vise par le tuteur depuis Python via une RECETTE SYSTEME
+Compose le scenario plasma vise par le tuteur depuis Python via une recette systeme
 (`recipes.plasma`) : trois especes (electrons Euler, ions et neutres isothermes) partageant un
-Poisson de systeme (f = q_e n_e + q_i n_i), couplees par des SOURCES inter-especes : ionisation
+Poisson de systeme (f = q_e n_e + q_i n_i), couplees par des sources inter-especes : ionisation
 (un neutre devient un ion + un electron) et collision ion-neutre (friction). La recette cable
 add_block + set_poisson + add_ionization + add_collision ; le cas ne fait que poser les CI et
 verifier. On verifie que la machinerie de couplage se compose et tourne :
@@ -11,7 +11,7 @@ verifier. On verifie que la machinerie de couplage se compose et tourne :
   - ionisation : masse n_i + n_g conservee (transfert neutre -> ion), neutres consommes ;
   - integrite : densites finies et positives sur tout le run.
 
-Les electrons exercent le schema de la Phase 1 (HLLC + reconstruction PRIMITIVE). La collision
+Les electrons exercent le schema de la Phase 1 (HLLC + reconstruction primitive). La collision
 ion-neutre (friction) est cablee et active ; sa conservation de quantite de mouvement est verifiee
 isolement dans le test des bindings (ici le champ agit aussi sur les ions). L'ionisation transfere
 la densite (comp 0) ; le transfert de quantite de mouvement / energie des particules creees est

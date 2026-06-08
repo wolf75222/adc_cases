@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 r"""Reproduction du benchmark diocotron de Hoffart-Maier-Shadid-Tomas (arXiv:2510.11808),
-Section 5.3, AVEC NOTRE solveur `adc` (bindings Python de la facade compilee), 100 % Python.
+Section 5.3, avec notre solveur `adc` (bindings Python de la facade compilee), 100 % Python.
 
 Le papier valide son schema "structure-preserving" pour les equations magnetic Euler-Poisson
-dans la LIMITE DE DERIVE MAGNETIQUE (omega_d << omega_p << omega_c) en reproduisant le TAUX DE
-CROISSANCE de l'instabilite diocotron d'une colonne creuse, compare a la relation de dispersion
-analytique. Ce modele reduit de derive E x B (la limite visee) se COMPOSE ici GENERIQUEMENT
+dans la limite de derive magnetique (omega_d << omega_p << omega_c) en reproduisant le taux de
+croissance de l'instabilite diocotron d'une colonne creuse, compare a la relation de dispersion
+analytique. Ce modele reduit de derive E x B (la limite visee) se compose ici generiquement
 depuis Python, un bloc `diocotron` + un Poisson de systeme a paroi conductrice circulaire,
-via `adc.System`, SANS aucun solveur C++ dedie au diocotron. On reproduit donc directement la
+via `adc.System`, sans aucun solveur C++ dedie au diocotron. On reproduit donc directement la
 figure-cle du papier (gamma numerique vs analytique vs mode l), en pur Python sur la lib.
 
 Ce qui est produit (dans diocotron/figures/) :
@@ -53,12 +53,12 @@ PAPER = {3: 0.772, 4: 0.911, 5: 0.683}   # cibles analytiques (Section 5.3)
 
 
 # ===========================================================================
-# 1. ANALYTIQUE : probleme aux valeurs propres radial de Petri (numpy, "full python").
+# 1. analytique : probleme aux valeurs propres radial de Petri (numpy, "full python").
 #    omega L_m phi = m Omega L_m phi + q_m phi,  phi(0)=phi(Rw)=0,  Omega = -(1/r^2) int rho r'.
 #    Probleme aux valeurs propres resolu en pur numpy (Petri / Davidson-Felice).
 # ===========================================================================
-# Geometrie ABSOLUE pour le probleme aux valeurs propres (memes RATIOS 6:8:16 que la simu,
-# mais a une echelle ou le lissage w=0.05 represente un anneau NET ; le taux NORMALISE est
+# Geometrie absolue pour le probleme aux valeurs propres (memes ratios 6:8:16 que la simu,
+# mais a une echelle ou le lissage w=0.05 represente un anneau net ; le taux normalise est
 # invariant d'echelle, donc directement comparable a la simu qui tourne en r0:r1:wall =
 # 0.15:0.20:0.40).
 ANA_A, ANA_B, ANA_RW, ANA_W, ANA_N = 6.0, 8.0, 16.0, 0.05, 2000
@@ -96,7 +96,7 @@ def diocotron_eigenvalue(m, a=ANA_A, b=ANA_B, Rw=ANA_RW, rhobar=RHOBAR, w=ANA_W,
 
 
 # ===========================================================================
-# 2. NUMERIQUE : notre solveur. Mesure du taux de croissance du mode l.
+# 2. numerique : notre solveur. Mesure du taux de croissance du mode l.
 # ===========================================================================
 def bilinear_on_circle(field, n, radius, l_samples=256):
     """Echantillonne `field` (n x n, centres de cellules) sur un cercle de rayon `radius`
@@ -155,7 +155,7 @@ def ring_density(n, l, delta):
 
 
 def make_ring_system(n, l, delta):
-    """Compose le diocotron GENERIQUEMENT depuis Python : un bloc 'diocotron', un
+    """Compose le diocotron generiquement depuis Python : un bloc 'diocotron', un
     Poisson de systeme avec paroi conductrice circulaire. Aucun DiocotronSolver C++."""
     sim = adc.System(n=n, L=L, periodic=False)
     sim.add_block("ne", model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=0.0),
@@ -239,8 +239,8 @@ def _write_provenance(out, runs):
 
 
 def main():
-    # Figures CANONIQUES versionnees : ecrites DIRECTEMENT dans diocotron/figures/ (tracke), pour
-    # qu'une re-execution les rafraichisse EN PLACE (plus de copie manuelle depuis out/). Un
+    # Figures canoniques versionnees : ecrites directement dans diocotron/figures/ (tracke), pour
+    # qu'une re-execution les rafraichisse en place (plus de copie manuelle depuis out/). Un
     # provenance.json est depose a cote (SHA adc_cpp/adc_cases, backend, resolution, commande).
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
     os.makedirs(out, exist_ok=True)

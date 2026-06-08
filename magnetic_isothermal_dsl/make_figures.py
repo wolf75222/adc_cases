@@ -3,12 +3,12 @@
 
 Deux figures, ecrites sous magnetic_isothermal_dsl/figures/ (versionnees, avec provenance.json) :
 
-  lorentz_oracle.png       : l'oracle analytique de Lorentz. Le RESIDU inter-runs
+  lorentz_oracle.png       : l'oracle analytique de Lorentz. Le residu inter-runs
                              dR = eval_rhs(B_z=B0) - eval_rhs(B_z=0) confronte, canal par canal,
                              a sa forme analytique numpy (B0 my, -B0 mx). Heatmap des deux ecarts
                              (identiquement noirs : err == 0) + histogramme du residu (pic a 0).
   cyclotron_trajectory.png : la trajectoire de Lorentz. La quantite de mouvement moyenne (mx, my),
-                             initialement (u0, 0), TOURNE a omega_c = q*B_z sans changer de module ;
+                             initialement (u0, 0), tourne a omega_c = q*B_z sans changer de module ;
                              le cercle analytique omega_c*t est superpose aux points mesures.
 
 Reproduit la physique exacte de run.py (memes parametres, meme modele DSL, meme schema).
@@ -59,7 +59,7 @@ def fig_lorentz_oracle(backend, sim_b0, sim_0, state0):
     err_rho = dR[0]              # B_z ne touche jamais la densite : doit etre identiquement 0
 
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.2))
-    # Echelle de couleur ancree a l'epsilon machine : tout pixel non nul (>~ 2e-16) SATURE.
+    # Echelle de couleur ancree a l'epsilon machine : tout pixel non nul (>~ 2e-16) sature.
     # Le champ identiquement nul s'assoit exactement au centre neutre : la preuve est visuelle.
     eps = np.finfo(np.float64).eps  # 2.22e-16
     for ax, err, title in (
@@ -149,7 +149,7 @@ def main():
     t0 = time.time()
     backend, sim_b0, sim_0, state0, backends = _bound_single()
     ora = fig_lorentz_oracle(backend, sim_b0, sim_0, state0)
-    # NB : la trajectoire AVANCE sim_b0 ; on la genere apres l'oracle (qui lit rhs a t=0).
+    # NB : la trajectoire avance sim_b0 ; on la genere apres l'oracle (qui lit rhs a t=0).
     traj = fig_cyclotron_trajectory(backend, sim_b0)
     wall = time.time() - t0
 

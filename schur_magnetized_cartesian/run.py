@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Effet TEMPOREL du complement de Schur sur un fluide magnetise CARTESIEN raide.
+"""Effet temporel du complement de Schur sur un fluide magnetise cartesien raide.
 
 But (PR6)
 ---------
-MESURER, sur un fluide isotherme magnetise CARTESIEN, l'effet temporel de l'etage
-source condense par Schur (`CondensedSchur`, #118-128) face a l'integration EXPLICITE
+mesurer, sur un fluide isotherme magnetise cartesien, l'effet temporel de l'etage
+source condense par Schur (`CondensedSchur`, #118-128) face a l'integration explicite
 de la meme source. NB : l'etage Schur est branche ici via le hook bas niveau
 `sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)` (cf. plus
-bas) et NON via `adc.Split(Explicit, CondensedSchur)` : sur le backend AOT, l'ABI du
+bas) et non via `adc.Split(Explicit, CondensedSchur)` : sur le backend AOT, l'ABI du
 .so ne transporte pas le sous-pas SSPRK3 attendu par `adc.Split` (cf. section Backend).
 
 Le terme raide est la force de Lorentz `m x Omega` (Omega = omega_c e_z, omega_c =
-B_z). Integree EXPLICITEMENT, la rotation cyclotronique impose la borne de
+B_z). Integree explicitement, la rotation cyclotronique impose la borne de
 stabilite dt * omega_c < O(1) : a omega_c grand le pas explicite s'effondre. L'etage
-`CondensedSchur` avance la source electrostatique/Lorentz IMPLICITEMENT (il assemble
+`CondensedSchur` avance la source electrostatique/Lorentz implicitement (il assemble
 et resout l'operateur condense A = I + theta^2 dt^2 alpha rho B^{-1}, B portant la
 rotation de Lorentz), supprimant cette borne : le pas stable n'est plus limite que
 par le transport hyperbolique.
@@ -27,20 +27,20 @@ une seule fois en `adc.dsl.Model` :
     d_t m  + div(m m^T/rho + cs2 rho I) = q rho (-grad phi) + m x Omega
     Delta phi = q rho
 
-Deux VARIANTES de source partagent flux / valeurs propres / Poisson :
+Deux variantes de source partagent flux / valeurs propres / Poisson :
 
 `local`   la source complete (electrostatique + Lorentz) est emise dans le C++
-          genere ; avancee EXPLICITEMENT apres le transport.
+          genere ; avancee explicitement apres le transport.
 `schur`   la source locale est nulle ; l'etage electrostatique/Lorentz est avance
-          par `CondensedSchur` (set_source_stage), IMPLICITEMENT.
+          par `CondensedSchur` (set_source_stage), implicitement.
 
-Pour rendre le TRANSPORT non limitant et isoler la raideur de la SOURCE, on prend
+Pour rendre le transport non limitant et isoler la raideur de la source, on prend
 une vitesse du son lente (cs2 petit) : le pas explicite de transport ~ h/cs reste
 large devant 1/omega_c.
 
 Mesure
 ------
-Pour chaque variante on cherche le PLUS GRAND dt qui reste stable (densite finie,
+Pour chaque variante on cherche le plus grand dt qui reste stable (densite finie,
 bornee, positive) jusqu'a t_end, par balayage geometrique de dt. On reporte le pas
 stable explicite vs Schur (theta=0.5 Crank-Nicolson et theta=1.0 Euler retrograde),
 le produit dt*omega_c et le gain.

@@ -2,7 +2,7 @@
 
 Ces controles (conservation de la masse, finitude, positivite) reviennent dans presque tous
 les cas. Ils levent `AssertionError` avec un message clair : un cas qui echoue sort en erreur,
-ce qui rend la CV/CI rouge. On garde le COMPORTEMENT historique (memes tolerances par defaut).
+ce qui rend la CV/CI rouge. On garde le comportement historique (memes tolerances par defaut).
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ def relative_drift(value, reference):
 def assert_mass_conserved(mass, mass0, tol=1e-9, label="", relative=True):
     """Verifie la conservation de la masse : derive (relative par defaut) sous `tol`.
 
-    `relative=False` compare l'ecart ABSOLU |mass - mass0| (utilise par les cas qui historiquement
+    `relative=False` compare l'ecart absolu |mass - mass0| (utilise par les cas qui historiquement
     asseraient en absolu). Renvoie la derive mesuree.
     """
     drift = relative_drift(mass, mass0) if relative else abs(mass - mass0)
@@ -41,7 +41,7 @@ def assert_positive(array, label="densite"):
 
 
 def assert_opposite_sign(a, b, min_mag=0.0, label=""):
-    """Verifie que `a` et `b` ont des signes STRICTEMENT opposes (a*b < 0).
+    """Verifie que `a` et `b` ont des signes strictement opposes (a*b < 0).
 
     `min_mag` exige en plus que chaque grandeur depasse ce seuil en valeur absolue : on evite
     ainsi de valider trivialement deux quasi-zeros (bruit machine) dont le produit serait negatif

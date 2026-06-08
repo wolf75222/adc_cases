@@ -1,7 +1,7 @@
-"""Recettes SYSTEME : configurations multi-especes pretes a l'emploi.
+"""Recettes systeme : configurations multi-especes pretes a l'emploi.
 
 Un niveau au-dessus des modeles d'espece (`adc_cases.models`). La ou un modele renvoie un seul
-`adc.Model` (une espece), une recette configure un `sim` COMPLET : plusieurs blocs, le Poisson de
+`adc.Model` (une espece), une recette configure un `sim` complet : plusieurs blocs, le Poisson de
 systeme et les couplages inter-especes (ionisation, collision). C'est ici que vit la composition
 d'un scenario multi-especes, separee des briques d'espece.
 

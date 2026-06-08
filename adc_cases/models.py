@@ -1,8 +1,8 @@
 """Modeles d'espece nommes = compositions de briques generiques de `adc`.
 
-C'est ICI (cote application) que vivent les noms d'espece. adc_cpp ne connait que des briques
+C'est ici (cote application) que vivent les noms d'espece. adc_cpp ne connait que des briques
 (ExB, CompressibleFlux, PotentialForce, ChargeDensity, BackgroundDensity...) ; un modele est une
-composition `adc.Model(state, transport, source, elliptic)`, soit UNE espece.
+composition `adc.Model(state, transport, source, elliptic)`, soit une espece.
 
 Le niveau au-dessus (configurer un `sim` multi-especes : plusieurs blocs + Poisson + couplages)
 vit dans `adc_cases.recipes` (two_fluid, plasma), pas ici.
@@ -56,8 +56,8 @@ def euler_poisson(sign=1.0, gamma=1.4, four_pi_G=1.0, rho0=1.0):
 
 
 def euler(gamma=1.4):
-    """Euler compressible PUR : un gaz isole, sans source ni couplage (f = 0). Sert aux cas
-    multi-fluides NON couples (meme flux pour chaque espece, seules les CI different)."""
+    """Euler compressible pur : un gaz isole, sans source ni couplage (f = 0). Sert aux cas
+    multi-fluides non couples (meme flux pour chaque espece, seules les CI different)."""
     return adc.Model(
         state=adc.FluidState(kind="compressible", gamma=gamma),
         transport=adc.CompressibleFlux(),

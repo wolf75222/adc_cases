@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Demo "composition_api" : composer un systeme multi-especes BLOC par BLOC.
+"""Demo "composition_api" : composer un systeme multi-especes bloc par bloc.
 
 Capacite demontree
 ------------------
 C'est le niveau d'abstraction vise par le tuteur : depuis Python, l'utilisateur
-COMPOSE son systeme un bloc d'equation a la fois, avec une API OBJET lisible, et
-choisit pour CHAQUE bloc, independamment :
+compose son systeme un bloc d'equation a la fois, avec une API objet lisible, et
+choisit pour chaque bloc, independamment :
 
-    sim = adc.System(n=48, L=1.0, periodic=True)   # config = MAILLAGE seul
+    sim = adc.System(n=48, L=1.0, periodic=True)   # config = maillage seul
     sim.add_block("electrons", model=models.electron_euler(),
                   spatial=adc.Spatial(vanleer=True, flux="hllc"),
                   time=adc.IMEX(substeps=10))
@@ -16,7 +16,7 @@ choisit pour CHAQUE bloc, independamment :
                   time=adc.Explicit())
     sim.set_poisson(); sim.solve_fields(); sim.advance(dt, n)
 
-Le MODELE physique n'est plus une chaine ("electron_euler") mais une COMPOSITION de
+Le modele physique n'est plus une chaine ("electron_euler") mais une composition de
 briques generiques de `adc` (etat / transport / source / elliptique), nommee cote
 application dans `models.py` :
 
@@ -24,23 +24,23 @@ application dans `models.py` :
   - models.ion_isothermal() = Euler isotherme + force du potentiel + densite de charge ;
   - models.diocotron()      = derive E x B d'un scalaire + fond neutralisant (Poisson).
 
-La parametrisation physique (gamma, cs2, B0, charge, fond n_i0) vit DANS les briques du
-modele, plus dans la config du systeme : `adc.System(...)` ne porte que le MAILLAGE
+La parametrisation physique (gamma, cs2, B0, charge, fond n_i0) vit dans les briques du
+modele, plus dans la config du systeme : `adc.System(...)` ne porte que le maillage
 (n, L, periodic). On choisit ensuite, par bloc :
-  - la RECONSTRUCTION       spatiale (adc.Spatial : none / minmod / vanleer) ;
-  - le FLUX numerique       (rusanov robuste / hllc onde de contact, Euler complet) ;
-  - le TRAITEMENT temporel  (adc.Explicit = SSPRK2 / adc.IMEX = transport explicite +
+  - la reconstruction       spatiale (adc.Spatial : none / minmod / vanleer) ;
+  - le flux numerique       (rusanov robuste / hllc onde de contact, Euler complet) ;
+  - le traitement temporel  (adc.Explicit = SSPRK2 / adc.IMEX = transport explicite +
                              source raide implicite ; adc.Implicit alias d'IMEX) ;
-  - le nombre de SOUS-PAS   par macro-pas (p.ex. 10 sous-pas electrons : 1 ion).
+  - le nombre de sous-pas   par macro-pas (p.ex. 10 sous-pas electrons : 1 ion).
 
-Python dit QUOI assembler ; tout le calcul cellule par cellule (assemble_rhs<Limiter,
+Python dit quoi assembler ; tout le calcul cellule par cellule (assemble_rhs<Limiter,
 Flux>, Newton local de la source implicite, Poisson de systeme Sum_s q_s n_s) reste
 en C++ compile et fige a l'ajout du bloc. Aucun callback Python dans le hot path :
-chaque bloc embarque une fermeture d'avancee compilee, type-erased SEULEMENT au niveau
-de la liste de blocs. SAUF si l'on ecrit soi-meme son integrateur temporel en Python
+chaque bloc embarque une fermeture d'avancee compilee, type-erased seulement au niveau
+de la liste de blocs. sauf si l'on ecrit soi-meme son integrateur temporel en Python
 (partie D) via les primitives solve_fields / eval_rhs / get_state / set_state : le
-schema en temps est alors en Python (par PAS), le calcul du residu et Poisson restant
-en C++ (par CELLULE).
+schema en temps est alors en Python (par pas), le calcul du residu et Poisson restant
+en C++ (par cellule).
 
 Ce que le script verifie
 -------------------------
@@ -48,7 +48,7 @@ Ce que le script verifie
     ions isothermes (Rusanov + Minmod + explicite + 1 sous-pas) coexistent ; chacun
     conserve sa masse ; le Poisson couple est actif (potentiel non nul) ; les electrons
     evoluent.
-(B) Determinisme de la composition : un MEME modele diocotron compose DEUX fois,
+(B) Determinisme de la composition : un meme modele diocotron compose deux fois,
     independamment (deux appels a models.diocotron), avec la meme CI numpy et la meme
     avancee, donne des densites identiques au bit pres (ecart == 0). La composition de
     briques est reproductible : memes briques -> meme calcul C++ fige.
@@ -56,7 +56,7 @@ Ce que le script verifie
     scalaire) leve une erreur claire ; une source fluide (PotentialForce) posee sur un
     transport scalaire (Scalar) aussi ; un modele incoherent (Scalar + CompressibleFlux)
     est rejete des sa composition.
-(D) Integrateur temporel ECRIT EN PYTHON : on avance un bloc diocotron avec
+(D) Integrateur temporel ecrit en python : on avance un bloc diocotron avec
     adc.integrate.ssprk2_step(sim, dt) (SSPRK2 Python, Poisson re-resolu per-stage) ;
     la masse reste conservee et l'etat fini ; on ecrit son propre take_step en Python
     tandis que le calcul par cellule reste en C++.
@@ -87,15 +87,15 @@ def _meshgrid_centres(n, L):
 
 
 def partie_A():
-    """Composition heterogene : un schema numerique DIFFERENT par bloc."""
+    """Composition heterogene : un schema numerique different par bloc."""
     print("== Partie (A) : un schema (modele/spatial/temps/sous-pas) par bloc ==")
 
-    # Config = MAILLAGE seul : adc.System ne porte plus la physique (gamma, cs2, B0...).
+    # Config = maillage seul : adc.System ne porte plus la physique (gamma, cs2, B0...).
     sim = adc.System(n=48, L=1.0, periodic=True)
 
     # Electrons : Euler complet, reconstruction VanLeer, flux HLLC (onde de contact),
     # traitement IMEX (transport explicite + force electrostatique implicite), et
-    # 10 SOUS-PAS par macro-pas (les electrons, plus raides, sont sous-cycles).
+    # 10 sous-pas par macro-pas (les electrons, plus raides, sont sous-cycles).
     # La physique (gamma, charge) est portee par la composition models.electron_euler().
     sim.add_block("electrons", model=models.electron_euler(),
                   spatial=adc.Spatial(vanleer=True, flux="hllc"),
@@ -138,7 +138,7 @@ def partie_A():
 
 
 def partie_B():
-    """Determinisme : un MEME modele compose deux fois donne le meme calcul (bit pour bit)."""
+    """Determinisme : un meme modele compose deux fois donne le meme calcul (bit pour bit)."""
     print("== Partie (B) : determinisme de la composition de briques (bit pour bit) ==")
 
     n, L = 32, 1.0
@@ -147,7 +147,7 @@ def partie_B():
     n_i0 = float(rho0.mean())  # fond neutralisant -> Poisson periodique solvable
 
     def construire_et_avancer():
-        # Le modele diocotron est RECOMPOSE a partir des briques generiques a chaque
+        # Le modele diocotron est recompose a partir des briques generiques a chaque
         # appel : memes parametres (B0, alpha, fond n_i0) -> meme spec figee cote C++.
         s = adc.System(n=n, L=L, periodic=True)
         s.add_block("e", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
@@ -189,7 +189,7 @@ def partie_C():
 
     # Source fluide (PotentialForce) posee sur un transport scalaire (Scalar + ExB) :
     # incoherent (la force du potentiel agit sur une quantite de mouvement fluide) ->
-    # rejet a l'ajout du bloc. Le modele se COMPOSE (state<->transport coherents) mais
+    # rejet a l'ajout du bloc. Le modele se compose (state<->transport coherents) mais
     # la source est invalide pour ce transport.
     source_fluide_sur_scalaire = adc.Model(
         state=adc.Scalar(), transport=adc.ExB(B0=1.0),
@@ -199,7 +199,7 @@ def partie_C():
         "s", model=source_fluide_sur_scalaire, spatial=adc.Spatial(minmod=True)),
         "source PotentialForce sur transport scalaire")
 
-    # Modele incoherent des la COMPOSITION : un etat scalaire exige un transport ExB,
+    # Modele incoherent des la composition : un etat scalaire exige un transport ExB,
     # pas un flux compressible -> adc.Model(...) leve directement.
     doit_lever(lambda: adc.Model(
         state=adc.Scalar(), transport=adc.CompressibleFlux(),
@@ -210,7 +210,7 @@ def partie_C():
 
 
 def partie_D():
-    """Integrateur temporel ECRIT EN PYTHON : take_step custom, calcul par cellule en C++."""
+    """Integrateur temporel ecrit en python : take_step custom, calcul par cellule en C++."""
     print("== Partie (D) : integrateur temporel custom en Python (SSPRK2) ==")
 
     n, L = 32, 1.0
@@ -224,10 +224,10 @@ def partie_D():
     sim.set_poisson()
     sim.set_density("e", rho0.copy())
 
-    # On n'appelle PAS sim.advance(...) : on ecrit la boucle en temps NOUS-MEMES.
-    # adc.integrate.ssprk2_step assemble les etages RK en Python (par PAS) en
+    # On n'appelle pas sim.advance(...) : on ecrit la boucle en temps nous-memes.
+    # adc.integrate.ssprk2_step assemble les etages RK en Python (par pas) en
     # s'appuyant sur solve_fields / eval_rhs / get_state / set_state ; le residu
-    # -div F + S et le Poisson de couplage restent calcules en C++ (par CELLULE).
+    # -div F + S et le Poisson de couplage restent calcules en C++ (par cellule).
     m0 = sim.mass("e")
     dt = 0.001
     nsteps = 20

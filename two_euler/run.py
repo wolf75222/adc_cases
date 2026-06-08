@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Cas "two_euler" : deux gaz d'Euler INDEPENDANTS (electrons + ions), non couples.
+"""Cas "two_euler" : deux gaz d'Euler independants (electrons + ions), non couples.
 
-Etape "deux Euler, meme code" de l'echelle de tests du tuteur : le MEME schema
-(CompressibleFlux + HLLC + reconstruction PRIMITIVE) tourne pour deux especes Euler sans aucun
+Etape "deux Euler, meme code" de l'echelle de tests du tuteur : le meme schema
+(CompressibleFlux + HLLC + reconstruction primitive) tourne pour deux especes Euler sans aucun
 code dedie ; seules les conditions initiales different. Les electrons sont 100x plus legers
 (densite plus faible -> vitesse du son ~10x plus grande), donc ils s'etendent plus vite. Les
-deux blocs ne sont PAS couples (charge nulle, NoSource). On verifie :
+deux blocs ne sont pas couples (charge nulle, NoSource). On verifie :
   - masse conservee par bloc (schema conservatif, domaine periodique) ;
   - positivite : rho > 0 et p > 0 (la reconstruction primitive y aide) ;
   - les electrons evoluent plus vite que les ions (front de detente plus etendu) ;

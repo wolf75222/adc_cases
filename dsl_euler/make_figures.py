@@ -1,10 +1,10 @@
 """Figures du cas dsl_euler (prototype experimental, mini-DSL interprete numpy).
 
-Re-joue EXACTEMENT la physique de run.py (meme modele declare en formules, meme CI, meme schema
+Re-joue exactement la physique de run.py (meme modele declare en formules, meme CI, meme schema
 Rusanov ordre 1 / Euler avant, 120 pas) en instrumentant a chaque pas. Ecrit deux figures + un
 provenance.json sous figures/. Backend matplotlib Agg (sans affichage).
 
-Le cas etant `experimental` (cf. cases_manifest.toml), ces figures NE sont PAS un asset de
+Le cas etant `experimental` (cf. cases_manifest.toml), ces figures ne sont pas un asset de
 reproduction versionne : ce sont des diagnostics du prototype (un etat fini et coherent + la
 relaxation de la bulle). Aucune cible publiee, aucune tolerance sur une valeur physique.
 """
@@ -131,7 +131,7 @@ def main():
         "command": "python make_figures.py",
         "category": "experimental",
         "note": "prototype DSL interprete numpy (PythonFlux), hors CI ; figures de diagnostic, "
-                "PAS un asset de reproduction versionne",
+                "pas un asset de reproduction versionne",
         "produces": ["final_state.png", "bubble_decay.png"],
         "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
         "adc_cases_sha": "1affec1d209e26d5ee422cac255d2cc3f149247a",

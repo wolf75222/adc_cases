@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Cas "diocotron_dsl" : le modele diocotron ECRIT ENTIEREMENT EN FORMULES (adc.dsl.Model),
-PUIS PROUVE bit-identique a la composition native de briques (adc_cases.models.diocotron).
+"""Cas "diocotron_dsl" : le modele diocotron ecrit entierement en formules (adc.dsl.Model),
+puis prouve bit-identique a la composition native de briques (adc_cases.models.diocotron).
 
 Pourquoi ce cas
 ---------------
 Le cas "diocotron" (et sa variante CI "band_instability") compose la physique a partir de
-briques NATIVES nommees : adc.Scalar + adc.ExB + adc.BackgroundDensity. Ici, on ecrit la MEME
+briques natives nommees : adc.Scalar + adc.ExB + adc.BackgroundDensity. Ici, on ecrit la meme
 physique sans aucune brique nommee : on declare la variable conservative, les champs auxiliaires
 (phi / grad phi), le flux d'advection E x B, les valeurs propres (vitesses de derive) et le second
-membre elliptique (densite de charge neutralisee) comme des EXPRESSIONS symboliques. adc.dsl
+membre elliptique (densite de charge neutralisee) comme des expressions symboliques. adc.dsl
 genere le C++, le compile et l'installe comme bloc du System via add_equation(...).
 
-Le point de la demonstration est l'EQUIVALENCE : sur la meme grille, la meme condition initiale,
+Le point de la demonstration est l'equivalence : sur la meme grille, la meme condition initiale,
 le meme Poisson periodique et le meme nombre de pas, l'etat produit par le modele DSL est
-BIT-IDENTIQUE a celui de la composition native. Les formules DSL reproduisent EXACTEMENT les
+bit-identique a celui de la composition native. Les formules DSL reproduisent exactement les
 conventions des briques du coeur (cf. ci-dessous), donc il n'y a aucune tolerance : np.array_equal.
 
 Conventions reproduites (ancrees dans le coeur adc_cpp)
@@ -29,14 +29,14 @@ Conventions reproduites (ancrees dans le coeur adc_cpp)
 
 Backend
 -------
-On compile en backend "production" (chemin NATIF zero-copie add_native_block : meme moteur que
+On compile en backend "production" (chemin natif zero-copie add_native_block : meme moteur que
 add_block, parite stricte). C'est la cible du plan. Si le module n'expose pas le chemin natif sur
 cette plateforme, on retombe sur "aot" (chemin de production host-marshale, numerique identique) :
 les deux donnent un etat bit-identique au natif (verifie). Le backend retenu est affiche.
 
 Invariants verifies (assert)
 ----------------------------
-  - EQUIVALENCE (coeur du cas) : etat DSL == etat natif, BIT-IDENTIQUE (np.array_equal) ;
+  - equivalence (coeur du cas) : etat DSL == etat natif, bit-identique (np.array_equal) ;
   - conservation de la masse (transport advectif, domaine periodique) ;
   - croissance de l'instabilite (amplitude finale > amplitude initiale), sur les deux modeles.
 """
@@ -59,14 +59,14 @@ from adc_cases.common.initial_conditions import band_density  # noqa: E402
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from adc_cases.common.native import adc_include  # noqa: E402
 
-# Parametres physiques partages par les deux modeles (DSL et natif) : ils DOIVENT coincider pour
+# Parametres physiques partages par les deux modeles (DSL et natif) : ils doivent coincider pour
 # que l'equivalence soit testable (memes conventions de briques).
 B0 = 1.0       # champ magnetique de fond (derive E x B)
 ALPHA = 1.0    # facteur du second membre elliptique alpha (n - n_i0)
 
 
 def diocotron_dsl_model(n_i0):
-    """Modele diocotron ECRIT EN FORMULES (adc.dsl.Model), reproduisant a l'identique les briques
+    """Modele diocotron ecrit en formules (adc.dsl.Model), reproduisant a l'identique les briques
     natives ExBVelocity (transport) et BackgroundDensity (elliptique). @p n_i0 : fond ionique
     neutralisant (moyenne de la densite initiale, pour la solubilite de Poisson periodique)."""
     m = dsl.Model("diocotron_dsl")
@@ -80,7 +80,7 @@ def diocotron_dsl_model(n_i0):
     grad_x = m.aux("grad_x")
     grad_y = m.aux("grad_y")
 
-    # Vitesse de derive E x B : v = (-grad_y / B0, grad_x / B0). Convention EXACTE de ExBVelocity.
+    # Vitesse de derive E x B : v = (-grad_y / B0, grad_x / B0). Convention exacte de ExBVelocity.
     vx = (-grad_y) / B0
     vy = grad_x / B0
 
@@ -94,7 +94,7 @@ def diocotron_dsl_model(n_i0):
     m.conservative_from([n])
 
     # Second membre elliptique (densite de charge neutralisee) : alpha (n - n_i0), convention
-    # EXACTE de BackgroundDensity. Couple le bloc au Poisson de systeme (rhs = "charge_density").
+    # exacte de BackgroundDensity. Couple le bloc au Poisson de systeme (rhs = "charge_density").
     m.elliptic_rhs(ALPHA * (n - n_i0))
 
     m.check()  # verifie que toute variable referencee (flux / valeurs propres / elliptique) est declaree
@@ -111,12 +111,12 @@ def perturbation_amplitude(density):
 
 def make_system(ne0):
     """Construit un System diocotron periodique vide (sans bloc). Le bloc (natif ou DSL) est ajoute
-    par l'appelant ; tout le reste (grille / Poisson / densite) est IDENTIQUE entre les deux."""
+    par l'appelant ; tout le reste (grille / Poisson / densite) est identique entre les deux."""
     return adc.System(n=ne0.shape[0], L=1.0, periodic=True)
 
 
 def run_native(ne0, n_i0, n_steps):
-    """Reference : la composition NATIVE de briques (adc_cases.models.diocotron), minmod + Rusanov,
+    """Reference : la composition native de briques (adc_cases.models.diocotron), minmod + Rusanov,
     explicite. Renvoie (densite finale, temps, masse)."""
     sim = make_system(ne0)
     sim.add_block("ne", model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0),
@@ -129,19 +129,19 @@ def run_native(ne0, n_i0, n_steps):
 
 
 def run_dsl(ne0, n_i0, n_steps):
-    """Le MEME systeme, mais le bloc "ne" est le modele DSL compile (backend "production" natif si
+    """Le meme systeme, mais le bloc "ne" est le modele DSL compile (backend "production" natif si
     disponible, sinon "aot"). Memes schema (minmod + Rusanov) et integrateur que le natif.
     Renvoie (densite finale, temps, masse, backend_retenu)."""
     include = adc_include()
     so_dir = case_output_dir("diocotron_dsl")
     model = diocotron_dsl_model(n_i0)
 
-    # Backend : on PREFERE "production" (chemin natif zero-copie, cible du plan) ; si la compilation
-    # native echoue OU si add_equation refuse le bloc natif sur cette plateforme, on retombe sur
+    # Backend : on prefere "production" (chemin natif zero-copie, cible du plan) ; si la compilation
+    # native echoue ou si add_equation refuse le bloc natif sur cette plateforme, on retombe sur
     # "aot" (numerique identique, host-marshale). Le chemin natif (add_native_block) verifie une cle
     # ABI incluant la signature des en-tetes : quand le module compile (_adc) a ete bati contre des
-    # en-tetes differents de include/, la compilation REUSSIT mais add_native_block leve un
-    # RuntimeError "ABI incompatible". On enveloppe donc TOUTE la construction (compile + aiguillage
+    # en-tetes differents de include/, la compilation reussit mais add_native_block leve un
+    # RuntimeError "ABI incompatible". On enveloppe donc toute la construction (compile + aiguillage
     # add_equation + run) dans le try : un echec sur "production" rejoue le tout en "aot" (qui passe
     # par add_compiled_block, sans cle ABI). Les deux donnent un etat bit-identique au natif ; le
     # choix n'affecte pas le resultat verifie.
@@ -166,7 +166,7 @@ def run_dsl(ne0, n_i0, n_steps):
 
 
 def main():
-    # --- Condition initiale en bande : MEME grille / IC que la variante CI native (mode 2) ---
+    # --- Condition initiale en bande : meme grille / IC que la variante CI native (mode 2) ---
     n, L = 96, 1.0
     ne0 = band_density(n, L, amp=1.0, width=0.05, mode=2, disp=0.02)
     # Fond ionique neutralisant : moyenne de la densite initiale (solubilite de Poisson periodique).
@@ -179,7 +179,7 @@ def main():
     print("grille n = %d x %d, %d pas, CFL = 0.4" % (n, n, n_steps))
     print("fond ionique n_i0 = %.6e (moyenne de ne)" % n_i0)
 
-    # --- Reference native, puis modele DSL, sur la MEME configuration ---
+    # --- Reference native, puis modele DSL, sur la meme configuration ---
     dn, tn, mn = run_native(ne0, n_i0, n_steps)
     dd, td, md, backend = run_dsl(ne0, n_i0, n_steps)
 
@@ -187,12 +187,12 @@ def main():
     print("natif : t = %.6f, masse = %.10e" % (tn, mn))
     print("DSL   : t = %.6f, masse = %.10e" % (td, md))
 
-    # --- EQUIVALENCE (coeur du cas) : etat DSL == etat natif, BIT-IDENTIQUE ---
+    # --- equivalence (coeur du cas) : etat DSL == etat natif, bit-identique ---
     max_abs = float(np.max(np.abs(dd - dn)))
     identical = bool(np.array_equal(dd, dn))
     print("max|DSL - natif| = %.3e   bit-identique = %s" % (max_abs, identical))
     assert identical, (
-        "le modele DSL n'est PAS bit-identique au natif (max|d| = %.3e) : une formule DSL "
+        "le modele DSL n'est pas bit-identique au natif (max|d| = %.3e) : une formule DSL "
         "diverge d'une brique du coeur (ExBVelocity / BackgroundDensity)" % max_abs)
 
     # --- Invariants physiques (sur le modele DSL ; le natif est l'oracle deja valide ailleurs) ---

@@ -3,23 +3,23 @@
 
 Deux figures, et seulement deux, parce que ce cas est `reproduction-candidate` :
 
-1. ``gap_to_paper.png`` -- le COEUR : taux mesure (brut, full-system-schur,
-   baseline cartesienne) vs cible papier, par mode, a n=256 ET n=384. La figure
-   est concue pour FAIRE RESSORTIR l'ecart de -82 a -95 %, pas pour suggerer une
+1. `gap_to_paper.png`, le coeur : taux mesure (brut, full-system-schur,
+   baseline cartesienne) vs cible papier, par mode, a n=256 et n=384. La figure
+   est concue pour faire ressortir l'ecart de -82 a -95 %, pas pour suggerer une
    concordance. Les barres mesurees sont rasantes face aux cibles ; l'etiquette
-   d'erreur est dessinee sur chaque paire. Les nombres sont VERBATIM ceux de la
+   d'erreur est dessinee sur chaque paire. Les nombres sont verbatim ceux de la
    table de validation du README (eux-memes issus de runs hors CI documentes dans
-   adc_cpp/docs/HOFFART_FIDELITY.md) ; ce script NE relance PAS run.py (LONG).
+   adc_cpp/docs/HOFFART_FIDELITY.md) ; ce script ne relance pas run.py (long).
 
-2. ``oracle_residual.png`` -- ce qui EST prouve : le residu de l'oracle analytique
+2. `oracle_residual.png`, ce qui est prouve : le residu de l'oracle analytique
    check_model.py (flux x/y, source Lorentz/electrique, rhs de Poisson) confronte
-   le modele symbolique compile aux formules a la main sur 2x2 cellules. On RELANCE
+   le modele symbolique compile aux formules a la main sur 2x2 cellules. On relance
    reellement la comparaison de check_model.py ici et on trace le residu max par
    bloc ; il plafonne au niveau machine (~1e-16). C'est l'observable qui justifie la
-   clause PROUVE.
+   clause prouve.
 
-Ecrit aussi ``figures/provenance.json`` (SHA des deux depots, backend, source des
-nombres mesures, statut PENDING explicite).
+Ecrit aussi `figures/provenance.json` (SHA des deux depots, backend, source des
+nombres mesures, statut pending explicite).
 
 Lancement :
     cd /private/tmp/adc_cases-deeptut/hoffart_euler_poisson_dsl
@@ -47,10 +47,10 @@ os.makedirs(FIGDIR, exist_ok=True)
 # Cibles du papier (Section 5.3 / Fig. 5.4, arXiv:2510.11808).
 PAPER = {3: 0.772, 4: 0.911, 5: 0.683}
 
-# Mesures BRUTES (full-system-schur, baseline cartesienne carre + mur Poisson
-# circulaire), VERBATIM de la table de validation du README (Section "Table de
+# Mesures brutes (full-system-schur, baseline cartesienne carre + mur Poisson
+# circulaire), verbatim de la table de validation du README (Section "Table de
 # validation"), elles-memes issues de runs hors CI documentes dans
-# adc_cpp/docs/HOFFART_FIDELITY.md. Ce script NE les recalcule PAS (run.py est LONG).
+# adc_cpp/docs/HOFFART_FIDELITY.md. Ce script ne les recalcule pas (run.py est long).
 MEASURED = {
     256: {3: 0.0372, 4: 0.0489, 5: 0.1211},
     384: {3: 0.0385, 4: 0.0613, 5: 0.1257},
@@ -93,9 +93,9 @@ def figure_gap_to_paper():
 
     ax.set_xticks(x)
     ax.set_xticklabels(["l=%d" % m for m in modes])
-    ax.set_ylabel("taux de croissance gamma (BRUT, sans 2pi)")
+    ax.set_ylabel("taux de croissance gamma (brut, sans 2pi)")
     ax.set_title("full-system-schur (cart-square) vs papier : ecart -82 a -95 %\n"
-                 "reproduction quantitative NON etablie (PENDING)")
+                 "reproduction quantitative non etablie (pending)")
     ax.set_ylim(0.0, 1.05)
     ax.legend(loc="upper right", framealpha=0.95)
     ax.grid(axis="y", alpha=0.25)
@@ -109,7 +109,7 @@ def figure_gap_to_paper():
 def figure_oracle_residual():
     """Re-joue la comparaison de check_model.py et trace le residu max par bloc.
 
-    C'est la seule chose PROUVEE du cas : le modele symbolique compile == les
+    C'est la seule chose prouvee du cas : le modele symbolique compile == les
     formules analytiques sur 2x2 cellules, au niveau machine.
     """
     p = PaperParameters(beta=3.0, temperature=0.25)
@@ -148,11 +148,11 @@ def figure_oracle_residual():
         ("Poisson rhs\n(-alpha rho)", np.max(np.abs(ell - ref_ell))),
     ]
     labels = [b[0] for b in blocks]
-    resid = [float(b[1]) for b in blocks]  # VRAI residu, sans plancher artificiel
+    resid = [float(b[1]) for b in blocks]  # residu, sans plancher artificiel
 
-    # Les 4 residus sont EXACTEMENT 0.0 (bit-exact, pas seulement < eps). Une echelle
+    # Les 4 residus sont exactement 0.0 (bit-exact, pas seulement < eps). Une echelle
     # log mentirait (barres a 0 -> disparaissent ou plancher invente). On dessine donc
-    # le residu mesure (0) en hauteur, la ligne eps-machine comme PLAFOND honnete que
+    # le residu mesure (0) en hauteur, la ligne eps-machine comme plafond honnete que
     # le residu ne franchit pas, et l'etiquette dit "0.0 (bit-exact)".
     eps = float(np.finfo(float).eps)
     fig, ax = plt.subplots(figsize=(7.2, 4.4))
@@ -165,7 +165,7 @@ def figure_oracle_residual():
     ax.set_xticklabels(labels)
     ax.set_ylabel("residu max |DSL compile - analytique|")
     ax.set_title("Oracle check_model.py : modele symbolique == formules a la main\n"
-                 "(2x2 cellules, beta=3, theta=0.25) -- residu = 0.0 bit-exact")
+                 "(2x2 cellules, beta=3, theta=0.25), residu = 0.0 bit-exact")
     for i, r in enumerate(resid):
         ax.annotate("%.1f\n(bit-exact)" % r, xy=(i, 0.0),
                     xytext=(i, 0.22 * eps), ha="center", va="bottom",
@@ -186,7 +186,7 @@ def main():
     provenance = {
         "case": "hoffart_euler_poisson_dsl",
         "category": "reproduction-candidate",
-        "reproduction_status": "PENDING (quantitative paper reproduction NOT established)",
+        "reproduction_status": "pending (quantitative paper reproduction not established)",
         "paper": "https://arxiv.org/abs/2510.11808",
         "adc_cpp_sha": adc_cpp_sha(adc),
         "adc_cases_sha": adc_cases_sha(),
@@ -196,15 +196,15 @@ def main():
                 "what": "raw full-system-schur growth rate vs paper target, per mode, n=256 and n=384",
                 "engine": "full-system-schur (cart-square baseline)",
                 "normalization": "raw (no 2pi, no rhobar)",
-                "source_of_numbers": "VERBATIM from README validation table / adc_cpp/docs/HOFFART_FIDELITY.md "
-                                     "(documented out-of-CI runs); NOT recomputed by this script",
+                "source_of_numbers": "verbatim from README validation table / adc_cpp/docs/HOFFART_FIDELITY.md "
+                                     "(documented out-of-CI runs); not recomputed by this script",
                 "paper_targets": PAPER,
                 "measured": MEASURED,
                 "relative_error_percent": {
                     str(n): {m: round(err_pct(MEASURED[n][m], PAPER[m]), 1) for m in (3, 4, 5)}
                     for n in (256, 384)
                 },
-                "reading": "reproduction NOT shown: measured raw slopes are -82 to -95% off the paper targets; "
+                "reading": "reproduction not shown: measured raw slopes are -82 to -95% off the paper targets; "
                            "error does not improve from n=256 to n=384 (not a resolution problem)",
             },
             "oracle_residual.png": {
@@ -216,7 +216,7 @@ def main():
                     "source": resid[2], "poisson_rhs": resid[3],
                 },
                 "machine_eps": float(np.finfo(float).eps),
-                "reading": "PROVED: the compiled symbolic model equals the analytic formulas BIT-EXACTLY "
+                "reading": "proved: the compiled symbolic model equals the analytic formulas bit-exactly "
                            "(all four residuals are exactly 0.0, below machine eps)",
             },
         },

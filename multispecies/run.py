@@ -3,24 +3,24 @@
 
 Capacite demontree
 ------------------
-Le systeme generique ``adc.System`` integre simultanement DEUX especes decrites
-par des modeles physiques DIFFERENTS, compiles en C++ :
+Le systeme generique `adc.System` integre simultanement deux especes decrites
+par des modeles physiques differents, compiles en C++ :
 
   * les electrons : Euler compressible complet (4 variables, rho/rho*u/rho*v/E),
   * les ions      : Euler isotherme (3 variables, ferme par cs2).
 
-Ces deux fluides heterogenes sont couples par UN SEUL probleme elliptique
+Ces deux fluides heterogenes sont couples par un seul probleme elliptique
 (Poisson de systeme) dont le second membre agrege les charges des deux especes :
 
         Poisson(phi) = f = q_e * n_e + q_i * n_i   (rhs = "charge_density")
 
 Python ne fait ici que composer le systeme (add_block), poser l'etat initial,
-piloter l'avancee en temps et DIAGNOSTIQUER ; toute la physique (les deux fluides
+piloter l'avancee en temps et diagnostiquer ; toute la physique (les deux fluides
 + le Poisson couple) est en C++.
 
 Invariants verifies (assert)
 -----------------------------
-  * Conservation de la masse PAR ESPECE : |mass_e - mass_e0| < 1e-9 et idem pour
+  * Conservation de la masse par espece : |mass_e - mass_e0| < 1e-9 et idem pour
     les ions. C'est le test fort du decouplage des bilans de masse : meme couplees
     par le champ, les deux especes conservent independamment leur masse.
   * Densites finies (pas de NaN/Inf) en fin d'integration.
@@ -120,7 +120,7 @@ def main():
     print(f"[t={sim.time():.4f}] separation de charge max|f| = {qmax1:.6e}")
 
     # --- Verification des invariants physiques (utilitaires partages) -----------
-    # Conservation de la masse PAR ESPECE (coeur de la demo de couplage), en ABSOLU
+    # Conservation de la masse par espece (coeur de la demo de couplage), en absolu
     # comme historiquement.
     drift_e = assert_mass_conserved(mass_e1, mass_e0, tol=1e-9, label="electrons",
                                     relative=False)

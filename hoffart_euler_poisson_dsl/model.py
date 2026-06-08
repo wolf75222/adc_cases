@@ -1,21 +1,21 @@
 """Magnetic isothermal Euler-Poisson model from Hoffart et al. (arXiv:2510.11808).
 
-Note : ce module definit le modele symbolique COMPLET (rho, rho*u, rho*v + flux +
+Note : ce module definit le modele symbolique complet (rho, rho*u, rho*v + flux +
 source electrostatique/Lorentz). La validation de normalisation du taux de
 croissance (NORMALIZATION.md, diag/diag_polar_omega.py) porte sur un modele
-DIFFERENT et REDUIT (derive ExB scalaire, sans quantite de mouvement). Aucune
+different et reduit (derive ExB scalaire, sans quantite de mouvement). Aucune
 reproduction quantitative du modele complet ci-dessous n'est encore etablie.
 
-The physical model is written once with ``adc.dsl.Model``.  Two source variants are
+The physical model is written once with `adc.dsl.Model`.  Two source variants are
 provided:
 
-``schur``
+`schur`
     The local DSL source is zero.  The electrostatic/Lorentz source is advanced by
-    ``adc.CondensedSchur`` in ``adc.System``.
+    `adc.CondensedSchur` in `adc.System`.
 
-``local``
+`local`
     The full source is emitted in the generated C++ model.  This is the variant used
-    by ``adc.AmrSystem`` with its cell-local IMEX source step.
+    by `adc.AmrSystem` with its cell-local IMEX source step.
 
 Both variants use the same conservative variables, physical flux, eigenvalues and
 Poisson right-hand side.
@@ -61,7 +61,7 @@ class PaperParameters:
 
 
 # Cibles du papier (Section 5.3). NB : la comparaison de normalisation (diag/diag_polar_omega.py)
-# utilise le modele ExB scalaire REDUIT, pas le systeme complet defini ici ; seul l=4 colle.
+# utilise le modele ExB scalaire reduit, pas le systeme complet defini ici ; seul l=4 colle.
 PAPER_GROWTH_RATES = {3: 0.772, 4: 0.911, 5: 0.683}
 PAPER_FIT_WINDOWS = {3: (0.40, 0.70), 4: (0.60, 0.75), 5: (1.15, 1.35)}
 PAPER_SNAPSHOT_FRACTIONS = (0.01, 0.125, 0.25, 0.375, 0.50, 0.625, 0.75, 0.875, 1.0)
@@ -79,8 +79,8 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
 
        -\Delta\phi = \alpha\rho,\qquad p=\theta\rho.
 
-    In two dimensions, with ``Omega = omega e_z``,
-    ``m x Omega = (omega*m_y, -omega*m_x)``.
+    In two dimensions, with `Omega = omega e_z`,
+    `m x Omega = (omega*m_y, -omega*m_x)`.
     """
     params = params or PaperParameters()
     if source not in ("schur", "local"):
@@ -153,7 +153,7 @@ def paper_initial_density(n, mode, params=None):
 
 
 def drift_velocity_from_potential(phi, params=None):
-    r"""Initial drift velocity ``-(grad(phi) x Omega)/|Omega|^2``."""
+    r"""Initial drift velocity `-(grad(phi) x Omega)/|Omega|^2`."""
     params = params or PaperParameters()
     h = params.length / phi.shape[0]
     grad_y, grad_x = np.gradient(phi, h, h, edge_order=2)

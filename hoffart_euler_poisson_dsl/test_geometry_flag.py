@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Smoke test for the --geometry {square,staircase,cutcell} plumbing of the hoffart case.
 
-This test does NOT need the heavy Kokkos/AMReX `adc` extension: it installs a tiny
+This test does not need the heavy Kokkos/AMReX `adc` extension: it installs a tiny
 fake `adc` module that records every method call on the fake `System`, then drives
 `build_uniform` for all three geometries. The assertions are real:
 
-  - 'square' (default) NEVER calls set_disc_domain    -> bit-identical historical path
+  - 'square' (default) never calls set_disc_domain    -> bit-identical historical path
   - 'staircase' calls set_disc_domain(L/2, L/2, R, mode='staircase')  -> T2 disc mask
   - 'cutcell'  calls set_disc_domain(L/2, L/2, R, mode='cutcell')     -> EB cut-cell mask
   - an unknown geometry raises ValueError

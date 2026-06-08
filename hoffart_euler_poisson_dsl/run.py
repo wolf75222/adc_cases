@@ -3,13 +3,13 @@
 
 Two execution paths are intentionally separated:
 
-``system-schur``
+`system-schur`
     Uniform finite volumes, WENO5-Z + SSPRK3 and the global condensed Schur
     electrostatic/Lorentz source stage.  This is the closest current ADC path to
     the paper and includes the paper initial drift velocity.
 
-``amr-imex``
-    Finite volumes on ``adc.AmrSystem`` with dynamic AMR, Kokkos and MPI.  It
+`amr-imex`
+    Finite volumes on `adc.AmrSystem` with dynamic AMR, Kokkos and MPI.  It
     advances the exact same PDE formulas, but uses the cell-local backward-Euler
     source step because CondensedSchur is not yet implemented on AMR.  The current
     AMR facade also initializes only density, so momentum starts at zero and
@@ -141,14 +141,14 @@ def build_uniform(compiled, rho, params, geometry="square"):
         wall="circle",
         wall_radius=params.radius,
     )
-    # GEOMETRIE DU TRANSPORT FV.
+    # geometrie du transport FV.
     # 'square' (defaut) : transport sur le carre cartesien complet (cote L = 2R),
-    # comportement historique BIT-IDENTIQUE, aucun appel a set_disc_domain.
+    # comportement historique bit-identique, aucun appel a set_disc_domain.
     # 'staircase'/'cutcell' : set_disc_domain(L/2, L/2, R, mode=...) materialise le
-    # masque disque (meme level set que le mur Poisson circulaire) ET est branche dans
-    # System::step depuis adc_cpp #224 -- le transport FV est confine au disque.
+    # masque disque (meme level set que le mur Poisson circulaire) et est branche dans
+    # System::step depuis adc_cpp #224, le transport FV est confine au disque.
     # NB : experience geometrie (verdict adc_cpp "cut-cell sans effet, deficit
-    # structurel") -- cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
+    # structurel"), cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
     # le deficit vient du schema temporel, pas de la geometrie.
     if geometry in ("staircase", "cutcell"):
         sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
@@ -184,14 +184,14 @@ def build_uniform(compiled, rho, params, geometry="square"):
 
 
 def amr_initial_drift(params, rho):
-    """Vitesse de derive initiale du papier ``v0 = -(grad phi0 x Omega)/|Omega|^2`` pour semer l'etat
-    conservatif de l'AMR (Phase B). Resout le Poisson initial ``-Delta phi = alpha rho`` (meme paroi
-    circulaire, resolution = niveau grossier AMR) sur un System uniforme JETABLE, via un compile
+    """Vitesse de derive initiale du papier `v0 = -(grad phi0 x Omega)/|Omega|^2` pour semer l'etat
+    conservatif de l'AMR (Phase B). Resout le Poisson initial `-Delta phi = alpha rho` (meme paroi
+    circulaire, resolution = niveau grossier AMR) sur un System uniforme jetable, via un compile
     target='system' du meme modele (le chemin AMR ne resout pas le Poisson au build, et son modele
     compile cible 'amr_system' n'est pas chargeable dans un System).
 
-    SOLVE UNIQUE : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
-    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite SINGLE-PASS, signalee distinctement
+    solve unique : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
+    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite single-PASS, signalee distinctement
     dans les metadonnees. Renvoie (u0, v0) ; leve si le solve echoue (l'appelant retombe sur set_density).
     """
     n = rho.shape[0]
@@ -241,20 +241,20 @@ def build_amr(compiled, rho, params, args):
         wall_radius=params.radius,
     )
     sim.set_refinement(args.refine_threshold)
-    # Phase B (Probleme 2) : demarrer l'AMR depuis l'etat de DERIVE du papier (rho, rho*u0, rho*v0)
-    # au lieu de m=0. set_conservative_state pose l'etat conservatif COMPLET sur le grossier (prolonge
-    # aux niveaux fins). Tout echec -- solve degenere, OU un adc anterieur a set_conservative_state --
-    # RETOMBE proprement sur set_density (comportement historique m=0) : aucune regression de robustesse.
+    # Phase B (Probleme 2) : demarrer l'AMR depuis l'etat de derive du papier (rho, rho*u0, rho*v0)
+    # au lieu de m=0. set_conservative_state pose l'etat conservatif complet sur le grossier (prolonge
+    # aux niveaux fins). Tout echec, solve degenere, ou un adc anterieur a set_conservative_state --
+    # retombe proprement sur set_density (comportement historique m=0) : aucune regression de robustesse.
     try:
         u0, v0 = amr_initial_drift(params, rho)
         # Modele isotherme 3-var : conservatif = [rho, rho*u, rho*v] (pas d'energie). On valide le
-        # NOMBRE de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
+        # nombre de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
         state = np.stack([rho, rho * u0, rho * v0])
         if state.shape[0] != compiled.n_vars:
             raise ValueError("etat de derive a %d composantes mais le bloc compile en a %d"
                              % (state.shape[0], compiled.n_vars))
         sim.set_conservative_state("electrons", state)
-    except Exception as exc:  # noqa: BLE001 -- fallback robuste, jamais de regression du build
+    except Exception as exc:  # noqa: BLE001, fallback robuste, jamais de regression du build
         if mpi_rank() == 0:
             print("[amr-imex] seed de derive indisponible (%s) -> fallback set_density (m=0)" % exc)
         sim.set_density("electrons", rho)
@@ -443,11 +443,11 @@ def write_summary(results, out, params, args):
         writer.writerow(["mode", "gamma_numeric", "gamma_paper", "relative_error_percent"])
         writer.writerows(rows)
 
-    # Enregistrement de mesure PRE-ENREGISTRE (graine de la table de validation
+    # Enregistrement de mesure pre-enregistre (graine de la table de validation
     # Phase 2). Un enregistrement par mode, avec SHA des deux depots, backend, n,
-    # dt, splitting, theta du Schur, fenetre de fit verbatim, gamma_numeric (BRUT,
+    # dt, splitting, theta du Schur, fenetre de fit verbatim, gamma_numeric (brut,
     # aucun facteur 2 pi / rhobar) et err_pct. Le moteur est etiquete explicitement
-    # (full-system-schur vs amr-imex-experimental) pour que la pente BRUTE du
+    # (full-system-schur vs amr-imex-experimental) pour que la pente brute du
     # modele complet ne soit jamais melangee aux nombres reduits porteurs du 2 pi
     # (ceux-la vivent dans diag/diag_polar_omega.py, engine='reduced-ExB').
     splitting = "Strang" if args.engine == "system-schur" else "Lie"
@@ -489,11 +489,11 @@ def write_summary(results, out, params, args):
         "geometry_note": (
             "square: full Cartesian square transport (historical default, bit-identical). "
             "staircase/cutcell: set_disc_domain(L/2, L/2, R, mode=...) materialises the "
-            "disc mask AND is routed into System::step transport (adc_cpp #224). "
+            "disc mask and is routed into System::step transport (adc_cpp #224). "
             "Cut-cell has no measurable effect on the diocotron growth rate (structural deficit)."
         ),
         "normalization": "raw (no 2pi, no rhobar): full-model slope vs paper directly; "
-                         "the 2pi/rhobar factor belongs ONLY to the reduced ExB-scalar "
+                         "the 2pi/rhobar factor belongs only to the reduced ExB-scalar "
                          "path (diag/diag_polar_omega.py, engine=reduced-ExB)",
         "adc_cpp_sha": cpp_sha,
         "adc_cases_sha": cases_sha,
@@ -527,7 +527,7 @@ def write_summary(results, out, params, args):
                     "finite-volume AMR spatial discretisation",
                     "cell-local IMEX rather than condensed Schur",
                     # Phase B : l'AMR demarre desormais a l'etat de derive (set_conservative_state),
-                    # mais via UN SEUL solve Poisson (probe uniforme), pas la relaxation a deux passes
+                    # mais via un seul solve Poisson (probe uniforme), pas la relaxation a deux passes
                     # du chemin system-schur. Sur un adc anterieur a set_conservative_state, le seed
                     # retombe sur m=0 (avertissement imprime au run).
                     "single-pass drift initialization (one Poisson solve, not the two-pass relaxation "
@@ -570,7 +570,7 @@ def parse_args():
         default="square",
         help="FV transport sub-domain (system-schur only). 'square' (default) keeps the "
              "historical full-square Cartesian transport, bit-identical. 'staircase'/'cutcell' "
-             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
+             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask and "
              "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
              "effect on the growth rate (structural deficit, not geometry).",
     )
@@ -611,11 +611,11 @@ def main():
             "amr-imex uses the same PDE but not the paper Schur stage or initial drift. "
             "Re-run with --acknowledge-amr-approximation."
         )
-    # Pre-enregistrement : la comparaison du modele complet DOIT utiliser les
+    # Pre-enregistrement : la comparaison du modele complet doit utiliser les
     # fenetres de fit verbatim du papier (Fig. 5.4). Cet assert verrouille
     # PAPER_FIT_WINDOWS contre toute fenetre adaptative qui se glisserait dans le
     # chemin complet (fit_growth lit directement PAPER_FIT_WINDOWS). Leve avant
-    # toute mesure ; n'introduit AUCUNE nouvelle fenetre.
+    # toute mesure ; n'introduit aucune nouvelle fenetre.
     verify_paper_windows(PAPER_FIT_WINDOWS)
     if args.quick:
         args.n = 48

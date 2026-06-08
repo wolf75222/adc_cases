@@ -1,12 +1,12 @@
-"""Cas "dsl_euler" : Euler compressible ECRIT EN FORMULES (mini-DSL symbolique adc.dsl).
+"""Cas "dsl_euler" : Euler compressible ecrit en formules (mini-DSL symbolique adc.dsl).
 
 Demonstration du principe "Python ecrit les equations, le coeur execute les boucles", version
-PROTOTYPE interprete CPU. On ne declare AUCUNE brique nommee (pas d'adc.CompressibleFlux) : on ecrit
+prototype interprete CPU. On ne declare aucune brique nommee (pas d'adc.CompressibleFlux) : on ecrit
 les variables, leurs formules, le flux et les valeurs propres comme des expressions symboliques.
 adc.dsl construit l'arbre, l'interprete en numpy, et le branche sur le backend hote adc.PythonFlux
 qui assemble -div(F*) par volumes finis (Rusanov, periodique).
 
-Etat : interprete CPU (prototypage). Le MEME arbre alimenterait plus tard un codegen C++/Kokkos pour
+Etat : interprete CPU (prototypage). Le meme arbre alimenterait plus tard un codegen C++/Kokkos pour
 la production (cf. adc_cpp/docs/ARCHITECTURE_CIBLE.md sect. 3). Le chemin de production reste les
 briques compilees ; ce cas montre le bout "declaratif" cote utilisateur.
 

@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
-"""Demo "two_fluid_ap" : modele bi-fluide isotherme en regime RAIDE (asymptotic-preserving).
+"""Demo "two_fluid_ap" : modele bi-fluide isotherme en regime raide (asymptotic-preserving).
 
-L'integrateur AP-IMEX deux-fluides a QUITTE le coeur adc_cpp : c'est un SCENARIO sur mesure,
+L'integrateur AP-IMEX deux-fluides a quitte le coeur adc_cpp : c'est un scenario sur mesure,
 pas une brique generique composable bloc-a-bloc comme `adc.System`. La stabilisation AP couple
-la raideur (frequence plasma) au pas de temps DANS l'elliptique (Poisson reformule
+la raideur (frequence plasma) au pas de temps dans l'elliptique (Poisson reformule
 lap(phi) = (ne* - ni*)/(1 + dt^2 (wpe^2 + wpi^2))), ce que la composition System ne sait pas
-reproduire. Le solveur vit donc ICI, dans adc_cases : la physique est en C++ (two_fluid_ap.hpp +
-_two_fluid_ap.cpp) et n'utilise du coeur que des BRIQUES GENERIQUES (maillage, elliptique,
-parallele) incluses depuis adc_cpp/include. Ce module .cpp est compile A LA VOLEE en une
-bibliotheque partagee et charge dans CE process via ctypes (meme principe que le JIT du DSL),
+reproduire. Le solveur vit donc ici, dans adc_cases : la physique est en C++ (two_fluid_ap.hpp +
+_two_fluid_ap.cpp) et n'utilise du coeur que des briques generiques (maillage, elliptique,
+parallele) incluses depuis adc_cpp/include. Ce module .cpp est compile A la volee en une
+bibliotheque partagee et charge dans ce process via ctypes (meme principe que le JIT du DSL),
 puis pilote depuis Python : aucun binding C++ cote cas, et le coeur ne nomme aucun scenario.
 
 Il integre deux fluides charges (electrons + ions) couples au champ electrique par la
-contrainte de quasi-neutralite. La frequence plasma omega_pe fixe l'echelle de temps RAIDE
+contrainte de quasi-neutralite. La frequence plasma omega_pe fixe l'echelle de temps raide
 du systeme : un schema explicite serait limite par dt * omega_pe < O(1), donc exploserait
 des qu'on prend un grand pas de temps.
 
 Le solveur emploie un traitement IMEX / asymptotic-preserving (AP) : le terme raide
-est integre de maniere implicite, ce qui rend le schema STABLE et CONSISTANT meme
+est integre de maniere implicite, ce qui rend le schema stable et consistant meme
 quand dt * omega_pe >> 1. On le demontre sur deux scenarios.
 
   Run 1 "raide" (non magnetise) :
       omega_pe = 1e3, omega_pi = 20, advance(5.0/1e3, 200)
-      => dt * omega_pe = 5 (un schema explicite EXPLOSERAIT).
+      => dt * omega_pe = 5 (un schema explicite exploserait).
       Invariants verifies :
-        - l'ecart a la quasi-neutralite max_dev() reste PETIT  (< 0.1) ;
-        - la charge nette locale max_charge() reste PETITE      (< 0.1) ;
+        - l'ecart a la quasi-neutralite max_dev() reste petit  (< 0.1) ;
+        - la charge nette locale max_charge() reste petite      (< 0.1) ;
         - la masse electronique mass_e est conservee            (erreur relative < 1e-7).
 
   Run 2 "magnetise" :
@@ -167,7 +167,7 @@ def _rel_err(a, b):
 
 def run_stiff(lib):
     """Run 1 : regime raide non magnetise, dt * omega_pe = 5."""
-    omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps RAIDE
+    omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps raide
     omega_pi = 20.0    # frequence plasma ionique
     n = 64
     solver = TwoFluidAP(lib, n=n, omega_pe=omega_pe, omega_pi=omega_pi)
@@ -185,7 +185,7 @@ def run_stiff(lib):
 
     print("[run 1 - raide, non magnetise]")
     print("  n=%d  omega_pe=%.3e  omega_pi=%.3e" % (n, omega_pe, omega_pi))
-    print("  dt=%.3e  nsteps=200  dt*omega_pe=%.1f  (explicite EXPLOSERAIT)" % (dt, stiffness))
+    print("  dt=%.3e  nsteps=200  dt*omega_pe=%.1f  (explicite exploserait)" % (dt, stiffness))
     print("  max_dev()    = %.6e   (ecart a la quasi-neutralite)" % max_dev)
     print("  max_charge() = %.6e   (charge nette locale)" % max_charge)
     print("  mass_e: %.6e -> %.6e   (err. relative %.3e)" % (mass_e0, mass_e, mass_rel))

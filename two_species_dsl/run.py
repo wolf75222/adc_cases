@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Cas "two_species_dsl" : DEUX especes ecrites ENTIEREMENT EN FORMULES (adc.dsl.Model),
-couplees par un meme Poisson, PROUVEES equivalentes a la composition native de briques.
+"""Cas "two_species_dsl" : deux especes ecrites entierement en formules (adc.dsl.Model),
+couplees par un meme Poisson, prouvees equivalentes a la composition native de briques.
 
 Pourquoi ce cas
 ---------------
-Le cas "multispecies" couple deux fluides heterogenes en COMPOSANT des briques natives :
+Le cas "multispecies" couple deux fluides heterogenes en composant des briques natives :
 electrons (Euler compressible, 4 var) + ions (Euler isotherme, 3 var), chacun avec une force
-electrostatique (PotentialForce) et une densite de charge (ChargeDensity), relies par UN seul
-Poisson de systeme (rhs = q_e n_e + q_i n_i). Ici, on ecrit la MEME physique des deux especes
-sans aucune brique nommee : variables, primitives, flux, valeurs propres, SOURCE (Lorentz/
-electrostatique q rho E avec E = -grad phi) et second membre elliptique (q n) sont des EXPRESSIONS
+electrostatique (PotentialForce) et une densite de charge (ChargeDensity), relies par un seul
+Poisson de systeme (rhs = q_e n_e + q_i n_i). Ici, on ecrit la meme physique des deux especes
+sans aucune brique nommee : variables, primitives, flux, valeurs propres, source (Lorentz/
+electrostatique q rho E avec E = -grad phi) et second membre elliptique (q n) sont des expressions
 symboliques. Chaque espece est compilee par adc.dsl et installee via add_equation(...).
 
 Capacite demontree (au dela du diocotron mono-espece)
 -----------------------------------------------------
-  - un modele DSL a SOURCE (la force electrostatique lit grad phi via le canal aux) ;
-  - DEUX especes DSL de tailles d'etat differentes (4 et 3 variables) dans le meme System ;
+  - un modele DSL a source (la force electrostatique lit grad phi via le canal aux) ;
+  - deux especes DSL de tailles d'etat differentes (4 et 3 variables) dans le meme System ;
   - un Poisson couple dont le RHS agrege les charges des deux blocs DSL (rhs = "charge_density").
 
-Le traitement temporel est explicite (SSPRK2) pour les deux blocs, A L'IDENTIQUE du natif, pour
+Le traitement temporel est explicite (SSPRK2) pour les deux blocs, A L'identique du natif, pour
 que l'equivalence soit testable. add_equation accepte par ailleurs un time/substeps par bloc
 (adc.Explicit(substeps=k) / adc.IMEX), mais un sous-cyclage different romprait la comparaison
 bit-a-bit avec le natif (qui avance les deux blocs au meme pas).
@@ -35,18 +35,18 @@ Conventions reproduites (ancrees dans le coeur adc_cpp)
 
 Equivalence
 -----------
-Le RESIDU et le flux de chaque espece DSL sont BIT-IDENTIQUES au natif (verifie a 1 pas :
-np.array_equal). Sur plusieurs pas COUPLES, l'etat des electrons derive d'un epsilon machine
+Le residu et le flux de chaque espece DSL sont bit-identiques au natif (verifie a 1 pas :
+np.array_equal). Sur plusieurs pas couples, l'etat des electrons derive d'un epsilon machine
 (~1e-30) du natif : la seule difference est une reassociation flottante dans l'accumulation du
-SECOND MEMBRE de Poisson partage (deux blocs y contribuent). Ce n'est pas un ecart de physique ;
+second membre de Poisson partage (deux blocs y contribuent). Ce n'est pas un ecart de physique ;
 on l'asserte donc avec une tolerance serree (1e-24), tandis que les ions restent bit-identiques.
 
 Backend : "production" (natif zero-copie) si disponible, sinon "aot" (numerique identique).
 
 Invariants verifies (assert)
 ----------------------------
-  - EQUIVALENCE : etat DSL ~ etat natif (electrons a 1e-24, ions bit-identique) par espece ;
-  - conservation de la masse PAR ESPECE (transport advectif) ;
+  - equivalence : etat DSL ~ etat natif (electrons a 1e-24, ions bit-identique) par espece ;
+  - conservation de la masse par espece (transport advectif) ;
   - finitude et positivite des densites.
 """
 
@@ -67,20 +67,20 @@ from adc_cases.common.checks import assert_finite, assert_positive, relative_dri
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from adc_cases.common.native import adc_include  # noqa: E402
 
-# Parametres physiques partages (DSL et natif) : ils DOIVENT coincider pour que l'equivalence tienne.
+# Parametres physiques partages (DSL et natif) : ils doivent coincider pour que l'equivalence tienne.
 GAMMA_E = 5.0 / 3.0    # electrons : Euler compressible adiabatique
 CS2_I = 1.0            # ions : fermeture isotherme p = cs2 rho
 Q_E, Q_I = -1.0, 1.0   # charges (signe inclus) ; q/m = charge dans le coeur (PotentialForce.qom)
 
 
 def electron_dsl_model():
-    """Electrons : Euler compressible 4 var + force electrostatique + densite de charge, EN FORMULES.
+    """Electrons : Euler compressible 4 var + force electrostatique + densite de charge, en formules.
     Reproduit a l'identique les briques Euler / PotentialForce / ChargeDensity du coeur."""
     m = dsl.Model("electron_euler")
     rho, rhou, rhov, E = m.conservative_vars("rho", "rho_u", "rho_v", "E")
     grad_x = m.aux("grad_x")
     grad_y = m.aux("grad_y")
-    g = m.param("gamma", GAMMA_E)  # NOMME : inline au codegen + set_gamma (metadonnee ABI coherente)
+    g = m.param("gamma", GAMMA_E)  # nomme : inline au codegen + set_gamma (metadonnee ABI coherente)
 
     u = m.primitive("u", rhou / rho)
     v = m.primitive("v", rhov / rho)
@@ -92,7 +92,7 @@ def electron_dsl_model():
            y=[rhov, rhov * u, rhov * v + p, (E + p) * v])
     m.eigenvalues(x=[u - c, u, u, u + c], y=[v - c, v, v, v + c])
 
-    # Layout primitif (rho, u, v, p) par la forme POSITIONNELLE (les primitives sont DEJA definies
+    # Layout primitif (rho, u, v, p) par la forme positionnelle (les primitives sont deja definies
     # ci-dessus ; on ne fait que fixer l'ordre de Prim, sans les redefinir).
     m.primitive_vars(rho, u, v, p)
     m.conservative_from([rho, rho * u, rho * v, p / (g - 1.0) + 0.5 * rho * (u * u + v * v)])
@@ -109,7 +109,7 @@ def electron_dsl_model():
 
 
 def ion_dsl_model():
-    """Ions : Euler isotherme 3 var + force electrostatique + densite de charge, EN FORMULES.
+    """Ions : Euler isotherme 3 var + force electrostatique + densite de charge, en formules.
     Reproduit a l'identique les briques IsothermalFlux / PotentialForce / ChargeDensity."""
     m = dsl.Model("ion_isothermal")
     rho, rhou, rhov = m.conservative_vars("rho", "rho_u", "rho_v")
@@ -148,7 +148,7 @@ def initial_conditions(n):
 
 
 def run_native(n, ne2d, ni2d, n_steps):
-    """Reference : composition NATIVE (adc_cases.models.electron_euler / ion_isothermal)."""
+    """Reference : composition native (adc_cases.models.electron_euler / ion_isothermal)."""
     sim = adc.System(n=n, L=1.0, periodic=True)
     sim.add_block("electrons", model=models.electron_euler(charge=Q_E, gamma=GAMMA_E),
                   spatial=adc.Spatial(minmod=True), time=adc.Explicit())
@@ -164,8 +164,8 @@ def run_native(n, ne2d, ni2d, n_steps):
 
 
 def _compile(model, tag, backend):
-    """Compile @p model avec le backend DEMANDE (sans fallback interne : le fallback est gere au
-    niveau de run_dsl pour que les DEUX especes partagent le meme backend). Renvoie le CompiledModel."""
+    """Compile @p model avec le backend demande (sans fallback interne : le fallback est gere au
+    niveau de run_dsl pour que les deux especes partagent le meme backend). Renvoie le CompiledModel."""
     import os
     include = adc_include()
     so_dir = case_output_dir("two_species_dsl")
@@ -173,10 +173,10 @@ def _compile(model, tag, backend):
 
 
 def run_dsl(n, ne2d, ni2d, n_steps):
-    """Le MEME systeme, mais les deux blocs sont des modeles DSL compiles (meme schema et meme temps
-    que le natif). On PREFERE "production" (natif) ; si le chemin natif echoue (compilation OU
-    branchement add_native_block -- la garde d'ABI se declenche au branchement, pas a la compilation),
-    on retombe sur "aot" pour les DEUX especes a la fois (un backend coherent par run). Renvoie
+    """Le meme systeme, mais les deux blocs sont des modeles DSL compiles (meme schema et meme temps
+    que le natif). On prefere "production" (natif) ; si le chemin natif echoue (compilation ou
+    branchement add_native_block, la garde d'ABI se declenche au branchement, pas a la compilation),
+    on retombe sur "aot" pour les deux especes a la fois (un backend coherent par run). Renvoie
     (etat_e, etat_i, masse_e, masse_i, backend)."""
     last = None
     for backend in ("production", "aot"):
@@ -215,7 +215,7 @@ def main():
     ed, idd, me_d, mi_d, backend = run_dsl(n, ne2d, ni2d, n_steps)
     print("backend DSL retenu : %r" % backend)
 
-    # --- EQUIVALENCE par espece ---
+    # --- equivalence par espece ---
     de = float(np.max(np.abs(ed - en)))
     di = float(np.max(np.abs(idd - inn)))
     print("electrons : max|DSL - natif| = %.3e (bit-identique = %s)" % (de, np.array_equal(ed, en)))

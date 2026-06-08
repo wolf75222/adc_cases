@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Figures de diagnostic du cas two_euler (validation d'invariant).
 
-Re-joue EXACTEMENT la physique de run.py (meme grille, meme schema, memes CI, meme boucle
+Re-joue exactement la physique de run.py (meme grille, meme schema, memes CI, meme boucle
 step_adaptive(0.4) x 20), mais instrumente chaque macro-pas pour produire les series temporelles
 que run.py n'enregistre pas (il ne garde que l'etat final). On trace :
 
@@ -93,7 +93,7 @@ def run_instrumented():
     rec["we"].append(max_wave_speed(Ue)); rec["wi"].append(max_wave_speed(Ui))
 
     for _ in range(20):
-        # vitesses d'onde AVANT le macro-pas : reproduisent wmin et n_b du C++
+        # vitesses d'onde avant le macro-pas : reproduisent wmin et n_b du C++
         Ue, Ui = state(sim, "electrons", n), state(sim, "ions", n)
         we, wi = max_wave_speed(Ue), max_wave_speed(Ui)
         wmin = min(we, wi)
@@ -140,7 +140,7 @@ def fig_masses(rec, me0, mi0):
     ax[0].set_title("masse(t) : chaque bloc plat (conservation)")
     ax[0].legend()
     # derive relative |m(t) - m0| / m0 en echelle log : doit rester au bruit machine.
-    # On plancher a eps_machine (~2.2e-16) : une derive EXACTEMENT nulle (m(t) == m0 au bit pres)
+    # On plancher a eps_machine (~2.2e-16) : une derive exactement nulle (m(t) == m0 au bit pres)
     # est portee au plancher, pas a -inf, pour rester lisible.
     eps = np.finfo(float).eps
     de = np.maximum(np.abs(rec["me"] - me0) / abs(me0), eps)
@@ -157,7 +157,7 @@ def fig_masses(rec, me0, mi0):
     fig.tight_layout()
     p = os.path.join(FIGDIR, "masses.png")
     fig.savefig(p, dpi=120); plt.close(fig)
-    # max drift RAW (non plancher) pour la provenance : la vraie derive mesuree
+    # max drift RAW (non plancher) pour la provenance : la derive mesuree
     de_raw = float(np.max(np.abs(rec["me"] - me0) / abs(me0)))
     di_raw = float(np.max(np.abs(rec["mi"] - mi0) / abs(mi0)))
     return p, de_raw, di_raw
@@ -167,7 +167,7 @@ def fig_positivity(rec):
     fig, ax = plt.subplots(1, 2, figsize=(11, 4.4))
     t = rec["t"]
     # echelle log : les deux blocs differant d'un facteur 100 en densite, seul le log montre que
-    # rho_min des electrons (~0.007, rho0=0.01) reste STRICTEMENT positif tout du long.
+    # rho_min des electrons (~0.007, rho0=0.01) reste strictement positif tout du long.
     ax[0].semilogy(t, rec["rho_e"], "o-", color="tab:blue", label="electrons (rho0=0.01)")
     ax[0].semilogy(t, rec["rho_i"], "s-", color="tab:red", label="ions (rho0=1.0)")
     ax[0].set_xlabel("t"); ax[0].set_ylabel("rho_min(t)  (echelle log)")
@@ -197,7 +197,7 @@ def fig_multirate(rec):
     ax[0].legend()
     ax[1].plot(t, rec["macro_dt"][1:], "d-", color="tab:green", label="macro_dt = cfl h / wmin")
     ax[1].set_xlabel("t"); ax[1].set_ylabel("macro_dt")
-    ax[1].set_title("macro-pas cale sur le bloc le plus LENT (ions)")
+    ax[1].set_title("macro-pas cale sur le bloc le plus lent (ions)")
     ax[1].legend()
     fig.suptitle("two_euler : le bloc rapide (electrons) est sous-cycle automatiquement")
     fig.tight_layout()

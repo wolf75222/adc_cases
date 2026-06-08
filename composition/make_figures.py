@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Figures de diagnostic du cas composition (categorie tutoriel).
 
-Re-joue EXACTEMENT la physique de run.py (memes parametres : Partie A grille 48,
+Re-joue exactement la physique de run.py (memes parametres : Partie A grille 48,
 electrons electron_euler() VanLeer+HLLC+IMEX(10), ions ion_isothermal()
 Minmod+Rusanov+Explicit ; Parties B/D grille 32, diocotron) et produit deux figures
 dans figures/ :
@@ -12,16 +12,16 @@ dans figures/ :
                         et potentiel couple |phi| (Sum_s q_s n_s, Poisson de systeme).
                         Montre que la composition bloc-par-bloc produit des champs reels
                         couples ; aucun claim physique (tutoriel).
-  2. determinism.png  : Parties B et D. Determinisme bit a bit, sur DEUX chemins :
-                        (B) deux compositions independantes du MEME diocotron (briques
-                        figees C++) ; (D) deux executions de l'integrateur SSPRK2 ECRIT
-                        EN PYTHON (adc.integrate.ssprk2_step). Chaque heatmap |a - b| est
+  2. determinism.png  : Parties B et D. Determinisme bit a bit, sur deux chemins :
+                        (B) deux compositions independantes du meme diocotron (briques
+                        figees C++) ; (D) deux executions de l'integrateur SSPRK2 ecrit
+                        en python (adc.integrate.ssprk2_step). Chaque heatmap |a - b| est
                         identiquement noire (ecart == 0, array_equal True). Une seule
                         tache non noire trahirait du non-determinisme dans le chemin
                         compose (B) ou dans le pas Python (D).
 
-Ce cas est un TUTORIEL : il demontre une capacite d'API, il ne valide aucun resultat
-physique publie. Les figures sont des DIAGNOSTICS de l'API (champs composes, egalite
+Ce cas est un tutoriel : il demontre une capacite d'API, il ne valide aucun resultat
+physique publie. Les figures sont des diagnostics de l'API (champs composes, egalite
 bit), pas une reproduction. Versionnees avec figures/provenance.json (memes champs que
 diocotron/figures/provenance.json).
 
@@ -113,7 +113,7 @@ def fig_density_maps(fa):
     panel(axes[3], np.abs(fa["phi_fin"]),
           "|phi| couple (Poisson systeme)\nSum_s q_s n_s", cmap="magma")
     fig.suptitle(
-        "Partie A : champs d'un systeme compose bloc par bloc (un schema par bloc) -- TUTORIEL, aucun claim physique",
+        "Partie A : champs d'un systeme compose bloc par bloc (un schema par bloc), tutoriel, aucun claim physique",
         fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.93])
     out = os.path.join(FIGDIR, "density_maps.png")
@@ -145,7 +145,7 @@ def partie_B_compose():
 
 
 # --------------------------------------------------------------------------- #
-# Partie D : deux executions de l'integrateur SSPRK2 ECRIT EN PYTHON
+# Partie D : deux executions de l'integrateur SSPRK2 ecrit en python
 # --------------------------------------------------------------------------- #
 def partie_D_pystep():
     X, Y = meshgrid_xy(N_BD, L)
@@ -184,7 +184,7 @@ def fig_determinism(da_B, db_B, da_D, db_D):
     # (D) heatmap de l'ecart : doit etre identiquement noir.
     imD = axes[1].imshow(diff_D, origin="lower", cmap="inferno",
                          extent=[0, L, 0, L], vmin=0.0, vmax=1e-15)
-    axes[1].set_title("(D) |rho_run1 - rho_run2|\ndeux pas SSPRK2 ECRITS EN PYTHON",
+    axes[1].set_title("(D) |rho_run1 - rho_run2|\ndeux pas SSPRK2 ecrits en python",
                       fontsize=10)
     axes[1].set_xticks([0, L]); axes[1].set_yticks([0, L])
     fig.colorbar(imD, ax=axes[1], fraction=0.046, pad=0.04)
@@ -200,7 +200,7 @@ def fig_determinism(da_B, db_B, da_D, db_D):
     axes[2].set_ylabel("nb de cellules")
 
     fig.suptitle(
-        "Determinisme bit a bit : composition figee (B) ET pas SSPRK2 ecrit en Python (D) -- ecart == 0",
+        "Determinisme bit a bit : composition figee (B) et pas SSPRK2 ecrit en Python (D), ecart == 0",
         fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.92])
     out = os.path.join(FIGDIR, "determinism.png")
@@ -243,7 +243,7 @@ def main():
             "electrons": "electron_euler() | Spatial(vanleer, hllc) | IMEX(substeps=10)",
             "ions": "ion_isothermal() | Spatial(minmod, rusanov) | Explicit()",
             "diocotron_B": "diocotron() | Spatial(minmod, rusanov) | Explicit(substeps=1)",
-            "diocotron_D": "diocotron() | Spatial(minmod) | integrateur SSPRK2 ECRIT EN PYTHON (adc.integrate.ssprk2_step)",
+            "diocotron_D": "diocotron() | Spatial(minmod) | integrateur SSPRK2 ecrit en python (adc.integrate.ssprk2_step)",
         },
         "dt_nsteps": {"A": [DT_A, NSTEPS_A], "B": [DT_B, NSTEPS_B], "D": [DT_D, NSTEPS_D]},
         "python": sys.version.split()[0],

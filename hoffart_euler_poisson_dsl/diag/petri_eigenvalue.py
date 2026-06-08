@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Valeur propre ANALYTIQUE Petri/Davidson du diocotron (colonne creuse top-hat).
+"""Valeur propre analytique Petri/Davidson du diocotron (colonne creuse top-hat).
 
 But
 ---
-DERIVER (et non ajuster) le taux de croissance analytique gamma_l du mode diocotron
-pour une colonne d'electrons CREUSE en top-hat, densite uniforme rho_max sur l'anneau
+deriver (et non ajuster) le taux de croissance analytique gamma_l du mode diocotron
+pour une colonne d'electrons creuse en top-hat, densite uniforme rho_max sur l'anneau
 [r0, r1], a l'interieur d'un mur conducteur de rayon R, dans la geometrie 6:8:16 de
-Hoffart et al. (arXiv:2510.11808, Sec 5.3), puis CONFIRMER que
+Hoffart et al. (arXiv:2510.11808, Sec 5.3), puis confirmer que
 
     gamma_3 ~ 0.772 ,  gamma_4 ~ 0.911 ,  gamma_5 ~ 0.683
 
-en unites omega_d = 1 (la frequence diocotron du papier), SANS aucun facteur 2 pi
-applique a posteriori. C'est une confirmation INDEPENDANTE de la resolution de
-normalisation consignee dans ../../docs/HOFFART_FIDELITY.md pour le modele COMPLET :
-la pente de croissance BRUTE du modele complet est directement comparable aux cibles,
-et le facteur 2 pi / rhobar n'appartient QU'AU chemin reduit ExB scalaire.
+en unites omega_d = 1 (la frequence diocotron du papier), sans aucun facteur 2 pi
+applique a posteriori. C'est une confirmation independante de la resolution de
+normalisation consignee dans ../../docs/HOFFART_FIDELITY.md pour le modele complet :
+la pente de croissance brute du modele complet est directement comparable aux cibles,
+et le facteur 2 pi / rhobar n'appartient qu'au chemin reduit ExB scalaire.
 
 Reference [13] du papier : theorie lineaire diocotron de la colonne creuse non-neutre
 en limite centre-guide (derive ExB). Voir Davidson, "Physics of Nonneutral Plasmas",
@@ -28,20 +28,20 @@ Equilibre axisymetrique en limite centre-guide. Le papier resout
 
 Le Poisson radial donne r phi0'(r) = -alpha M(r), avec M(r) = int_0^r rho0(s) s ds la
 "masse" enfermee. La vitesse azimutale de derive vaut v0_theta = -(1/|Omega|) phi0', soit
-la frequence ANGULAIRE de derive d'equilibre
+la frequence angulaire de derive d'equilibre
 
     omega_E(r) = v0_theta / r = (alpha / |Omega|) M(r) / r^2 .
 
-Le papier (lignes 313-317) pose la frequence diocotron CYCLIQUE
+Le papier (lignes 313-317) pose la frequence diocotron cyclique
 
     omega_d := rho_max * alpha / |Omega|  = 1 ,   periode T_d := 1 / omega_d = 1
 
-(et tf = 10 = 10 T_d). Comme omega_d est CYCLIQUE (une revolution complete de 2 pi
-radians par periode T_d = 1), l'echelle ANGULAIRE correspondante est
+(et tf = 10 = 10 T_d). Comme omega_d est cyclique (une revolution complete de 2 pi
+radians par periode T_d = 1), l'echelle angulaire correspondante est
 
     Wd := 2 pi * omega_d        (= 2 pi pour omega_d = 1).
 
-C'est LA l'origine du 2 pi : il convertit la frequence cyclique du papier (cycles par
+C'est la l'origine du 2 pi : il convertit la frequence cyclique du papier (cycles par
 unite de temps) en frequence angulaire (radians par unite de temps) utilisee par la
 relation de dispersion. Voir le pave "Ou est le 2 pi" plus bas et petri_eigenvalue.md.
 
@@ -65,7 +65,7 @@ forme standard de la colonne creuse (Davidson) :
     s_out = (1 / 2l) (1 - (r1/R)^{2l})              auto-couplage du bord externe
     s_mut = (1 / 2l) (r0/r1)^l (1 - (r1/R)^{2l})    inter-couplage interne <-> externe .
 
-Les SIGNES de saut de densite (bord interne 0 -> rho_max : +1 ; bord externe
+Les signes de saut de densite (bord interne 0 -> rho_max : +1 ; bord externe
 rho_max -> 0 : -1) rendent les inter-couplages de signes opposes : c'est le mecanisme de
 Kelvin-Helmholtz/Rayleigh qui produit la paire de valeurs propres complexes conjuguees
 (l'instabilite). Le taux de croissance est
@@ -76,11 +76,11 @@ en unites omega_d = 1 grace a Wd = 2 pi omega_d.
 
 Ou est le 2 pi (relation entre chemin reduit ExB et omega_d du modele complet)
 -----------------------------------------------------------------------------
-Le diagnostic du chemin REDUIT ExB scalaire (diag_polar_omega.py) mesure gamma_raw =
-pente de log|c_l| dans l'horloge ExB-NATURELLE du solveur polaire. Dans cette horloge la
-derive d'equilibre tourne en TOURS (un tour = 2 pi radians) : gamma_raw est le taux de
-croissance par "tour-temps". Le papier rapporte gamma_l dans l'unite omega_d CYCLIQUE,
-ou T_d = 1/omega_d = 1 designe UN tour. Convertir un taux exprime par unite de temps
+Le diagnostic du chemin reduit ExB scalaire (diag_polar_omega.py) mesure gamma_raw =
+pente de log|c_l| dans l'horloge ExB-naturelle du solveur polaire. Dans cette horloge la
+derive d'equilibre tourne en tours (un tour = 2 pi radians) : gamma_raw est le taux de
+croissance par "tour-temps". Le papier rapporte gamma_l dans l'unite omega_d cyclique,
+ou T_d = 1/omega_d = 1 designe un tour. Convertir un taux exprime par unite de temps
 ExB-naturelle vers l'unite omega_d revient a multiplier par le nombre d'unites
 ExB-naturelles dans un T_d, soit 2 pi (puisque l'angle parcouru en un T_d est 2 pi). D'ou
 
@@ -88,10 +88,10 @@ ExB-naturelles dans un T_d, soit 2 pi (puisque l'angle parcouru en un T_d est 2 
 
 Le rhobar = rho_max apparait parce que l'echelle de derive omega_E est proportionnelle a
 rho_max (via M(r) ~ rho_max) : normaliser par rhobar ramene a l'amplitude unitaire de
-l'anneau. Le facteur GLOBAL 2 pi / rhobar n'est donc PAS un ajustement ; c'est la
+l'anneau. Le facteur global 2 pi / rhobar n'est donc pas un ajustement ; c'est la
 conversion exacte horloge-ExB-naturelle (radian/tour) -> horloge-omega_d (cyclique). Le
-present script construit DIRECTEMENT la matrice en unites omega_d (le 2 pi est DANS Wd),
-donc Im(omega) brut EST gamma_l du papier sans facteur applique apres coup.
+present script construit directement la matrice en unites omega_d (le 2 pi est dans Wd),
+donc Im(omega) brut est gamma_l du papier sans facteur applique apres coup.
 
 Lancer
 ------
@@ -108,14 +108,14 @@ import numpy as np
 # Geometrie 6:8:16 du papier (Sec 5.3). r0, r1 = bords de l'anneau ; R = mur conducteur.
 R0, R1, RW = 6.0, 8.0, 16.0
 RHO_MAX = 1.0       # rhobar = rho_max dans la conversion 2pi/rhobar
-OMEGA_D = 1.0       # frequence diocotron CYCLIQUE du papier (lignes 313-317)
+OMEGA_D = 1.0       # frequence diocotron cyclique du papier (lignes 313-317)
 
 # Cibles du papier (Sec 5.3, eq (5.1), Fig 5.4(d), theorie lineaire [13]).
 PAPER = {3: 0.772, 4: 0.911, 5: 0.683}
 
 # Parties reelles analytiques |Re(omega)| en unite ExB-naturelle (rotation propre du mode)
 # et ratio invariant d'echelle Im/Re ; valeurs publiees dans ../NORMALIZATION.md /
-# diag_polar_omega.py. Servent de controle CROISE independant de l'unite.
+# diag_polar_omega.py. Servent de controle croise independant de l'unite.
 RE_ANA = {3: 0.33144, 4: 0.43859, 5: 0.54747}
 RATIO_ANA = {3: 0.3708, 4: 0.3309, 5: 0.1998}
 
@@ -138,7 +138,7 @@ def diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D):
 
     Les deux degres de liberte sont les deplacements des bords interne (r0) et externe
     (r1). La frequence propre omega est valeur propre de cette matrice ; gamma_l =
-    max Im(omega). Construite DIRECTEMENT en unites omega_d via Wd = 2 pi omega_d (donc
+    max Im(omega). Construite directement en unites omega_d via Wd = 2 pi omega_d (donc
     aucun facteur 2 pi a appliquer ensuite).
     """
     if l < 1:
@@ -217,12 +217,12 @@ def self_check():
 
 def main():
     print(
-        "VALEUR PROPRE ANALYTIQUE Petri/Davidson -- colonne creuse top-hat [%g,%g], mur R=%g"
+        "valeur propre analytique Petri/Davidson, colonne creuse top-hat [%g,%g], mur R=%g"
         % (R0, R1, RW)
     )
     print(
-        "  unites omega_d=1 (cyclique, T_d=1) ; le 2 pi est DANS Wd=2pi*omega_d, "
-        "RIEN n'est multiplie apres coup."
+        "  unites omega_d=1 (cyclique, T_d=1) ; le 2 pi est dans Wd=2pi*omega_d, "
+        "rien n'est multiplie apres coup."
     )
     print()
     print(
@@ -254,8 +254,8 @@ def main():
     # asserts reels : leve AssertionError (donc sortie non nulle / CI rouge) si hors marge.
     self_check()
     print(
-        "CONFIRME : gamma_3/4/5 = 0.772 / 0.911 / 0.683 reproduits a < 1% en unites "
-        "omega_d, SANS facteur 2 pi applique apres coup. Re(ExB) retrouve RE_ANA et "
+        "confirme : gamma_3/4/5 = 0.772 / 0.911 / 0.683 reproduits a < 1% en unites "
+        "omega_d, sans facteur 2 pi applique apres coup. Re(ExB) retrouve RE_ANA et "
         "Im/Re (invariant d'echelle) retrouve RATIO_ANA : le MODE complexe est correct."
     )
 

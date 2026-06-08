@@ -2,17 +2,17 @@
 
 Capacite demontree
 ------------------
-On compose un systeme generique `adc.System` avec UN bloc de modele
+On compose un systeme generique `adc.System` avec un bloc de modele
 "euler_poisson" : il integre les equations d'Euler compressibles (densite,
 quantite de mouvement, energie) couplees a une equation de Poisson pour le champ
 de force auto-consistant. Toute la physique est en C++ ; Python ne fait que
 composer le systeme, fixer la condition initiale, avancer en temps et
 diagnostiquer.
 
-On effectue DEUX runs identiques (n=64) ne differant que par le SIGNE du
-couplage, passe au modele compose ``models.euler_poisson(sign=...)`` :
-  1) sign = +1.0  -> force ATTRACTIVE (auto-gravite)
-  2) sign = -1.0  -> force REPULSIVE (charge d'espace, plasma)
+On effectue deux runs identiques (n=64) ne differant que par le signe du
+couplage, passe au modele compose `models.euler_poisson(sign=...)` :
+  1) sign = +1.0  -> force attractive (auto-gravite)
+  2) sign = -1.0  -> force repulsive (charge d'espace, plasma)
 
 Condition initiale commune : densite au repos faiblement perturbee par un cosinus
   rho = rho0 * (1 + eps*cos(2*pi*x/L)),  eps = 0.01
@@ -27,16 +27,16 @@ Invariants physiques verifies (par assert)
     la force de Poisson derive d'un potentiel et sa somme spatiale est nulle ;
     elle ne peut donc creer aucune impulsion nette. On exige |p_x|, |p_y| < 1e-8.
 
-  * Contraste gravite vs plasma (ASSERTE) : la force attractive et la force
+  * Contraste gravite vs plasma (asserte) : la force attractive et la force
     repulsive agissent en sens opposes, ce qui se traduit par une derive
-    d'energie de SIGNES OPPOSES entre les deux runs. Le signe de chacun est lui
+    d'energie de signes opposes entre les deux runs. Le signe de chacun est lui
     aussi fixe par la physique : l'auto-gravite (attractif) abaisse l'energie
     totale diagnostiquee (dE < 0), la charge d'espace (repulsif) l'eleve
     (dE > 0). On exige des magnitudes franches (> TOL_DE) pour que le signe soit
     significatif et non du bruit numerique (dE vaut 0 a perturbation nulle).
 
 Etat : `adc.System.get_state("gas")` renvoie un tableau numpy de forme
-(4, n, n) = [rho, rho*u, rho*v, E]. Il n'y a PAS de energy()/total_momentum()
+(4, n, n) = [rho, rho*u, rho*v, E]. Il n'y a pas de energy()/total_momentum()
 sur System : on lit ces diagnostics directement sur cet etat
 (p_x = U[1].sum(), p_y = U[2].sum(), E_tot = U[3].sum()).
 """
@@ -59,7 +59,7 @@ TOL_MASS = 1e-9   # derive relative de masse admissible
 TOL_MOM = 1e-8    # impulsion nette admissible (doit rester nulle)
 # Magnitude minimale du contraste energetique : la derive d'energie due au travail de la force
 # de Poisson vaut ~6e-4 (eps=0.01, 20 pas), tres au-dessus du bruit machine (dE = 0 exactement a
-# eps=0). On exige donc une derive franche pour que le SIGNE soit physiquement significatif.
+# eps=0). On exige donc une derive franche pour que le signe soit physiquement significatif.
 TOL_DE = 1e-5
 
 # Parametres d'integration : petites tailles et peu de pas pour rester rapide.
@@ -88,7 +88,7 @@ def energy_and_momentum(sim):
 def run_case(sign, label):
     """Avance un run Euler-Poisson et renvoie un dictionnaire de diagnostics.
 
-    sign = +1.0 -> GRAVITE (attractif) ; sign = -1.0 -> PLASMA (repulsif).
+    sign = +1.0 -> gravite (attractif) ; sign = -1.0 -> PLASMA (repulsif).
     """
     sim = adc.System(n=N, L=L, periodic=True)
     sim.add_block("gas",
@@ -139,7 +139,7 @@ def run_case(sign, label):
 
 def main():
     # Deux runs : seul le signe du couplage (sign du modele) change.
-    grav = run_case(+1.0, "GRAVITE")
+    grav = run_case(+1.0, "gravite")
     print()
     plas = run_case(-1.0, "PLASMA ")
     print()
@@ -169,7 +169,7 @@ def main():
     print("Contraste energetique (attractif vs repulsif) :")
     print(f"  dE GRAVITE = {dE_grav:+.6e}   dE PLASMA = {dE_plas:+.6e}")
 
-    # Les deux derives doivent etre de signes opposes ET franches (au-dessus de TOL_DE),
+    # Les deux derives doivent etre de signes opposes et franches (au-dessus de TOL_DE),
     # sinon le signe ne serait pas physiquement significatif (cf. dE = 0 a perturbation nulle).
     assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE,
                          label="contraste energetique gravite vs plasma")

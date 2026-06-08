@@ -1,12 +1,12 @@
 """Genere les figures de diagnostic du cas diocotron_amr.
 
 Re-joue la physique du cas (meme bande de charge, meme modele diocotron, meme schema
-NoSlope+Rusanov, CFL=0.4) sur DEUX chemins :
+NoSlope+Rusanov, CFL=0.4) sur deux chemins :
   - AMR   : adc.AmrSystem (hierarchie grossier + 1 niveau fin, regrid Berger-Rigoutsos,
             reflux conservatif) ; mass()/density()/n_patches() sans argument de bloc ;
-  - uniforme : adc.System a la MEME resolution de base 64x64 ; mass("ne")/density("ne").
+  - uniforme : adc.System a la meme resolution de base 64x64 ; mass("ne")/density("ne").
 
-Les deux runs partagent band_density / models.diocotron / n_i0 = <n_e>, donc le SEUL
+Les deux runs partagent band_density / models.diocotron / n_i0 = <n_e>, donc le seul
 facteur change est la presence de l'AMR. On en tire :
   fig 1  density_compare.png : carte de densite finale uniforme | AMR | difference ;
   fig 2  patch_map.png       : footprint des cellules taggees (proxy de la couverture
@@ -214,7 +214,7 @@ def main():
     with open(os.path.join(FIGDIR, "provenance.json"), "w") as f:
         json.dump(prov, f, indent=2)
 
-    # Trace console (les VRAIS nombres a citer dans le README).
+    # Trace console (les nombres a citer dans le README).
     print("== make_figures diocotron_amr ==")
     print("n_i0 (fond)            = %.6f" % n_i0)
     print("seuil de raffinement   = %.6f" % threshold)

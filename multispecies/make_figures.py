@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Figures de diagnostic du cas multispecies (categorie validation).
 
-Re-joue EXACTEMENT la physique de run.py (memes briques models.electron_euler /
+Re-joue exactement la physique de run.py (memes briques models.electron_euler /
 models.ion_isothermal, meme Poisson de systeme charge_density, meme CI cosinus,
 memes 20 pas de dt = 0.001) et enregistre l'historique pas a pas de la masse de
 chaque espece. Produit trois figures sous figures/ :
 
-  1. masse.png     : mass_e(t) et mass_i(t) en ECHELLE ABSOLUE, fenetre etroite
+  1. masse.png     : mass_e(t) et mass_i(t) en echelle absolue, fenetre etroite
                      autour de la masse initiale, pour rendre visible la derive
                      ~1e-11 (du bruit d'arrondi flottant, pas de la physique).
   2. densite.png   : cartes finales n_e(x,y) et n_i(x,y).
@@ -33,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
-# --- Parametres : STRICTEMENT ceux de run.py --------------------------------
+# --- Parametres : strictement ceux de run.py --------------------------------
 N = 48
 L = 1.0
 DT = 0.001
@@ -66,7 +66,7 @@ def build_system():
 
 
 def run_with_history():
-    """Avance 20 pas en relevant la masse par espece a CHAQUE pas (historique du diagnostic)."""
+    """Avance 20 pas en relevant la masse par espece a chaque pas (historique du diagnostic)."""
     sim = build_system()
     me0 = sim.mass("electrons")
     mi0 = sim.mass("ions")
@@ -83,10 +83,10 @@ def run_with_history():
 
 
 def fig_mass(t, me, mi, me0, mi0):
-    """Figure 1 : conservation de masse par espece, ECHELLE ABSOLUE (montre la derive d'arrondi)."""
+    """Figure 1 : conservation de masse par espece, echelle absolue (montre la derive d'arrondi)."""
     fig, (axe, axi) = plt.subplots(1, 2, figsize=(11, 4.2))
 
-    # Echelle absolue : on trace la DERIVE M(t) - M(0) (l'offset M0 est dans le titre/legende),
+    # Echelle absolue : on trace la derive M(t) - M(0) (l'offset M0 est dans le titre/legende),
     # graduee en multiples de l'epsilon machine relatif eps*M0 pour montrer que la derive y vit.
     eps_e = np.finfo(float).eps * me0  # 1 ulp sur M0 ~ 5.1e-13 (= grain du flottant a cette echelle)
     span_e = max(np.max(np.abs(me - me0)), eps_e)
@@ -116,7 +116,7 @@ def fig_mass(t, me, mi, me0, mi0):
              transform=axi.transAxes, fontsize=8,
              bbox=dict(boxstyle="round", fc="white", ec="0.7"))
 
-    fig.suptitle("Conservation de masse PAR ESPECE (tol assert = 1e-9, en absolu)")
+    fig.suptitle("Conservation de masse par espece (tol assert = 1e-9, en absolu)")
     fig.tight_layout()
     out = os.path.join(FIGDIR, "masse.png")
     fig.savefig(out, dpi=130)

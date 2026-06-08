@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Cas "tutorial" : la MEME physique diocotron ecrite de TROIS facons equivalentes, mirroir cote
+"""Cas "tutorial" : la meme physique diocotron ecrite de trois facons equivalentes, mirroir cote
 adc_cases du tutoriel Sphinx adc_cpp (docs/sphinx/getting_started/tutorial.md).
 
-Ce cas est un TUTORIEL executable. Il montre, de bout en bout et sur une seule physique (le
+Ce cas est un tutoriel executable. Il montre, de bout en bout et sur une seule physique (le
 diocotron : une densite electronique scalaire transportee par derive E x B, avec un fond ionique
-neutralisant), l'API GENERALE d'adc -- sans jamais dependre d'une "classe specialisee" qui cacherait
-la composition. On construit le meme modele de TROIS manieres :
+neutralisant), l'API generale d'adc, sans jamais dependre d'une "classe specialisee" qui cacherait
+la composition. On construit le meme modele de trois manieres :
 
-  (1) HELPER SPECIALISE  : adc_cases.models.diocotron(...)   -- l'oracle "tout fait" ;
-  (2) BRIQUES NATIVES    : adc.Model(state, transport, source, elliptic) reconstruit a la main ;
-  (3) FORMULES (DSL)     : adc.dsl.Model(...) ou la physique est ecrite en expressions symboliques.
+  (1) helper specialise  : adc_cases.models.diocotron(...)  , l'oracle "tout fait" ;
+  (2) briques natives    : adc.Model(state, transport, source, elliptic) reconstruit a la main ;
+  (3) formules (DSL)     : adc.dsl.Model(...) ou la physique est ecrite en expressions symboliques.
 
-Le helper (1) n'est rien d'autre que la composition (2) (son corps EST adc.Model(Scalar, ExB,
+Le helper (1) n'est rien d'autre que la composition (2) (son corps est adc.Model(Scalar, ExB,
 NoSource, BackgroundDensity)) : on le prouve par np.array_equal sur la sortie. Et (3) reproduit
-EXACTEMENT les conventions des briques du coeur (ExBVelocity, BackgroundDensity), donc il est lui
+exactement les conventions des briques du coeur (ExBVelocity, BackgroundDensity), donc il est lui
 aussi bit-identique. La lecon : un "modele nomme" est une composition de briques generiques ; on
-peut l'ecrire en briques OU en formules, c'est interchangeable et numeriquement identique.
+peut l'ecrire en briques ou en formules, c'est interchangeable et numeriquement identique.
 
 Sorties (figures/), reproductibles :
   - tutorial_growth.png        : amplitude de la perturbation vs temps (semilog) + carte finale ;
@@ -48,7 +48,7 @@ from adc_cases.common.initial_conditions import band_density  # noqa: E402
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from adc_cases.common.native import adc_include  # noqa: E402
 
-# Parametres physiques PARTAGES par les trois constructions : ils doivent coincider pour que
+# Parametres physiques partages par les trois constructions : ils doivent coincider pour que
 # l'equivalence soit testable (memes conventions de briques que le helper et le coeur).
 B0 = 1.0       # champ magnetique de fond (la derive vaut E x B / B0)
 ALPHA = 1.0    # facteur du second membre elliptique : rhs = alpha (n - n_i0)
@@ -58,10 +58,10 @@ FIGDIR = os.path.join(HERE, "figures")
 
 
 # --------------------------------------------------------------------------------------------------
-# (2) BRIQUES NATIVES : on reconstruit models.diocotron a la main, brique par brique.
+# (2) briques natives : on reconstruit models.diocotron a la main, brique par brique.
 # --------------------------------------------------------------------------------------------------
 def diocotron_from_bricks(n_i0):
-    """Le modele diocotron compose a partir des QUATRE briques de role du coeur. C'est, mot pour mot,
+    """Le modele diocotron compose a partir des quatre briques de role du coeur. C'est, mot pour mot,
     le corps de adc_cases.models.diocotron (adc_cases/models.py) : un "modele nomme" n'est qu'une
     composition de briques generiques.
 
@@ -79,11 +79,11 @@ def diocotron_from_bricks(n_i0):
 
 
 # --------------------------------------------------------------------------------------------------
-# (3) FORMULES (DSL) : la MEME physique ecrite en expressions symboliques (aucune brique nommee).
+# (3) formules (DSL) : la meme physique ecrite en expressions symboliques (aucune brique nommee).
 # --------------------------------------------------------------------------------------------------
 def diocotron_from_dsl(n_i0):
-    """Le modele diocotron ECRIT EN FORMULES (adc.dsl.Model). Chaque ligne reproduit la convention
-    EXACTE de la brique native correspondante, donc la sortie est bit-identique (cf. equivalence).
+    """Le modele diocotron ecrit en formules (adc.dsl.Model). Chaque ligne reproduit la convention
+    exacte de la brique native correspondante, donc la sortie est bit-identique (cf. equivalence).
 
     On declare : la variable conservative n ; les champs auxiliaires phi / grad phi fournis par le
     solveur ; le flux d'advection E x B ; les valeurs propres (vitesses de derive, pour Rusanov/CFL) ;
@@ -124,7 +124,7 @@ def compile_dsl(model):
 # Construction du System (commune) + integration avec capture des trames et de l'amplitude.
 # --------------------------------------------------------------------------------------------------
 def make_system(ne0):
-    """System diocotron periodique vide : grille, Poisson et densite IDENTIQUES pour les trois
+    """System diocotron periodique vide : grille, Poisson et densite identiques pour les trois
     constructions ; seul le bloc (briques via add_block, ou DSL via add_equation) differe."""
     return adc.System(n=ne0.shape[0], L=1.0, periodic=True)
 
@@ -135,7 +135,7 @@ def add_bricks_block(sim, model):
 
 
 def add_dsl_block(sim, compiled):
-    """Bloc DSL : add_equation aiguille le CompiledModel vers le bon adder selon son backend. MEME
+    """Bloc DSL : add_equation aiguille le CompiledModel vers le bon adder selon son backend. meme
     schema (minmod + Rusanov) et integrateur que le bloc natif, pour que l'equivalence tienne."""
     sim.add_equation("ne", model=compiled,
                      spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
@@ -234,21 +234,21 @@ def main():
     print("=== tutorial : diocotron en helper / briques / formules (meme physique) ===")
     print("grille %d x %d, %d pas, CFL 0.4, n_i0 = %.6e" % (n, n, n_steps, n_i0))
 
-    # (1) HELPER SPECIALISE -- l'oracle.
+    # (1) helper specialise, l'oracle.
     s_helper = make_system(ne0)
     add_bricks_block(s_helper, models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0))
     s_helper.set_poisson(rhs="charge_density", solver="geometric_mg")
     s_helper.set_density("ne", ne0)
     _, _, _, final_helper, _, _ = run_capture(s_helper, n_steps)
 
-    # (2) BRIQUES reconstruites a la main -- on capture les trames et l'amplitude ici.
+    # (2) briques reconstruites a la main, on capture les trames et l'amplitude ici.
     s_bricks = make_system(ne0)
     add_bricks_block(s_bricks, diocotron_from_bricks(n_i0))
     s_bricks.set_poisson(rhs="charge_density", solver="geometric_mg")
     s_bricks.set_density("ne", ne0)
     frames, times, amps, final_bricks, t_b, m_b = run_capture(s_bricks, n_steps)
 
-    # (3) FORMULES (DSL) -- compile (production -> aot) puis MEME systeme.
+    # (3) formules (DSL), compile (production -> aot) puis meme systeme.
     compiled, backend = compile_dsl(diocotron_from_dsl(n_i0))
     s_dsl = make_system(ne0)
     add_dsl_block(s_dsl, compiled)
@@ -256,14 +256,14 @@ def main():
     s_dsl.set_density("ne", ne0)
     _, _, _, final_dsl, t_d, m_d = run_capture(s_dsl, n_steps)
 
-    # --- EQUIVALENCE : les trois constructions donnent un etat BIT-IDENTIQUE ---
+    # --- equivalence : les trois constructions donnent un etat bit-identique ---
     eq_hb = bool(np.array_equal(final_helper, final_bricks))
     eq_bd = bool(np.array_equal(final_bricks, final_dsl))
     print("backend DSL retenu : %r" % backend)
     print("helper == briques : %s   briques == DSL : %s" % (eq_hb, eq_bd))
     print("max|briques - DSL| = %.3e" % float(np.max(np.abs(final_bricks - final_dsl))))
     assert eq_hb, "le helper models.diocotron diverge de la composition de briques (pourtant identiques)"
-    assert eq_bd, "le modele DSL n'est PAS bit-identique aux briques (une formule diverge du coeur)"
+    assert eq_bd, "le modele DSL n'est pas bit-identique aux briques (une formule diverge du coeur)"
 
     # --- Invariants physiques (sur les briques ; l'oracle est deja valide ailleurs) ---
     amp0, ampf = amps[0], amps[-1]

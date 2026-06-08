@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""GIF hero de l'instabilite diocotron suivie par AMR : reproduit le TYPE de la figure hero du
-README adc_cpp (`docs/anim_romeo_diocotron_amr3.gif`), avec les VRAIS patchs fins du solveur.
+"""GIF hero de l'instabilite diocotron suivie par AMR : reproduit le type de la figure hero du
+README adc_cpp (`docs/anim_romeo_diocotron_amr3.gif`), avec les patchs fins du solveur.
 
-CE QUE MONTRE LA FIGURE : un seul panneau, bande de charge horizontale perturbee au mode l=2, qui
-s'enroule en oeil-de-chat (Kelvin-Helmholtz du diocotron), suivie par les CADRES DE RAFFINEMENT AMR
-REELS qui collent au coeur dense. Fond sombre, colormap inferno, titre "diocotron AMR : densite n_e".
+ce que montre la figure : un seul panneau, bande de charge horizontale perturbee au mode l=2, qui
+s'enroule en oeil-de-chat (Kelvin-Helmholtz du diocotron), suivie par les cadres de raffinement AMR
+qui collent au coeur dense. Fond sombre, colormap inferno, titre "diocotron AMR : densite n_e".
 
-PORTEE HONNETE (lire avant de citer la figure) :
-  - LA PHYSIQUE EST REELLE : la bande est advectee par le vrai solveur (derive E x B du modele
+portee honnete (lire avant de citer la figure) :
+  - la bande est advectee par le solveur (derive E x B du modele
     `models.diocotron`, Poisson de charge resolu par multigrille geometrique sur `adc.AmrSystem`).
-    L'enroulement en vortex est la VRAIE sortie du code, pas une animation scriptee.
-  - LES CADRES SONT REELS (plus de proxy). Ils sont la GEOMETRIE EXACTE des patchs fins, lue par
+    L'enroulement en vortex est calcule, pas une animation scriptee.
+  - les cadres viennent du solveur (plus de proxy). Ils sont la geometrie exacte des patchs fins, lue par
     `AmrSystem.patch_rectangles()` (binding `patch_boxes()`). Plus aucune reconstruction par seuils de
     densite ni scipy : chaque rectangle est un patch que le moteur a effectivement raffine. Le
     raffinement suit la bande (criteres `set_refinement(threshold)` au-dessus du plancher) et evolue
     a chaque regrid : les patchs se deplacent et se multiplient quand l'instabilite s'enroule.
-  - DIFFERENCE AVEC LE HERO ROMEO : la facade Python `adc.AmrSystem` raffine sur UN niveau fin
-    multi-patch (Berger-Rigoutsos). Le hero du README a ete produit par le MOTEUR C++ multi-niveaux
-    (`advance_amr`, 3 niveaux, GH200). Ici les patchs sont colores PAR NIVEAU (cyan = niveau 1, vert =
+  - difference avec le hero ROMEO : la facade Python `adc.AmrSystem` raffine sur un niveau fin
+    multi-patch (Berger-Rigoutsos). Le hero du README a ete produit par le moteur C++ multi-niveaux
+    (`advance_amr`, 3 niveaux, GH200). Ici les patchs sont colores par niveau (cyan = niveau 1, vert =
     2, rouge = 3) : aujourd'hui seul le niveau 1 apparait (facade = 1 niveau fin), le code est pret si
-    un futur expose plus de niveaux. Le nombre reel de patchs est aussi consigne dans provenance.json.
+    un futur expose plus de niveaux. Le nombre de patchs est aussi consigne dans provenance.json.
 
 Produit `figures/diocotron_amr_hero.gif` + `figures/diocotron_amr_hero_cover.png` + `provenance.json`.
 Lancement : PYTHONPATH=<build>/python:. python3 diocotron_amr/make_hero_gif.py
@@ -44,14 +44,14 @@ MODE, DISP, WIDTH = 2, 0.04, 0.06
 B0, ALPHA = 1.0, 1.0
 NFRAMES, STEPS_PER_FRAME, CFL = 44, 6, 0.4
 REGRID_EVERY = 6          # regrid une fois par trame -> les patchs suivent la bande
-# Seuil de tag AU-DESSUS du plancher (band_density: floor=1.0, pic ~2.0) : sans ca, toute la grille
+# Seuil de tag au-dessus du plancher (band_density: floor=1.0, pic ~2.0) : sans ca, toute la grille
 # (densite >= 1 partout) serait taggee et le niveau fin tuilerait tout le domaine (non adaptatif).
 THRESHOLD = 1.4
 FLOOR = 1.0
 
-# Couleur du cadre PAR NIVEAU AMR (cyan = niveau 1, vert = 2, rouge = 3). La facade ne produit que
+# Couleur du cadre par niveau AMR (cyan = niveau 1, vert = 2, rouge = 3). La facade ne produit que
 # le niveau 1 aujourd'hui ; le dict couvre les niveaux superieurs au cas ou (lecture honnete : la
-# couleur trace le VRAI niveau du patch, pas un seuil de densite invente).
+# couleur trace le niveau du patch, pas un seuil de densite invente).
 LEVEL_COLORS = {1: "#00e5ff", 2: "#39ff14", 3: "#ff2d2d"}
 LEVEL_LW = {1: 1.3, 2: 1.6, 3: 1.9}
 
@@ -72,7 +72,7 @@ def build_amr(ne, n_i0):
 
 
 def patch_rects_by_level(sim):
-    """Renvoie une liste de (level, x0, y0, w, h) : les VRAIS patchs fins, niveau + rectangle physique.
+    """Renvoie une liste de (level, x0, y0, w, h) : les patchs fins, niveau + rectangle physique.
     Lit patch_boxes() (level + coins index) et convertit en [0, L]^2 (dx = L / (n << level))."""
     n = sim.nx()
     out = []
@@ -83,7 +83,7 @@ def patch_rects_by_level(sim):
 
 
 def draw_panel(ax, ne, vmax, rects, Rectangle):
-    """Trace un panneau hero : champ inferno sur fond sombre + VRAIS patchs AMR (colores par niveau)."""
+    """Trace un panneau hero : champ inferno sur fond sombre + patchs AMR (colores par niveau)."""
     im = ax.imshow(ne, origin="lower", cmap="inferno", vmin=FLOOR, vmax=vmax, extent=[0, L, 0, L])
     for level, x0, y0, w, h in rects:
         col = LEVEL_COLORS.get(level, "#ffffff")
@@ -117,7 +117,7 @@ def main():
     fields, rects_per_frame, npatch = [], [], []
     for _ in range(NFRAMES):
         fields.append(np.asarray(sim.density("ne")).copy())
-        rects_per_frame.append(patch_rects_by_level(sim))   # VRAIS patchs de la trame
+        rects_per_frame.append(patch_rects_by_level(sim))   # patchs de la trame
         npatch.append(int(sim.n_patches()))
         for _ in range(STEPS_PER_FRAME):
             sim.step_cfl(CFL)
@@ -159,16 +159,16 @@ def main():
         "script": "diocotron_amr/make_hero_gif.py",
         "command": "python diocotron_amr/make_hero_gif.py",
         "produces": ["diocotron_amr_hero.gif", "diocotron_amr_hero_cover.png"],
-        "reproduit": "le TYPE de docs/anim_romeo_diocotron_amr3.gif (README adc_cpp) : panneau unique, "
+        "reproduit": "le type de docs/anim_romeo_diocotron_amr3.gif (README adc_cpp) : panneau unique, "
                      "bande mode l=2 enroulee en oeil-de-chat, cadres AMR suivant le coeur dense",
-        "physique_reelle": "advection E x B + Poisson de charge (multigrille) par le vrai solveur "
-                           "adc.AmrSystem (models.diocotron) ; l'enroulement KH est la sortie du code",
-        "cadres": "REELS : geometrie exacte des patchs fins via AmrSystem.patch_boxes() / "
-                  "patch_rectangles() (binding patch-boxes). AUCUN proxy de densite, AUCUN scipy. "
+        "physique": "advection E x B + Poisson de charge (multigrille) par le solveur "
+                    "adc.AmrSystem (models.diocotron) ; l'enroulement KH est la sortie du code",
+        "cadres": "geometrie exacte des patchs fins via AmrSystem.patch_boxes() / "
+                  "patch_rectangles() (binding patch-boxes). aucun proxy de densite, aucun scipy. "
                   "Colores par niveau (1=cyan, 2=vert, 3=rouge) ; niveaux observes : %s." % levels_seen,
         "difference_avec_hero": "facade Python AmrSystem = 1 niveau fin multi-patch (niveaux observes "
                                 "ci-dessus) ; le hero ROMEO = moteur C++ multi-niveaux (advance_amr, "
-                                "3 niveaux reels, GH200)",
+                                "3 niveaux, GH200)",
         "adc_cpp_sha": git_sha(adc_cpp_root),
         "adc_cases_sha": git_sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.AmrSystem, brique models.diocotron, Poisson geometric_mg)",
@@ -182,7 +182,7 @@ def main():
     with open(os.path.join(FIGDIR, "provenance.json"), "w") as fh:
         json.dump(prov, fh, indent=2)
 
-    print("patchs fins REELS (via patch_boxes) : min=%d max=%d final=%d ; niveaux %s"
+    print("patchs fins (via patch_boxes) : min=%d max=%d final=%d ; niveaux %s"
           % (min(npatch), max(npatch), npatch[-1], levels_seen))
     print("ecrit : %s" % gif)
     print("ecrit : %s" % cover)
