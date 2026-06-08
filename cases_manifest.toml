@@ -167,3 +167,10 @@ category = "experimental"
 ci = false
 needs = ["cxx"]
 desc = "Effet temporel de l'etage source condense par Schur sur un fluide isotherme magnetise cartesien raide (balayage du dt stable explicite vs Schur)."
+
+[[case]]
+path = "safe_euler_periodic/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Cas SUR de la campagne de perf : Euler compressible pur periodique (bulle de pression lisse, rho>0, p>0, transport pur). Valide l'equivalence briques<->DSL (bit-identique) + invariants. La MESURE 3 fronts (C++/briques/DSL) vit dans perf/ (hors manifeste)."
