@@ -16,8 +16,8 @@ verifie des invariants structurels et exerce l'API multi-blocs.
 | Entrees | grille $64^2$, $L=1$, periodique ; 2 blocs Euler `gamma=1.4` ; bulle de surpression gaussienne centrale $p=p_0+dp\,e^{-r^2/(\sigma^2 L^2)}$ ($p_0=1$, $dp=0.5$, $\sigma^2=0.02$), gaz au repos $u=v=0$ ; electrons $\rho_0=0.01$, ions $\rho_0=1.0$ ; Poisson de systeme avec $f=0$ (charge nulle) ; 20 macro-pas `step_adaptive(0.4)` |
 | Sorties | etats finaux $(4,64,64)$ des 2 blocs ; 4 diagnostics imprimes (masse, positivite, front) ; figures dans `figures/` + `figures/provenance.json` (ce tutoriel, hors `run.py`) |
 | Invariants garantis | masse relative conservee `< 1e-9` par bloc ; `rho > 0` et `p > 0` (positivite) ; `fe > fi` (front electrons plus etendu) ; etats finis (ni NaN ni Inf) |
-| PROUVE | (1) chaque bloc conserve sa masse a la derive relative mesuree $\le 1.6\times10^{-14}$ (electrons) et $\le 5.1\times10^{-15}$ (ions), bruit machine ; (2) positivite tenue : `rho_min` e=$7.71\times10^{-3}$, i=$0.803$ ; `p_min` e=$0.932$, i=$1.000$ ; (3) le front electronique couvre $86\%$ des cellules contre $29\%$ pour les ions ; (4) les 2 blocs sont strictement independants (aucune source, $f=0$) |
-| NE PROUVE PAS | ce n'est pas une reproduction publiee ni une physique de plasma : les noms "electrons"/"ions" sont une analogie, les 2 gaz ne sont pas couples (un couplage Poisson est [`multispecies`](../multispecies/) / [`plasma`](../plasma/)). Aucun `assert` ne teste le sous-cyclage multirate ni le facteur 10 sur la vitesse du son : ils sont mesures et traces, pas asseres. Aucune validation device / MPI / AMR (CPU mono-rang). |
+| Prouve | (1) chaque bloc conserve sa masse a la derive relative mesuree $\le 1.6\times10^{-14}$ (electrons) et $\le 5.1\times10^{-15}$ (ions), bruit machine ; (2) positivite tenue : `rho_min` e=$7.71\times10^{-3}$, i=$0.803$ ; `p_min` e=$0.932$, i=$1.000$ ; (3) le front electronique couvre $86\%$ des cellules contre $29\%$ pour les ions ; (4) les 2 blocs sont strictement independants (aucune source, $f=0$) |
+| Ne prouve pas | ce n'est pas une reproduction publiee ni une physique de plasma : les noms "electrons"/"ions" sont une analogie, les 2 gaz ne sont pas couples (un couplage Poisson est [`multispecies`](../multispecies/) / [`plasma`](../plasma/)). Aucun `assert` ne teste le sous-cyclage multirate ni le facteur 10 sur la vitesse du son : ils sont mesures et traces, pas asseres. Aucune validation device / MPI / AMR (CPU mono-rang). |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $64^2$, ~0.45 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi deux blocs Euler tournent sous le meme code (composition de briques) ;
@@ -43,7 +43,7 @@ Poisson de systeme est $f=\sum_b q_b n_b=0$ car les deux charges valent zero (se
 resolu reste nul et ne retroagit sur personne. "two_euler" est donc deux lois de conservation
 hyperboliques independantes qui partagent le meme code.
 
-Justifie la clause PROUVE (4) du contrat (blocs strictement independants) et la clause NE PROUVE PAS
+Justifie la clause Prouve (4) du contrat (blocs strictement independants) et la clause Ne prouve pas
 (pas de physique de plasma : ce cas ne couple rien).
 
 ---
@@ -94,7 +94,7 @@ seulement par `set_state` (section 5).
 C'est un cas de validation d'invariant : la prediction n'est pas un nombre physique d'un papier,
 c'est une propriete structurelle que le schema doit respecter. Trois invariants, trois raisons.
 
-### 3.1 Conservation de la masse (justifie PROUVE 1)
+### 3.1 Conservation de la masse (justifie Prouve 1)
 
 La premiere composante d'Euler est $\partial_t\rho+\nabla\cdot(\rho\mathbf{u})=0$. Un schema volumes
 finis met a jour chaque cellule par le bilan des flux a ses faces :
@@ -111,7 +111,7 @@ au-dessus du bruit machine attendu ($\sim 10^{-16}$) et bien en dessous de toute
 "bug de conservation". La derive mesuree ($\le 1.6\times10^{-14}$, section 6) confirme : on est au
 bruit machine, $10^5$ fois sous la tolerance.
 
-### 3.2 Positivite (justifie PROUVE 2)
+### 3.2 Positivite (justifie Prouve 2)
 
 Euler n'a de sens que pour $\rho>0$ et $p>0$ ($c=\sqrt{\gamma p/\rho}$ devient imaginaire sinon, le
 schema explose). Rien ne garantit mathematiquement la positivite d'un MUSCL+HLLC generique a
@@ -128,7 +128,7 @@ La positivite n'est donc pas un theoreme mais un invariant empirique que le cas 
 expansion la plus forte), et c'est elle qui descend le plus bas : `rho_min` electrons atteint
 $6.99\times10^{-3}$ au creux (section 6), toujours $>0$.
 
-### 3.3 Ordre des fronts (justifie PROUVE 3)
+### 3.3 Ordre des fronts (justifie Prouve 3)
 
 A pression egale $p_0=1$, la vitesse du son d'Euler est $c=\sqrt{\gamma p_0/\rho_0}$. Le rapport
 des deux blocs est $c_e/c_i=\sqrt{\rho_{0,i}/\rho_{0,e}}=\sqrt{1.0/0.01}=10$, le nombre affiche par
@@ -267,56 +267,56 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 
 ![Cartes de densite finale, electrons a gauche, ions a droite](figures/density_maps.png)
 
-- **PROUVE** : les deux cartes sont des etats finis et coherents (`assert_finite`), produits par le
+- **Prouve** : les deux cartes sont des etats finis et coherents (`assert_finite`), produits par le
   meme schema. La detente radiale a creuse le centre des deux gaz (densite minimale au point de
   surpression, evacuee vers l'exterieur) : echelle electrons $[0.008,\,0.011]$ autour de $\rho_0=0.01$,
   echelle ions $[0.80,\,1.02]$ autour de $\rho_0=1.0$, contraste $\sim 100$ entre les deux blocs.
-- **SUGGERE (non assere)** : la carte electronique montre une croix diagonale et des lobes qui touchent
+- **Suggéré (non assere)** : la carte electronique montre une croix diagonale et des lobes qui touchent
   les bords : son front (10x plus rapide) a deja atteint les images periodiques et interfere avec
   lui-meme, alors que la carte ionique reste un anneau propre, centre, loin des bords. C'est la
   signature visuelle de "electrons plus etendus" (`fe=0.861` vs `fi=0.287`), mais aucun assert ne teste
   la forme.
-- **NON MONTRE** : la carte est a $t$ fixe ; pas de dynamique transitoire ici (voir les figures
+- **Non montré** : la carte est a $t$ fixe ; pas de dynamique transitoire ici (voir les figures
   temporelles ci-dessous).
 
 ### `masses.png` : masse conservee par espece (invariant 1)
 
 ![Masse(t) des deux especes (plate) et derive relative en echelle log sous la tolerance](figures/masses.png)
 
-- **PROUVE** : panneau gauche, les deux masses sont plates sur tout le run (electrons $\sim 41$,
+- **Prouve** : panneau gauche, les deux masses sont plates sur tout le run (electrons $\sim 41$,
   ions $\sim 4096$, le rapport 100 des densites). Panneau droit (derive relative log), les deux blocs
   restent entre le bruit machine ($\sim 2\times10^{-16}$, pointilles gris) et $\sim 4\times10^{-14}$,
   soit $\ge 4$ ordres de grandeur sous la tolerance `1e-9` (tiret noir). L'invariant 3.1 tient :
   conservation au bit pres. Certains pas ions touchent exactement le plancher eps (derive
   rigoureusement nulle ce pas-la).
-- **NON MONTRE** : la figure ne distingue pas la part d'erreur due au sous-cyclage electronique (10
+- **Non montré** : la figure ne distingue pas la part d'erreur due au sous-cyclage electronique (10
   sous-pas) de celle du pas ionique unique ; les deux derivent au meme niveau machine.
 
 ### `positivity.png` : positivite rho_min / p_min vs t (invariant 2)
 
 ![rho_min et p_min des deux especes vs t, tous strictement positifs](figures/positivity.png)
 
-- **PROUVE** : panneau gauche (echelle log), `rho_min` electrons reste autour de $7\times10^{-3}$ (creux
+- **Prouve** : panneau gauche (echelle log), `rho_min` electrons reste autour de $7\times10^{-3}$ (creux
   a $6.99\times10^{-3}$), `rho_min` ions decroit de $1.0$ vers $0.80$ : aucun ne passe par zero.
   Panneau droit (echelle lineaire), `p_min` ions reste a $1.000$, `p_min` electrons dip a $0.905$ au
   plus bas puis remonte : tous deux $\gg 0$. L'invariant 3.2 tient ; la reconstruction primitive +
   HLLC preserve la positivite a travers la detente la plus severe (electrons).
-- **SUGGERE** : le creux de `p_min` electrons vers $t\approx0.02$ suivi d'une remontee est la signature
+- **Suggéré** : le creux de `p_min` electrons vers $t\approx0.02$ suivi d'une remontee est la signature
   de la detente qui passe puis se relaxe ; non asseree, seul le minimum global $>0$ l'est.
-- **NON MONTRE** : aucune borne de positivite garantie (HLLC generique n'a pas de limiteur de
+- **Non montré** : aucune borne de positivite garantie (HLLC generique n'a pas de limiteur de
   positivite) ; c'est un invariant empirique de ce run, pas un theoreme.
 
 ### `multirate.png` : le bloc rapide est sous-cycle automatiquement
 
 ![Nombre de sous-cycles n_e (autour de 10) et macro_dt cale sur les ions](figures/multirate.png)
 
-- **PROUVE / mesure** : panneau gauche, le bloc `electrons` est sous-cycle $n_e=10$ a chaque macro-pas
+- **Prouve / mesure** : panneau gauche, le bloc `electrons` est sous-cycle $n_e=10$ a chaque macro-pas
   (touchant $11$ dans le transitoire precoce ou la detente electronique fait monter brievement
   $w_e/w_i$ au-dessus de 10), les `ions` restent a $n_i=1$. Panneau droit, `macro_dt` $\approx 4.3\times
   10^{-3}$ est cale sur le bloc le plus lent (ions) et varie de $\pm 1.5\%$ au fil de l'evolution de la
   vitesse du son ionique. C'est le multirate `step_adaptive` : $n_b=\lceil w_b/w_{\min}\rceil$
   (section 4.3), sans configuration explicite.
-- **NON MONTRE** : aucun assert ne teste $n_e=10$ ni la valeur de `macro_dt` ; ils sont mesures (cette
+- **Non montré** : aucun assert ne teste $n_e=10$ ni la valeur de `macro_dt` ; ils sont mesures (cette
   figure), pas valides contre une tolerance. Le multirate est exerce, pas asseré.
 
 ---

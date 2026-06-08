@@ -17,8 +17,8 @@ etat au bit pres (`np.array_equal`, aucune tolerance).
 | Entrees | grille $96^2$, $L=1$, periodique ; CI bande mode 2 `band_density(amp=1, width=0.05, mode=2, disp=0.02)` ; $B_0=1$, $\alpha=1$ ; fond ionique $n_{i0}=\overline{n_e}=1.088623$ (moyenne de la CI, solubilite du Poisson periodique) ; 60 pas, CFL 0.4 ; minmod + Rusanov, SSPRK2, Poisson `geometric_mg` |
 | Sorties | densite finale $n$ des deux chemins (natif, DSL) ; backend retenu ; 1 figure (3 panneaux) dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py:194-209` : `np.array_equal(d_dsl, d_natif)` (bit) ; `t_dsl == t_natif` (bit) ; `m_dsl == m_natif` (bit) ; `mass_drift < 1e-6` ; `amp_final > amp_initial` |
-| PROUVE | egalite bit du chemin complet : $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ apres 60 pas, `np.array_equal` True ; temps et masse identiques au bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, les deux). L'identite tient parce que les formules DSL emettent les memes expressions ponctuelles que `ExBVelocity` et `BackgroundDensity` (table section 3), compilees dans le meme assembleur par cellule |
-| NE PROUVE PAS | ce n'est pas une reproduction publiee, ni une validation du taux de croissance (cela vit dans [`../diocotron/`](../diocotron/), categorie `reproduction`). Aucun nombre n'est confronte a un article. L'egalite bit prouve que le chemin DSL ne devie pas du chemin natif ; elle ne dit rien de la justesse physique des deux (un bug commun aux deux briques resterait invisible). Le backend natif `production` (`add_native_block`) echoue sur cette plateforme (ABI : `_adc` bati contre des en-tetes != `include/`) : le run nominal passe par `aot` (host-marshale, numerique identique au natif, verifie). L'egalite bit du chemin `production` n'est donc pas exercee ici |
+| Prouve | egalite bit du chemin complet : $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ apres 60 pas, `np.array_equal` True ; temps et masse identiques au bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, les deux). L'identite tient parce que les formules DSL emettent les memes expressions ponctuelles que `ExBVelocity` et `BackgroundDensity` (table section 3), compilees dans le meme assembleur par cellule |
+| Ne prouve pas | ce n'est pas une reproduction publiee, ni une validation du taux de croissance (cela vit dans [`../diocotron/`](../diocotron/), categorie `reproduction`). Aucun nombre n'est confronte a un article. L'egalite bit prouve que le chemin DSL ne devie pas du chemin natif ; elle ne dit rien de la justesse physique des deux (un bug commun aux deux briques resterait invisible). Le backend natif `production` (`add_native_block`) echoue sur cette plateforme (ABI : `_adc` bati contre des en-tetes != `include/`) : le run nominal passe par `aot` (host-marshale, numerique identique au natif, verifie). L'egalite bit du chemin `production` n'est donc pas exercee ici |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend `aot` (apres echec `production`), $96^2$, ~6 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : quelles conventions du coeur le DSL doit reproduire pour que l'egalite bit
@@ -72,7 +72,7 @@ sans changer le resultat, parce que la couche du bas est identique.
 
 ---
 
-## 3. Les conventions du coeur, reproduites en formules (justifie PROUVE)
+## 3. Les conventions du coeur, reproduites en formules (justifie Prouve)
 
 L'egalite bit ne tient que si chaque expression DSL est le sosie exact de la fonction ponctuelle de
 la brique. Voici la correspondance, ancree dans les en-tetes du coeur et dans `run.py`.
@@ -173,17 +173,17 @@ Generees par `python make_figures.py` (meme configuration que `run.py`), version
 On montre les deux champs (panneaux 1 et 2) puis leur ecart (panneau 3), plutot qu'un
 carre noir seul qui aurait l'air vide ou casse.
 
-- PROUVE / visible : les panneaux natif et DSL sont la meme bande ondulee (mode azimutal 2,
+- Prouve / visible : les panneaux natif et DSL sont la meme bande ondulee (mode azimutal 2,
   deux creux), densite de $1.0$ a $\approx 1.98$ ($\sigma\approx 0.23$, donc un champ structure,
   pas uniforme). Le troisieme panneau ($\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, echelle
   fixee $[0,\,10^{-15}]$) est identiquement noir : $\max=0.0\times10^{0}$, `np.array_equal` True
   (asserte `run.py:194`). L'echelle au niveau machine garantit qu'un seul pixel different
   ressortirait ; il n'y en a aucun. Le residu n'est pas "petit", il est exactement nul : meme
   tableau bit pour bit.
-- SUGGERE (non assere) : l'amplitude du mode a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
+- Suggéré (non assere) : l'amplitude du mode a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
   10^{-2}\to amp_{final}=1.031\times10^{-1}$, `run.py:202-203`) ; seul $amp_{final}>amp_{0}$ est
   asserte (`run.py:209`). La phase non lineaire d'enroulement n'est pas atteinte sur 60 pas.
-- NON MONTRE : l'egalite bit ne dit rien de la justesse physique. Un bug present dans
+- Non montré : l'egalite bit ne dit rien de la justesse physique. Un bug present dans
   `ExBVelocity` et reproduit fidelement par la formule DSL donnerait aussi une carte noire. Elle
   prouve la non-deviation DSL/natif, pas la correction du modele (validee ailleurs,
   [`../diocotron/`](../diocotron/)).

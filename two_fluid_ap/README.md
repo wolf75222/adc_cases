@@ -17,8 +17,8 @@ reproduction d'un resultat publie.
 | Entrees | grille $64^2$, $L=2\pi$, periodique ; CI $n_e=1+\epsilon\cos(kx+ky)$, $k=2\pi/L$, $\epsilon=10^{-3}$, $n_i=1$, $m_s=0$ ; isotherme $c_e^2=1$, $c_i^2=0.04$ ; $z_e=-1$, $z_i=+1$, $n_0=1$. Run 1 raide : $\omega_{pe}=10^3$, $\omega_{pi}=20$, $\Delta t=5\times10^{-3}$, 200 pas, $s=\Delta t\,\omega_{pe}=5$. Run 2 magnetise : $\omega_{ce}=4$, $\omega_{ci}=0.2$, $\Delta t=10^{-2}$, 100 pas |
 | Sorties | diagnostics imprimes (`max_dev`, `max_charge`, `mass_e`), ligne finale `OK two_fluid_ap` ; 2 figures + `figures/provenance.json` (via `make_figures.py`) ; lib JIT dans `out/two_fluid_ap/build/` |
 | Invariants garantis | les `assert` de `run.py` : finitude (`np.isfinite`, run 1+2) ; `max_dev < 0.1` et `max_charge < 0.1` (run 1, `run.py:199-200`) ; `mass_rel < 1e-7` (run 1+2, `run.py:202`, `run.py:235`) |
-| PROUVE | a $s=5$ (run 1), schema AP fini et borne : $\max\lvert n_e-1\rvert=5.325\times10^{-7}$, $\max\lvert n_i-n_e\rvert=6.698\times10^{-11}$, masse $e$ conservee a $2.276\times10^{-14}$ relatif ; run 2 magnetise masse $e$ a $1.665\times10^{-14}$. Prediction AP falsifiable (figure 1) : la deviation AP plateaute a $5.41\times10^{-7}$ pour $s\in[1,50]$, tandis que l'explicite est fini pour $s\le1.0$ et NaN des $s\ge1.2$ |
-| NE PROUVE PAS | pas une reproduction publiee : aucun nombre confronte a un article. Les `assert` de `run.py` testent des bornes ($<0.1$, $<10^{-7}$), pas l'ordre AP : le contraste AP/explicite est mesure par `make_figures.py`, pas asserte. `mass_e=4096` est une somme sans poids $dx^2$ (proxy de conservation relative, pas une masse physique). Le diagnostic C++ `tfap_max_dev` est non fiable sur un champ explose (`fmax` sur NaN rend $0.0$, section 6) : l'explosion explicite est detectee cote Python par `np.isfinite`. Regime quasi-lineaire ($\epsilon=10^{-3}$, schema spatial bas ordre, fond $n_0=1$ constant) ; backend valide = CPU serie seul (portabilite GPU non exercee ici) |
+| Prouve | a $s=5$ (run 1), schema AP fini et borne : $\max\lvert n_e-1\rvert=5.325\times10^{-7}$, $\max\lvert n_i-n_e\rvert=6.698\times10^{-11}$, masse $e$ conservee a $2.276\times10^{-14}$ relatif ; run 2 magnetise masse $e$ a $1.665\times10^{-14}$. Prediction AP falsifiable (figure 1) : la deviation AP plateaute a $5.41\times10^{-7}$ pour $s\in[1,50]$, tandis que l'explicite est fini pour $s\le1.0$ et NaN des $s\ge1.2$ |
+| Ne prouve pas | pas une reproduction publiee : aucun nombre confronte a un article. Les `assert` de `run.py` testent des bornes ($<0.1$, $<10^{-7}$), pas l'ordre AP : le contraste AP/explicite est mesure par `make_figures.py`, pas asserte. `mass_e=4096` est une somme sans poids $dx^2$ (proxy de conservation relative, pas une masse physique). Le diagnostic C++ `tfap_max_dev` est non fiable sur un champ explose (`fmax` sur NaN rend $0.0$, section 6) : l'explosion explicite est detectee cote Python par `np.isfinite`. Regime quasi-lineaire ($\epsilon=10^{-3}$, schema spatial bas ordre, fond $n_0=1$ constant) ; backend valide = CPU serie seul (portabilite GPU non exercee ici) |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, scenario C++ JIT `TwoFluidAP2D<GeometricMG>` (Apple clang 21, C++20), CPU serie, $64^2$ ; run.py ~3.6 s (cache a jour) / ~5.5 s (1ere compilation) ; `figures/provenance.json` |
 
 A la fin tu sauras : ce qu'est la raideur d'un plasma et pourquoi un schema explicite y est limite a
@@ -29,7 +29,7 @@ falsifiable (deviation bornee quand $s\to\infty$, explicite NaN), et pourquoi le
 
 ---
 
-## 1. Le mecanisme physique : la raideur du plasma (justifie PROUVE : AP borne)
+## 1. Le mecanisme physique : la raideur du plasma (justifie Prouve : AP borne)
 
 Deux fluides isothermes charges, electrons (densite $n_e$, charge $z_e=-1$) et ions ($n_i$,
 $z_i=+1$), partagent un champ electrique auto-consistant. Trois ingredients enchaines, dont le
@@ -121,7 +121,7 @@ lui que `make_figures.py` bascule pour le contraste de la section 7.
 
 ---
 
-## 4. Maths : la reformulation AP de l'elliptique (justifie PROUVE : pas stable non effondre)
+## 4. Maths : la reformulation AP de l'elliptique (justifie Prouve : pas stable non effondre)
 
 ### 4.1 D'ou vient la borne explicite
 
@@ -221,7 +221,7 @@ ai(i, j, 0) = Real(1);                                              // n_i = 1 (
 
 ---
 
-## 6. Diagnostics et leur fiabilite (justifie NE PROUVE PAS : proxys)
+## 6. Diagnostics et leur fiabilite (justifie Ne prouve pas : proxys)
 
 Les diagnostics C++ (`_two_fluid_ap.cpp`) :
 
@@ -231,7 +231,7 @@ Les diagnostics C++ (`_two_fluid_ap.cpp`) :
 - `tfap_max_charge` = $\max\lvert n_i-n_e\rvert$, `tfap_max_dev` = $\max\lvert n_e-1\rvert$
   (`:54-73`), precedes de `device_fence()` (barriere host/device, memoire unifiee GPU).
 
-Piege important (justifie la clause NE PROUVE PAS) : `tfap_max_dev` fait `std::fmax` sur le champ
+Piege important (justifie la clause Ne prouve pas) : `tfap_max_dev` fait `std::fmax` sur le champ
 et propage mal les NaN. Verifie : pour le schema explicite a $s=5$ (champ entierement NaN, 4096
 cellules), `tfap_max_dev()` rend `0.0` et `tfap_max_charge()` rend `0.0`. Un `0.0` du
 diagnostic C++ ne prouve donc pas que le schema est stable. `make_figures.py` ne s'y fie pas : il lit
@@ -258,17 +258,17 @@ A $\Delta t=5\times10^{-3}$ et horizon 200 pas fixes, on balaie $s=\Delta t\,\om
 $\omega_{pe}$ (avec $\omega_{pi}=0.02\,\omega_{pe}$, ratio du run 1), pour le schema AP
 (`stabilize=True`) et explicite (`stabilize=False`).
 
-- **PROUVE** (mesure cote champ, `np.isfinite`) : la deviation AP (bleu) reste bornee sur tout le
+- **Prouve** (mesure cote champ, `np.isfinite`) : la deviation AP (bleu) reste bornee sur tout le
   balayage et plateaute a $5.41\times10^{-7}$ pour $s\in[1,50]$ (valeurs : $s=5\to5.325\times10^{-7}$,
   $s=10\to5.390\times10^{-7}$, $s=50\to5.414\times10^{-7}$). Le schema explicite (rouge) suit l'AP
   tant que $s\le1.0$ ($s=1.0\to5.416\times10^{-7}$) puis devient NaN des $s=1.2$ (croix rouges) :
   la borne explicite $s=\Delta t\,\omega_{pe}\approx1$ (trait gris) est exactement celle predite en
   4.1. C'est la propriete asymptotic-preserving : le pas stable ne s'effondre pas quand $s\to\infty$.
-- **SUGGERE (non assere)** : la deviation AP decroit puis plateaute quand $s$ croit (de
+- **Suggéré (non assere)** : la deviation AP decroit puis plateaute quand $s$ croit (de
   $5.9\times10^{-4}$ a $s=0.05$ vers $5.4\times10^{-7}$) : la limite quasi-neutre est de mieux en
   mieux approchee a forte raideur. C'est coherent avec l'AP (la stabilisation ecrase le RHS de
   charge), mais aucun assert ne teste la monotonie ni la valeur du plateau.
-- **NON MONTRE** : aucun `assert` de `run.py` ne teste ce contraste (les asserts ne touchent que le
+- **Non montré** : aucun `assert` de `run.py` ne teste ce contraste (les asserts ne touchent que le
   schema AP). La figure ne montre pas pourquoi l'explicite diverge (croissance pas-a-pas de
   l'oscillation de charge) : on observe l'etat NaN final, pas la trajectoire de l'instabilite.
 
@@ -278,15 +278,15 @@ $\omega_{pe}$ (avec $\omega_{pi}=0.02\,\omega_{pe}$, ratio du run 1), pour le sc
 
 Etat final du run raide de reference ($s=5$, AP, 200 pas).
 
-- **PROUVE / mesure** : $n_e$ et $n_i$ valent tous deux $1+5.3\times10^{-7}\cos(kx+ky)$ (bandes
+- **Prouve / mesure** : $n_e$ et $n_i$ valent tous deux $1+5.3\times10^{-7}\cos(kx+ky)$ (bandes
   diagonales, suivant la CI) : le plasma est quasi-neutre, les deux especes ont relaxe vers le
   meme profil malgre $s=5$ (un explicite aurait deja NaN). La charge nette $n_i-n_e$ est d'ordre
   $6.7\times10^{-11}$ : trois ordres sous la deviation, et bien sous la separation de charge
   initiale $\epsilon=10^{-3}$. La quasi-neutralite est imposee, pas supposee.
-- **SUGGERE** : la charge nette porte une texture en damier d'echelle grille (au niveau
+- **Suggéré** : la charge nette porte une texture en damier d'echelle grille (au niveau
   $\sim6\times10^{-11}$) : c'est le bruit dispersif de la continuite centree (dissipation nulle)
   a amplitude residuelle, plausible a l'oeil mais non quantifie par un assert.
-- **NON MONTRE** : a $\epsilon=10^{-3}$ et schema bas ordre, aucune dynamique non lineaire ni
+- **Non montré** : a $\epsilon=10^{-3}$ et schema bas ordre, aucune dynamique non lineaire ni
   separation de charge macroscopique. La carte ne dit rien du schema explicite (qui n'a pas d'etat
   final fini a $s=5$).
 

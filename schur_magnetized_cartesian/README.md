@@ -16,8 +16,8 @@ re-derivee ici : elle renvoie a [`../magnetic_isothermal_dsl/`](../magnetic_isot
 | Entrees | grille $16^2$, $L=1$, **periodique** ($h=0.0625$) ; CI $\rho=1+0.05\cos(2\pi x)$, vitesse oblique $u=v=0.5$ ; $c_s^2=10^{-4}$ (transport lent, non limitant), $q=-1$, $\alpha=1$, $B_z=\omega_c$ constant ; minmod + Rusanov, transport SSPRK2 (AOT) ; etage Schur $\theta\in\{0.5,1.0\}$ |
 | Sorties | `dt_stable` par methode (explicite / Schur $\theta{=}0.5$ / Schur $\theta{=}1.0$), produit $dt\,\omega_c$, gain ; console + `out/<cas>/dt_stable.csv` (option `--csv`) ; 2 figures dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | aucun `assert` : c'est une mesure, pas une validation. Le critere de stabilite est `is_stable` (`run.py:152-161`) : a un $dt$ donne, la densite reste finie, $\lvert\rho\rvert_{\max}\le 10^3$ et $\rho_{\min}\ge -10^{-2}$ a chaque pas jusqu'a $t_{end}$ |
-| PROUVE (mesure, non assere) | explicite : $dt_{stable}\propto 1/\omega_c$ (mesure $5.62\times10^{-2}\to5.62\times10^{-4}$ de $\omega_c{=}10^2$ a $10^3$, facteur exactement 100), produit borne $dt\,\omega_c\le O(1)$ ; a $\omega_c{=}10^4$ aucun $dt$ teste n'est stable ($dt_{stable}=0$). Schur : $dt_{stable}=3.16\times10^{-1}$ independant de $\omega_c$, cale sur le transport ; gain mesure 562x ($\omega_c{=}10^3$, run complet) jusqu'a non borne ($\omega_c{=}10^4$) |
-| NE PROUVE PAS | pas une reproduction publiee ; aucune fidelite a un papier (la cible Hoffart [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) est le cas separe [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), lui-meme `reproduction-candidate` PENDING). L'etage Schur est branche par le hook prive `sim._s.set_source_stage(...)`, pas par `adc.Split(Explicit, CondensedSchur)` (non cable sur AOT). `dt_stable` est une borne discrete (balayage geometrique au quart de decade), pas un seuil fin ; le critere de stabilite est heuristique (finitude+bornes+positivite), pas spectral. Cas raide fabrique ($c_s^2$ minuscule) : le gain est propre a ce point de fonctionnement |
+| Prouve (mesure, non assere) | explicite : $dt_{stable}\propto 1/\omega_c$ (mesure $5.62\times10^{-2}\to5.62\times10^{-4}$ de $\omega_c{=}10^2$ a $10^3$, facteur exactement 100), produit borne $dt\,\omega_c\le O(1)$ ; a $\omega_c{=}10^4$ aucun $dt$ teste n'est stable ($dt_{stable}=0$). Schur : $dt_{stable}=3.16\times10^{-1}$ independant de $\omega_c$, cale sur le transport ; gain mesure 562x ($\omega_c{=}10^3$, run complet) jusqu'a non borne ($\omega_c{=}10^4$) |
+| Ne prouve pas | pas une reproduction publiee ; aucune fidelite a un papier (la cible Hoffart [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) est le cas separe [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), lui-meme `reproduction-candidate` pending). L'etage Schur est branche par le hook prive `sim._s.set_source_stage(...)`, pas par `adc.Split(Explicit, CondensedSchur)` (non cable sur AOT). `dt_stable` est une borne discrete (balayage geometrique au quart de decade), pas un seuil fin ; le critere de stabilite est heuristique (finitude+bornes+positivite), pas spectral. Cas raide fabrique ($c_s^2$ minuscule) : le gain est propre a ce point de fonctionnement |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend DSL `aot`, $16^2$, macOS arm64 ; figure (1) lue du run complet documente `out/dt_stable.csv` ($\omega_c{=}10^3$, $t_{end}{=}1$), figure (2) d'une mesure fraiche ciblee (3 $\omega_c$, $t_{end}{=}0.05$, ~231 s les trois balayages) ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi la rotation cyclotronique impose $dt\,\omega_c<O(1)$ a l'explicite,
@@ -45,7 +45,7 @@ mouvement et $0$ sur l'energie ($v\times B\perp v$) : c'est exactement la conven
 `MagneticLorentzForce` (`source.hpp:84-93`), $s_1=+q_{om}B_z m_y$, $s_2=-q_{om}B_z m_x$. Cette
 rotation est le terme raide : elle fait tourner $m$ a la pulsation $\omega_c$ sans la dissiper. Plus
 $\omega_c$ est grand, plus la rotation est rapide, plus l'avancee explicite doit prendre un pas fin
-pour la suivre. Justifie la clause PROUVE (la borne explicite) et son contraire (le Schur la leve).
+pour la suivre. Justifie la clause Prouve (la borne explicite) et son contraire (le Schur la leve).
 
 ---
 
@@ -161,16 +161,16 @@ fraiche ciblee `/tmp/schur_measure.json` (champs dans `figures/provenance.json`)
 
 ![Barres log du dt stable : explicite a 3.16e-4 sous la borne, Schur theta=0.5 a 0.178 (562x), theta=1.0 a 0.316 (1000x)](figures/timing_dt_stable.png)
 
-- PROUVE (mesure) : a $\omega_c=10^3$, $t_{end}=1$, l'explicite plafonne a
+- Prouve (mesure) : a $\omega_c=10^3$, $t_{end}=1$, l'explicite plafonne a
   $dt_{stable}=3.162\times10^{-4}$, soit $dt\,\omega_c=0.316$ : la borne cyclotronique $O(1)$, ligne
   tiretee. Le Schur tient a $dt_{stable}=0.178$ ($\theta{=}0.5$, $dt\,\omega_c=178$, gain 562x) et
   $0.316$ ($\theta{=}1.0$, $dt\,\omega_c=316$, gain 1000x) : deux a trois ordres de grandeur
   au-dessus de la borne explicite.
-- SUGGERE (non assere) : $\theta=1.0$ (Euler retrograde, inconditionnellement stable) gagne plus
+- Suggéré (non assere) : $\theta=1.0$ (Euler retrograde, inconditionnellement stable) gagne plus
   que $\theta=0.5$ (Crank-Nicolson, marginalement stable), conforme a la theorie de la rotation ; mais
   aucun assert ne classe les deux $\theta$, et l'ecart (un seul palier du balayage) est a la
   resolution de la mesure, pas une marge fine.
-- NON MONTRE : ces $dt_{stable}$ sont des bornes au quart de decade, pas des seuils continus ; le
+- Non montré : ces $dt_{stable}$ sont des bornes au quart de decade, pas des seuils continus ; le
   Schur a $0.316$ approche le pas de transport ($\sim h/c_s$), preuve que c'est desormais le
   transport et non la source qui limite (lu sur le panneau suivant).
 
@@ -178,17 +178,17 @@ fraiche ciblee `/tmp/schur_measure.json` (champs dans `figures/provenance.json`)
 
 ![Deux panneaux : a gauche dt stable vs omega_c (explicite suit la pente -1, Schur plat sur le pas de transport, explicite instable a omega_c=1e4) ; a droite dt*omega_c (explicite borne O(1), Schur croit lineairement)](figures/timing_vs_omega.png)
 
-- PROUVE (mesure fraiche, $t_{end}=0.05$) : l'explicite suit la pente $-1$ ($dt_{stable}$ passe de
+- Prouve (mesure fraiche, $t_{end}=0.05$) : l'explicite suit la pente $-1$ ($dt_{stable}$ passe de
   $5.62\times10^{-2}$ a $\omega_c{=}10^2$ a $5.62\times10^{-4}$ a $\omega_c{=}10^3$, facteur exactement
   100 pour un facteur 10 sur $\omega_c$), puis a $\omega_c{=}10^4$ aucun $dt$ teste n'est stable
   ($dt_{stable}=0$, annote). Le Schur est plat a $3.16\times10^{-1}$ pour tout $\omega_c$ : la borne
   cyclotronique a disparu, le pas est cale au-dessus du transport ($4.42\times10^{-2}$, tiret).
-- SUGGERE : le panneau de droite montre $dt\,\omega_c$ explicite passant sous la ligne $1$ a
+- Suggéré : le panneau de droite montre $dt\,\omega_c$ explicite passant sous la ligne $1$ a
   $\omega_c{=}10^3$ ($0.562$) : c'est la signature de la borne $O(1)$. A $\omega_c{=}10^2$ le produit
   vaut $5.62$, au-dessus de $1$ : la, l'explicite est limite par le transport ($5.62\times10^{-2}>$
   transport $4.42\times10^{-2}$ au palier voisin), pas par le cyclotron. Le croisement borne/transport
   est plausible a l'oeil mais non assere.
-- NON MONTRE : $\theta=0.5$ et $\theta=1.0$ rendent ici le meme $dt_{stable}$ (les deux capees au
+- Non montré : $\theta=0.5$ et $\theta=1.0$ rendent ici le meme $dt_{stable}$ (les deux capees au
   palier de transport, que le balayage ne distingue pas a $t_{end}$ court) ; leur ecart n'apparait
   qu'au run complet ($t_{end}=1$, panneau 1). Le gain a $\omega_c{=}10^4$ est non borne (explicite
   nul) : un ratio fini n'a pas de sens, on rapporte "explicite instable a tout dt teste".
@@ -255,4 +255,4 @@ il peut sauter d'un palier ($\times10^{1/4}$) avec la plateforme, le compilateur
 | `figures/provenance.json` | SHA, backend, sources des deux panneaux, nombres mesures |
 | `out/dt_stable.csv` | table du run complet ($\omega_c{=}10^3$, $t_{end}{=}1$), source du panneau (1) |
 | `../magnetic_isothermal_dsl/` | valide le modele isotherme magnetise partage (oracle Lorentz, rotation) |
-| `../hoffart_euler_poisson_dsl/` | cible le papier complet (Schur), `reproduction-candidate` PENDING |
+| `../hoffart_euler_poisson_dsl/` | cible le papier complet (Schur), `reproduction-candidate` pending |

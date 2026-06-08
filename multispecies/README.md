@@ -14,9 +14,9 @@ l'arithmetique flottante.
 | Categorie (manifeste) | `validation` (`ci = true`, `needs = []`, [`cases_manifest.toml:38-43`](../cases_manifest.toml)). Ce n'est pas une reproduction publiee : on verifie un invariant structurel, pas une courbe d'un papier. |
 | Entrees | grille $48^2$, $L=1$, periodique ; electrons $n_e=1+\delta\cos(2\pi x/L)$ ($\delta=0.02$), ions $n_i=1$ ; charges $q_e=-1$, $q_i=+1$ ; $\gamma_e=5/3$, $c_{s,i}^2=1$ ; Poisson $\nabla^2\phi=q_e n_e+q_i n_i$, $\varepsilon=1$ ; $dt=0.001$, 20 pas |
 | Sorties | `print` des masses, de $\max\lvert f\rvert$ et des bornes de densite ; 3 figures de diagnostic dans `figures/` + `figures/provenance.json` (regenerees par `make_figures.py`, hors CI) |
-| Invariants garantis | les 4 `assert` de `run.py` : (1) $\max\lvert f\rvert>10^{-6}$ ; (2) $\lvert M_e-M_{e0}\rvert<10^{-9}$ et $\lvert M_i-M_{i0}\rvert<10^{-9}$ (ABSOLU) ; (3) densites finies ; (4) densites $>0$ |
-| PROUVE | masse de chaque espece conservee a $10^{-9}$ alors qu'un meme Poisson les couple : derives mesurees $\max_t\lvert\Delta M_e\rvert=4.23\times10^{-11}$, $\max_t\lvert\Delta M_i\rvert=3.18\times10^{-11}$ ; densites finies et positives ($n_e\in[0.980,1.020]$, $n_i\in[1{-}4{\times}10^{-6},\,1{+}4{\times}10^{-6}]$) ; separation de charge initiale non triviale $\max\lvert f\rvert=1.9957\times10^{-2}$ |
-| NE PROUVE PAS | aucun resultat physique : CI cosinus jouet, 20 pas ($t_f=0.02$), pas de longueur de Debye ni de frequence plasma, pas de taux mesure. La modulation ionique ($\sim4\times10^{-6}$) est qualitative. Aucun `assert` ne teste la quantite de mouvement, l'energie, la symetrie des especes, ni le potentiel. Mono-rang, pas de GPU/MPI/AMR. Le couplage teste n'est que le partage du Poisson : il ne valide ni la fermeture isotherme ni l'EOS compressible au-dela de "l'etat reste fini et positif" |
+| Invariants garantis | les 4 `assert` de `run.py` : (1) $\max\lvert f\rvert>10^{-6}$ ; (2) $\lvert M_e-M_{e0}\rvert<10^{-9}$ et $\lvert M_i-M_{i0}\rvert<10^{-9}$ (absolu) ; (3) densites finies ; (4) densites $>0$ |
+| Prouve | masse de chaque espece conservee a $10^{-9}$ alors qu'un meme Poisson les couple : derives mesurees $\max_t\lvert\Delta M_e\rvert=4.23\times10^{-11}$, $\max_t\lvert\Delta M_i\rvert=3.18\times10^{-11}$ ; densites finies et positives ($n_e\in[0.980,1.020]$, $n_i\in[1{-}4{\times}10^{-6},\,1{+}4{\times}10^{-6}]$) ; separation de charge initiale non triviale $\max\lvert f\rvert=1.9957\times10^{-2}$ |
+| Ne prouve pas | aucun resultat physique : CI cosinus jouet, 20 pas ($t_f=0.02$), pas de longueur de Debye ni de frequence plasma, pas de taux mesure. La modulation ionique ($\sim4\times10^{-6}$) est qualitative. Aucun `assert` ne teste la quantite de mouvement, l'energie, la symetrie des especes, ni le potentiel. Mono-rang, pas de GPU/MPI/AMR. Le couplage teste n'est que le partage du Poisson : il ne valide ni la fermeture isotherme ni l'EOS compressible au-dela de "l'etat reste fini et positif" |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie (deux blocs heterogenes + Poisson de systeme `charge_density`), $48^2$, ~0.24 s temps mur 1 lancement (macOS arm64, Python 3.12.2) ; nombres dans `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi deux fluides qui partagent un champ conservent quand meme chacun
@@ -27,7 +27,7 @@ Poisson est cable cote API, et ce que les figures prouvent vs suggerent vs ne mo
 
 ## 1. Pourquoi cet invariant : masse conservee par espece sous couplage
 
-Justifie la clause PROUVE (masse de chaque espece conservee a $10^{-9}$).
+Justifie la clause Prouve (masse de chaque espece conservee a $10^{-9}$).
 
 Le cas existe pour repondre a une question de structure : quand deux especes partagent le meme
 champ electrique $\mathbf{E}=-\nabla\phi$, leurs bilans de masse restent-ils decouples ? La
@@ -156,7 +156,7 @@ assert_finite(de, ...); assert_positive(de, ...)                  # run.py:133-1
 
 ## 4. Maths : pourquoi chaque masse est conservee a l'arrondi pres
 
-Justifie la clause PROUVE et la tolerance $10^{-9}$ (clause Invariants garantis).
+Justifie la clause Prouve et la tolerance $10^{-9}$ (clause Invariants garantis).
 
 ### 4.1 Telescopage des flux sur le tore
 
@@ -261,43 +261,43 @@ section 7. Les nombres cites viennent de `figures/provenance.json`.
 On trace $M_s(t)-M_s(0)$ (l'offset $M_0=2304$ est dans le titre), gradue en $10^{-10}$ pour rendre
 visible une derive qui serait invisible a l'echelle de $2304$.
 
-- **PROUVE** : les deux courbes oscillent au niveau $\sim4\times10^{-11}$ (electrons) et
+- **Prouve** : les deux courbes oscillent au niveau $\sim4\times10^{-11}$ (electrons) et
   $\sim3\times10^{-11}$ (ions) autour de zero, soit une marche d'arrondi de quelques dizaines
   d'ulp, 23 fois sous la tolerance $10^{-9}$. C'est la preuve numerique que chaque espece
   conserve sa masse independamment malgre le Poisson partage (l'`assert` de `run.py:125-128`).
-- **SUGGERE** (non assere) : l'allure en marche aleatoire (pas de derive monotone) est coherente
+- **Suggéré** (non assere) : l'allure en marche aleatoire (pas de derive monotone) est coherente
   avec une accumulation d'arrondi plutot qu'avec une fuite systematique ; aucun `assert` ne teste
   l'absence de tendance, seulement le maximum.
-- **NON MONTRE** : la masse au-dela de 20 pas (le cas s'arrete a $t=0.02$) ; rien ne garantit que
+- **Non montré** : la masse au-dela de 20 pas (le cas s'arrete a $t=0.02$) ; rien ne garantit que
   la derive resterait $<10^{-9}$ sur $10^5$ pas (l'accumulation d'arrondi croit lentement).
 
 ### `densite.png` : cartes finales $n_e$ et $n_i$
 
 ![Cartes de densite finale : n_e module en x amplitude 0.02, n_i amplitude 4e-6 en opposition](figures/densite.png)
 
-- **PROUVE** : $n_e\in[0.980,1.020]$ (le cosinus initial d'amplitude $0.02$, invariant en $y$) et
+- **Prouve** : $n_e\in[0.980,1.020]$ (le cosinus initial d'amplitude $0.02$, invariant en $y$) et
   $n_i\in[1{-}4\times10^{-6},\,1{+}4\times10^{-6}]$ restent finis et strictement positifs
   (`assert_finite` + `assert_positive`, `run.py:133-136`).
-- **SUGGERE** : $n_i$, initialement uniforme, a developpe une modulation $\sim4\times10^{-6}$ (un
+- **Suggéré** : $n_i$, initialement uniforme, a developpe une modulation $\sim4\times10^{-6}$ (un
   million de fois plus petite que celle des electrons) en opposition de phase, signe que les
   ions repondent au champ $\phi$ cree par les electrons. C'est la signature visuelle du couplage
   inter-especes, mais aucun `assert` ne mesure cette amplitude ni sa phase.
-- **NON MONTRE** : la quantite de mouvement et l'energie (non tracees) ; la dynamique non lineaire
+- **Non montré** : la quantite de mouvement et l'energie (non tracees) ; la dynamique non lineaire
   (20 pas, amplitude minuscule) ; aucune comparaison a une solution de reference.
 
 ### `potentiel.png` : un seul Poisson agrege les deux charges
 
 ![Carte de |phi| avec deux noeuds, et coupe phi(x) collant a (delta/k^2)cos(kx)](figures/potentiel.png)
 
-- **PROUVE** : la coupe $\phi(x)$ (points) suit la solution analytique $(\delta/k^2)\cos(kx)$
+- **Prouve** : la coupe $\phi(x)$ (points) suit la solution analytique $(\delta/k^2)\cos(kx)$
   (trait) avec un residu $3.0\times10^{-6}$ ($\sim0.6\%$), et la carte $\lvert\phi\rvert$ montre les
   deux noeuds ($\phi=0$ en $x=0.25$ et $x=0.75$) du mode $\cos(2\pi x)$. Cela confirme la
   convention de signe $\nabla^2\phi=f$ (section 4.3) et que le Poisson de systeme resout bien le
   second membre agrege.
-- **SUGGERE** : l'amplitude mesuree $5.025\times10^{-4}$ proche de l'analytique
+- **Suggéré** : l'amplitude mesuree $5.025\times10^{-4}$ proche de l'analytique
   $5.055\times10^{-4}$ suggere que le multigrille a converge ; le residu $0.6\%$ est de l'erreur de
   troncature $48^2$, pas une egalite bit.
-- **NON MONTRE** : aucun `assert` du `run.py` ne teste $\phi$ (le potentiel n'est verifie que par
+- **Non montré** : aucun `assert` du `run.py` ne teste $\phi$ (le potentiel n'est verifie que par
   cette figure, hors CI) ; pas de comparaison a un solveur FFT de reference ; pas d'etude de
   convergence en $h$.
 

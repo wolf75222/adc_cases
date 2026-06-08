@@ -16,8 +16,8 @@ et que le reflux conserve la masse a l'arrondi machine.
 | Entrees | grille de base $64\times 64$, $L=1$, periodique ; AMR `regrid_every=10`, 1 niveau fin, seuil de tag `threshold = n_{i0} + 0.15` ; CI `band_density` (bande gaussienne, `mode=4`, `width=0.05`, `disp=0.02`, `amp=1`, `floor=1`) ; modele `diocotron(B0=1, alpha=1, n_i0=<n_e>)` ; fond neutralisant $n_{i0}=\langle n_e\rangle$ ; 40 pas a `CFL=0.4`, schema NoSlope + Rusanov |
 | Sorties | trace stdout (patches, masse, drel par pas) ; 3 figures de diagnostic dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py` : `n_patches() >= 2` a chaque pas (`run.py:88`) ; `drel < 1e-9` (`run.py:89`) ; densite finie (`run.py:90`) ; `min(patches_seen) > npatch_ctrl` (`run.py:112`) ; `gap > 1e-3` (`run.py:115`) |
-| PROUVE | (1) la bande est couverte par 2 patchs fins a tous les pas, vs 1 pour un run de controle a seuil inatteignable : le raffinement vient du tagging ; (2) la solution raffinee differe de la non-raffinee de `max|delta| = 6.40e-2` (`run.py`, ecart sup > 1e-3) ; (3) la masse AMR est conservee a `drel <= 3.06e-15` (reflux) ; (4) densite finie partout |
-| NE PROUVE PAS | ce n'est pas une reproduction d'un taux $\gamma_l$ ni d'une figure du papier (la reproduction etablie vit dans [`../diocotron/`](../diocotron/), grille uniforme ; la candidate Euler-Poisson magnetisee complete dans [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), statut PENDING). La CI plafonne a 2 patchs et 1 niveau fin : pas de hierarchie profonde ni de grand nombre de patchs testes. Le seuil est cale empiriquement, pas issu d'un estimateur d'erreur. Aucun assert ne teste la convergence ni le taux de croissance. |
+| Prouve | (1) la bande est couverte par 2 patchs fins a tous les pas, vs 1 pour un run de controle a seuil inatteignable : le raffinement vient du tagging ; (2) la solution raffinee differe de la non-raffinee de `max|delta| = 6.40e-2` (`run.py`, ecart sup > 1e-3) ; (3) la masse AMR est conservee a `drel <= 3.06e-15` (reflux) ; (4) densite finie partout |
+| Ne prouve pas | ce n'est pas une reproduction d'un taux $\gamma_l$ ni d'une figure du papier (la reproduction etablie vit dans [`../diocotron/`](../diocotron/), grille uniforme ; la candidate Euler-Poisson magnetisee complete dans [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), statut pending). La CI plafonne a 2 patchs et 1 niveau fin : pas de hierarchie profonde ni de grand nombre de patchs testes. Le seuil est cale empiriquement, pas issu d'un estimateur d'erreur. Aucun assert ne teste la convergence ni le taux de croissance. |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif (`adc.AmrSystem` + `adc.System`), base $64^2$, Python 3.12.2, macOS arm64 ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi cet AMR ne touche pas la masse (la math du reflux + Poisson periodique),
@@ -93,7 +93,7 @@ reutilisee pour les deux) :
 - **controle** : `threshold = 1e30` (`NO_REFINE`, `run.py:48`), aucune cellule ne le depasse, le
   critere ne tagge jamais.
 
-Trois predictions tombent de ce contraste, chacune justifiant une clause PROUVE du contrat :
+Trois predictions tombent de ce contraste, chacune justifiant une clause Prouve du contrat :
 
 1. **Le raffinement vient du tagging** : `n_patches()` nominal $\ge 2$ a chaque pas (`run.py:88`),
    mais le controle reste a $1$ (`run.py:112`). Si la hierarchie produisait des patchs sans tagging,
@@ -224,28 +224,28 @@ Tous les nombres ci-dessous sont ceux du run (cf. `figures/provenance.json`).
 
 ![Densite finale : uniforme 64x64, AMR base 64x64 + niveau fin, et leur difference](figures/density_compare.png)
 
-- **PROUVE** (par les asserts de `run.py` et la mesure ici) : les deux runs portent la meme
+- **Prouve** (par les asserts de `run.py` et la mesure ici) : les deux runs portent la meme
   dynamique (bande modulee 4 fois, $n_e^{\max}$ AMR $=1.967$ vs uniforme $=1.920$) ; le panneau de
   difference est non nul, `max|delta n_e| = 8.68e-2` (du meme ordre que le `gap=6.40e-2` asseré dans
   `run.py:115`, fenetres de mesure differentes) : l'AMR modifie la solution.
-- **SUGGERE (non assere)** : la difference est structuree aux bords de la bande (lobes rouges/bleus
+- **Suggéré (non assere)** : la difference est structuree aux bords de la bande (lobes rouges/bleus
   alternes le long de $y\approx 0.45$ et $0.57$), pas un bruit diffus : c'est exactement ou le niveau
   fin resout mieux le gradient transverse. Visible, non teste par un assert spatial.
-- **NON MONTRE** : aucune des deux cartes n'est comparee a une solution de reference convergee ; on ne
+- **Non montré** : aucune des deux cartes n'est comparee a une solution de reference convergee ; on ne
   prouve pas laquelle est "la bonne", seulement qu'elles different la ou l'AMR agit.
 
 ### `patch_map.png` : ou l'AMR concentre la resolution
 
 ![Footprint des cellules taggees a 3 instants + n_patches au cours du temps](figures/patch_map.png)
 
-- **PROUVE** : `n_patches()` vaut 2 a tous les pas (panneau de droite, ligne plate ; `patches
+- **Prouve** : `n_patches()` vaut 2 a tous les pas (panneau de droite, ligne plate ; `patches
   observed = [2]` dans la provenance), ce qui satisfait l'assert $\ge 2$ (`run.py:88`). La bande est
   bien couverte par plusieurs patchs fins, pas un seul niveau degenere.
-- **SUGGERE** : le footprint des cellules taggees (proxy de la couverture du patch fin, $\approx 500$
+- **Suggéré** : le footprint des cellules taggees (proxy de la couverture du patch fin, $\approx 500$
   cellules, soit ~12 % du domaine) suit la bande : les 4 lobes de la modulation sont visibles a
   $t=0.33$ et s'etalent en une bande lisse a $t=6.62$ a mesure que le schema d'ordre 1 diffuse les
   bords. Le tag se concentre la ou $n_e>1.239$, jamais sur le plancher a $1.0$.
-- **NON MONTRE** : ce footprint est la zone taggee (densite > seuil), pas la geometrie exacte des
+- **Non montré** : ce footprint est la zone taggee (densite > seuil), pas la geometrie exacte des
   rectangles Berger-Rigoutsos : le binding n'expose pas les boites de patch, seulement leur nombre
   (`n_patches()`). Le footprint approche la couverture, il ne la dessine pas au pixel pres. Le compte
   reste fige a 2 : on ne teste ni la fusion/scission de patchs ni un grand nombre de patchs.
@@ -254,14 +254,14 @@ Tous les nombres ci-dessous sont ceux du run (cf. `figures/provenance.json`).
 
 ![Derive relative de masse vs t, AMR vs uniforme, sous la tolerance 1e-9](figures/mass_conservation.png)
 
-- **PROUVE** : les deux courbes restent collees au plancher d'arrondi machine ($\sim 10^{-15}$),
+- **Prouve** : les deux courbes restent collees au plancher d'arrondi machine ($\sim 10^{-15}$),
   six ordres de grandeur sous la tolerance `TOL_MASS = 1e-9` (ligne tiretee). Mesure : AMR
   `drel_max = 3.06e-15`, uniforme `drel_max = 6.12e-15`. L'assert `drel < 1e-9` (`run.py:89`) passe a
   chaque pas.
-- **SUGGERE** : l'AMR n'est pas moins conservatif que l'uniforme malgre ses interfaces grossier/fin
+- **Suggéré** : l'AMR n'est pas moins conservatif que l'uniforme malgre ses interfaces grossier/fin
   re-decoupees tous les 10 pas : sa courbe est meme legerement plus basse par endroits. C'est la
   signature attendue d'un reflux correct ; aucun assert ne compare les deux planchers.
-- **NON MONTRE** : on ne montre pas le scenario sans reflux (qui sortirait du graphe par une derive
+- **Non montré** : on ne montre pas le scenario sans reflux (qui sortirait du graphe par une derive
   en marches a chaque regrid). La figure prouve que le reflux *present* conserve, pas le contrefactuel.
 
 ### `diocotron_amr_hero.gif` : la figure hero du README adc_cpp, en version locale
@@ -277,18 +277,18 @@ fins du solveur, pas un proxy.
 
 ![Animation diocotron sur AMR : bande mode l=2 enroulee en oeil-de-chat, vrais patchs AMR](figures/diocotron_amr_hero.gif)
 
-- **PROUVE / visible (physique du solveur)** : la bande est advectee par le solveur (derive
+- **Prouve / visible (physique du solveur)** : la bande est advectee par le solveur (derive
   $E \times B$ de `models.diocotron`, Poisson de charge resolu par multigrille geometrique sur
   `adc.AmrSystem`). L'enroulement en deux vortex (oeil-de-chat, instabilite de Kelvin-Helmholtz du
   diocotron au mode $l=2$) est la sortie du code, pas une animation scriptee.
-- **PROUVE / visible (cadres du solveur)** : chaque rectangle cyan est la geometrie exacte d'un patch
+- **Prouve / visible (cadres du solveur)** : chaque rectangle cyan est la geometrie exacte d'un patch
   fin, lue par `AmrSystem.patch_rectangles()` (binding `patch_boxes()`). Aucun proxy de
   densite, aucun `scipy` : ce sont les patchs que le moteur a effectivement raffines. On le
   voit suivre la physique : au depart les patchs tuilent la bande sinusoidale, puis se concentrent
   sur les coeurs de vortex et le filament quand l'instabilite s'enroule (criteres de tag au-dessus du
   plancher, `set_refinement(threshold)` ; le regrid les replace a chaque fenetre). Le nombre de
   patchs varie (consigne dans `provenance.json`, champ `n_patches_*`).
-- **PORTEE (1 niveau, pas 3)** : la facade Python `adc.AmrSystem` raffine sur un niveau fin
+- **portee (1 niveau, pas 3)** : la facade Python `adc.AmrSystem` raffine sur un niveau fin
   multi-patch (Berger-Rigoutsos) : tous les patchs sont de niveau 1 (cyan ; le code colore par
   niveau, 1=cyan/2=vert/3=rouge, et serait pret si un futur exposait plus de niveaux). La figure hero
   du README adc_cpp a, elle, ete produite par le moteur C++ multi-niveaux (`advance_amr`, 3

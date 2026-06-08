@@ -15,8 +15,8 @@ se detend ; le cas verifie un etat fini et coherent, pas un nombre cible.
 | Entrees | grille $64^2$, $L=1$, periodique ; CI gaz au repos $\rho=1$, $v=0$, bulle gaussienne $p=1+0.4\,e^{-r^2/0.01}$ centree, $E=p/(\gamma-1)$ ; $\gamma=1.4$ ; schema Rusanov ordre 1 + Euler avant, CFL $0.4$, 120 pas (dt reevalue par pas) |
 | Sorties | etat $(4,n,n)=[\rho,\rho u,\rho v,E]$ en memoire numpy ; diagnostics console `drho_max`, `|v|_max`, `drel`, `max|dp|` ; 2 figures dans `figures/` + `figures/provenance.json` (ecrites par `make_figures.py`, pas par `run.py`) |
 | Invariants garantis | les 4 `assert` de `run.py:90-93` : `assert_finite(U)` ; `U[0].min()>0 and pressure(U).min()>0` ; `drel < 1e-9` ; `moved > 1e-3` |
-| PROUVE | l'arbre symbolique declare en formules produit un etat fini, positif ($\rho_{\min}=0.9222>0$, $p_{\min}=0.9752>0$) et non trivial (la bulle se detend : `moved`$=0.3939 \gg 10^{-3}$) ; la masse est conservee exactement (`drel`$=0.0$, bit-machine, flux conservatif + `np.roll` periodique) |
-| NE PROUVE PAS | prototype, pas production : backend numpy interprete (`PythonFlux`), pas de chemin compile, pas de GPU/MPI/AMR. Aucune egalite au natif n'est verifiee ici (`np.array_equal` absent) : c'est le seul `*_dsl` qui ne compile pas et ne se compare pas (voir [`diocotron_dsl`](../diocotron_dsl/)). Schema ordre 1 dissipatif : energie et impulsion non asserees, fronts etales. Aucune cible publiee, aucune tolerance sur une valeur physique. Hors CI |
+| Prouve | l'arbre symbolique declare en formules produit un etat fini, positif ($\rho_{\min}=0.9222>0$, $p_{\min}=0.9752>0$) et non trivial (la bulle se detend : `moved`$=0.3939 \gg 10^{-3}$) ; la masse est conservee exactement (`drel`$=0.0$, bit-machine, flux conservatif + `np.roll` periodique) |
+| Ne prouve pas | prototype, pas production : backend numpy interprete (`PythonFlux`), pas de chemin compile, pas de GPU/MPI/AMR. Aucune egalite au natif n'est verifiee ici (`np.array_equal` absent) : c'est le seul `*_dsl` qui ne compile pas et ne se compare pas (voir [`diocotron_dsl`](../diocotron_dsl/)). Schema ordre 1 dissipatif : energie et impulsion non asserees, fronts etales. Aucune cible publiee, aucune tolerance sur une valeur physique. Hors CI |
 | Provenance | adc_cpp `01873299`, adc_cases `1affec1d`, backend interprete numpy, $64^2$, ~0.2-0.4 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : ce que "ecrire un modele en formules" veut dire concretement (les 7 lignes de
@@ -26,7 +26,7 @@ manque pour promouvoir ce prototype au statut des autres `*_dsl`.
 
 ---
 
-## 1. Ce que ce cas declare (justifie PROUVE : etat fini et coherent)
+## 1. Ce que ce cas declare (justifie Prouve : etat fini et coherent)
 
 Pas de derivation de l'Euler-Poisson : c'est de l'Euler compressible pur (ni source ni Poisson ;
 `set_source`/`set_elliptic_rhs` ne sont jamais appeles, donc `source_value` rend des zeros,
@@ -77,7 +77,7 @@ Contraste avec la couche du milieu des autres `*_dsl` : eux appellent `emit_cpp_
 brique C++ generee branchee sur `assemble_rhs` device. Ici `to_python_flux` (`run.py:77`,
 `dsl.py:491-498`) court-circuite tout cela : l'arbre alimente directement `PythonFlux`.
 
-## 3. Le schema, ligne par ligne (justifie PROUVE : masse conservee bit-machine)
+## 3. Le schema, ligne par ligne (justifie Prouve : masse conservee bit-machine)
 
 `PythonFlux.residual` (`__init__.py:1263-1275`) assemble le flux de Rusanov (Lax-Friedrichs local) :
 
@@ -127,27 +127,27 @@ courbe d'article. Commande exacte en section 7.
 
 ![Densite finale (coeur rarefie) et pression finale (anneau radial), 64x64 periodique a t=0.589](figures/final_state.png)
 
-- **PROUVE** (asserte `run.py:90-91`) : l'etat final est fini et positif sur tout le domaine :
+- **Prouve** (asserte `run.py:90-91`) : l'etat final est fini et positif sur tout le domaine :
   $\rho\in[0.9222,1.0452]$, $p\in[0.9752,1.0638]$, aucun NaN/Inf. Le coeur s'est rarefie
   ($\rho\approx 0.94$ au centre : la bulle s'est videe), entoure d'un anneau radial sortant.
-- **SUGGERE** (non assere) : la signature acoustique (front radial qui s'eloigne du centre) est
+- **Suggéré** (non assere) : la signature acoustique (front radial qui s'eloigne du centre) est
   visible mais aucun assert ne la mesure ; le motif en croix est l'interference de l'onde avec
   ses images periodiques (domaine periodique + bulle alignee sur la grille), pas un artefact de bug.
-- **NON MONTRE** : aucune comparaison a une solution de reference (Sedov, onde de souffle
+- **Non montré** : aucune comparaison a une solution de reference (Sedov, onde de souffle
   analytique) ; l'ordre 1 dissipatif etale les fronts, la carte n'est pas calibree quantitativement.
 
 ### `bubble_decay.png` : decroissance de la perturbation
 
 ![Pression au centre qui relaxe de 1.395 vers la moyenne 1.013, et amplitude max|p-p0| qui culmine a 0.457 a t=0.148](figures/bubble_decay.png)
 
-- **PROUVE / mesure** : la bulle se detend : la pression au sommet chute de $p_c(0)=1.395$, passe
+- **Prouve / mesure** : la bulle se detend : la pression au sommet chute de $p_c(0)=1.395$, passe
   sous la moyenne ($\bar p=1.013$ : rebond de rarefaction a $t\approx 0.15$), puis remonte vers
   $1.001$ a $t=0.589$. L'amplitude $\max|p-p_0|$ croit, culmine a $0.457$ a $t=0.148$ (le front
   est constitue), puis decroit vers la valeur asseree `moved`$=0.394$. C'est la "decroissance d'une
   perturbation" : le pic localise se dilue en onde etalee.
-- **SUGGERE** : la relaxation monotone vers $\bar p$ apres le rebond suggere un amortissement
+- **Suggéré** : la relaxation monotone vers $\bar p$ apres le rebond suggere un amortissement
   numerique (diffusion de Rusanov), non quantifie.
-- **NON MONTRE** : ni periode acoustique exacte, ni taux d'amortissement physique ; le schema ordre 1
+- **Non montré** : ni periode acoustique exacte, ni taux d'amortissement physique ; le schema ordre 1
   dissipe, le cas ne separe pas amortissement physique et numerique.
 
 ## 6. Ce qui manque pour promouvoir ce prototype (limites)
@@ -165,7 +165,7 @@ courbe d'article. Commande exacte en section 7.
 - **Schema ordre 1 dissipatif.** Rusanov + Euler avant : energie et impulsion non conservees et
   non asserees (seules masse, positivite, finitude, dynamique le sont). Adapte a une demo
   qualitative, pas a une etude acoustique quantitative.
-- **Aucune reference publiee, geometrie figee.** $64^2$ periodique en dur, pas d'argument CLI, aucune
+- **Aucune reference publiee, geometrie figee.** $64^2$ periodique en dur, pas d'argument cli, aucune
   cible d'article (d'ou `experimental`, pas `reproduction`). Pour le couplage source/Poisson en DSL,
   voir les cas dedies ci-dessus.
 

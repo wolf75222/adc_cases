@@ -15,8 +15,8 @@ falsifiable est un invariant exact, pas un nombre physique cible.
 | Entrees | grille $48^2$, $L=1$, periodique ; CI : $n_e = 1 + 0.05\cos(2\pi x)$ (faible separation de charge), $n_i = n_g = 1$, toutes au repos ; $q_e=-1$, $q_i=+1$, $q_g=0$ ; $\gamma_e=5/3$, $c_s^2=1$ ; $k_{ion}=0.3$, $k_{col}=0.5$ ; 20 macro-pas a CFL $0.3$ |
 | Sorties | $\lvert\phi\rvert_{max}$ initial ; masses $M_i, M_g$ avant/apres ; min des trois densites ; 3 figures de diagnostic dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les 4 `assert` de `run.py:66-69` : (1) $\lvert\phi\rvert_{max}>10^{-8}$ ; (2) $M_g$ baisse et $M_i$ monte (chacun $>10^{-6}$) ; (3) derive relative de $M_i+M_g$ sous $10^{-7}$ ; (4) densites finies et $>0$ |
-| PROUVE | (1) le Poisson de systeme est actif : $\lvert\phi\rvert_{max}=1.266\times10^{-3}$ ; (2) l'ionisation transfere la masse du neutre vers l'ion : $M_g\!:2304\to2237.32$, $M_i\!:2304\to2370.68$ ; (3) ce transfert conserve $M_i+M_g$ a $2.37\times10^{-15}$ (precision machine) ; (4) les trois densites restent finies et $>0$ (min $e=0.986$, $i=1.028$, $n=0.970$) |
-| NE PROUVE PAS | l'ionisation n'agit que sur la densite (comp 0) : le transfert de quantite de mouvement et d'energie des particules creees est une simplification du coeur (`system.cpp:719-733`), aucun assert ne le teste. La friction neglige l'echauffement (`system.cpp:754-757`). Aucune energie totale, aucun taux de croissance, aucune section efficace physique : $k_{ion}, k_{col}$ sont des constantes de demonstration. Pas de magnetisation, pas de derive ExB (cf. [`../diocotron/`](../diocotron/)). $48^2$/20 pas : aucune convergence |
+| Prouve | (1) le Poisson de systeme est actif : $\lvert\phi\rvert_{max}=1.266\times10^{-3}$ ; (2) l'ionisation transfere la masse du neutre vers l'ion : $M_g\!:2304\to2237.32$, $M_i\!:2304\to2370.68$ ; (3) ce transfert conserve $M_i+M_g$ a $2.37\times10^{-15}$ (precision machine) ; (4) les trois densites restent finies et $>0$ (min $e=0.986$, $i=1.028$, $n=0.970$) |
+| Ne prouve pas | l'ionisation n'agit que sur la densite (comp 0) : le transfert de quantite de mouvement et d'energie des particules creees est une simplification du coeur (`system.cpp:719-733`), aucun assert ne le teste. La friction neglige l'echauffement (`system.cpp:754-757`). Aucune energie totale, aucun taux de croissance, aucune section efficace physique : $k_{ion}, k_{col}$ sont des constantes de demonstration. Pas de magnetisation, pas de derive ExB (cf. [`../diocotron/`](../diocotron/)). $48^2$/20 pas : aucune convergence |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $48^2$, ~0.2 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi un Poisson de systeme couple trois fluides charges differemment,
@@ -98,9 +98,9 @@ $$\frac{d}{dt}\big(M_i + M_g\big) = 0, \qquad M_s \equiv \sum_{\text{cell}} n_s 
 La derivation (section 4) montre pourquoi : le terme source est antisymetrique entre $n_i$ et
 $n_g$ a la precision machine. L'artefact qui confronte cette prediction est `ionization.png`
 (section 6) : la courbe noire $M_i+M_g$ doit etre plate, et la derive relative doit plafonner
-sous la tolerance $10^{-7}$ de l'assert. C'est la clause PROUVE (3). La clause PROUVE (2) (sens du
-transfert) et PROUVE (1) (Poisson actif) sont confrontees par les memes figures. La clause
-NE PROUVE PAS (momentum/energie ignores) est justifiee en section 4 (ce que le foncteur n'ecrit pas)
+sous la tolerance $10^{-7}$ de l'assert. C'est la clause Prouve (3). La clause Prouve (2) (sens du
+transfert) et Prouve (1) (Poisson actif) sont confrontees par les memes figures. La clause
+Ne prouve pas (momentum/energie ignores) est justifiee en section 4 (ce que le foncteur n'ecrit pas)
 et en section 7.
 
 ---
@@ -131,7 +131,7 @@ ue(i, j, de) += dn;                                      // electron: +delta_n  
   $10^{-13}$ pres ($2370.677033292462$ vs $2370.677033292496$, `provenance.json`). $M_e$ n'est donc
   pas conservee (les electrons sont crees, pas advectes seulement) ; seul le couple $M_i+M_g$ l'est.
 
-### 4.2 Ce que le foncteur n'ecrit pas (la simplification, clause NE PROUVE PAS)
+### 4.2 Ce que le foncteur n'ecrit pas (la simplification, clause Ne prouve pas)
 
 Les trois lignes ci-dessus touchent uniquement la composante densite (comp 0). Elles n'ecrivent
 ni la quantite de mouvement (comp 1, 2) ni l'energie (comp 3 des electrons). Physiquement, un ion
@@ -210,14 +210,14 @@ instrumente la boucle pour enregistrer l'historique. Commande en section 8.
 
 ![Densites moyennes e/i/n vs t : ions et electrons montent, neutres descendent](figures/densities.png)
 
-- **PROUVE** (clause 2) : la densite moyenne des ions monte ($\bar n_i\!:1\to1.0289$) et celle des
+- **Prouve** (clause 2) : la densite moyenne des ions monte ($\bar n_i\!:1\to1.0289$) et celle des
   neutres descend ($\bar n_g\!:1\to0.9711$) de maniere exactement opposee : l'ionisation vide le
   reservoir neutre dans le reservoir ionise. Pentes initiales egales et de signe oppose (asserte par
   $M_g<M_{g,0}$ et $M_i>M_{i,0}$, `run.py:67`).
-- **SUGGERE (non assere)** : la courbe electron (bleu) est invisible, masquee sous la courbe ion
+- **Suggéré (non assere)** : la courbe electron (bleu) est invisible, masquee sous la courbe ion
   (rouge) : $\bar n_e=\bar n_i$ a $10^{-13}$ pres (section 4.1, $n_e$ et $n_i$ gagnent le meme
   $\delta n$). Visible a l'oeil, mais aucun assert ne compare $M_e$ a $M_i$.
-- **NON MONTRE** : la courbure tres legere (le taux $k n_e n_g$ depend de $n_e n_g$ qui evolue) ;
+- **Non montré** : la courbure tres legere (le taux $k n_e n_g$ depend de $n_e n_g$ qui evolue) ;
   sur $t<0.1$ et une fraction ionisee de 3 %, l'evolution reste quasi lineaire. Pas de saturation
   (le neutre n'est pas epuise).
 
@@ -225,14 +225,14 @@ instrumente la boucle pour enregistrer l'historique. Commande en section 8.
 
 ![Trois panneaux : transfert n_g vers n_i, derive de masse, impulsion totale](figures/ionization.png)
 
-- **PROUVE** (clause 3), panneau gauche : $M_i$ (rouge) et $M_g$ (vert) divergent en miroir, mais
+- **Prouve** (clause 3), panneau gauche : $M_i$ (rouge) et $M_g$ (vert) divergent en miroir, mais
   leur somme $M_i+M_g$ (noir) est rigoureusement plate a $4608=2\times2304$. Le transfert ne
   cree ni ne detruit de masse $i\!+\!g$.
-- **PROUVE** (clause 3), panneau central : la derive relative de $M_i+M_g$ plafonne autour de
+- **Prouve** (clause 3), panneau central : la derive relative de $M_i+M_g$ plafonne autour de
   $10^{-15}$ (precision machine), huit ordres de grandeur sous la tolerance d'assert $10^{-7}$
   (ligne grise) : l'antisymetrie du foncteur (section 4.1) tient au bit pres. C'est l'observable qui
-  PROUVE l'invariant, pas seulement le rend plausible.
-- **SUGGERE / NON MONTRE**, panneau droit : la variation d'impulsion totale du couple ion-neutre
+  Prouve l'invariant, pas seulement le rend plausible.
+- **Suggéré / Non montré**, panneau droit : la variation d'impulsion totale du couple ion-neutre
   reste au zero machine ($\sim10^{-17}$). La friction conserve cette impulsion (section 4.3) ;
   ici elle est de toute facon quasi nulle car les vitesses partent de zero et restent faibles. Le
   panneau suggere la conservation mais ne la prouve pas (aucun assert sur l'impulsion dans ce
@@ -242,15 +242,15 @@ instrumente la boucle pour enregistrer l'historique. Commande en section 8.
 
 ![Cartes 2D n_e, n_i, n_g a t final : striees en x, ions/neutres modules par l'ionisation](figures/density_map.png)
 
-- **PROUVE** (clause 4) : les trois cartes sont finies et partout positives (min $e=0.986$,
+- **Prouve** (clause 4) : les trois cartes sont finies et partout positives (min $e=0.986$,
   $i=1.028$, $n=0.970$ ; asserte `run.py:69`). Aucun creux negatif, le primitif electron et le minmod
   isotherme tiennent la positivite.
-- **SUGGERE (non assere)** : ions et neutres, partis uniformes, ont developpe une modulation en
+- **Suggéré (non assere)** : ions et neutres, partis uniformes, ont developpe une modulation en
   $x$ qui copie le motif electron (ion : maximum la ou $n_e$ est dense ; neutre : photographie
   negative). Cause : le taux local $k\,n_e\,n_g$ est proportionnel a $n_e$, donc on ionise plus la ou
   les electrons sont denses. C'est une consequence directe (et correcte) du couplage, mais aucun
   assert ne la verifie : signature, pas garantie.
-- **NON MONTRE** : aucune dynamique en $y$ (CI invariante en $y$, advection au repos) ; aucune
+- **Non montré** : aucune dynamique en $y$ (CI invariante en $y$, advection au repos) ; aucune
   structure non lineaire (run trop court, gradients trop faibles).
 
 ---

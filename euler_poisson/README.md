@@ -14,8 +14,8 @@ Ce n'est pas une reproduction d'un resultat publie.
 | Entrees | grille $64^2$, $L=1$, periodique ; CI $\rho=\rho_0(1+\epsilon\cos(2\pi x/L))$, $\epsilon=0.01$, repos ($v=0$, $E=\rho/(\gamma-1)$) ; $\gamma=1.4$, $\rho_0=1$, $4\pi G=1$ (sans unites), $dt=0.004$, 20 pas ; van Leer + HLLC + SSPRK2, Poisson `geometric_mg` |
 | Sorties | etat `(4,n,n)=[\rho,\rho u,\rho v,E]` lu par `get_state("gas")` ; diagnostics globaux $E_{tot}=U[3].\mathrm{sum}()$, $p_x=U[1].\mathrm{sum}()$, $p_y=U[2].\mathrm{sum}()$ ; 3 figures dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les 3 `assert` de `run.py` : masse `max_rel_mass < TOL_MASS=1e-9` ; impulsion `max_mom < TOL_MOM=1e-8` ; contraste `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` puis `dE_grav<0` et `dE_plas>0` (`run.py:150-180`) |
-| PROUVE | masse conservee a $2.6\times10^{-14}$ relatif (les deux runs) ; impulsion nette $8.9\times10^{-16}$ ; $dE_{grav}=-5.857667\times10^{-4}<0$ et $dE_{plas}=+6.137105\times10^{-4}>0$ (signes opposes, magnitude $\gg$ TOL_DE) ; la pente $|dE|$ vs $\epsilon$ vaut 2.000 (figure 2) |
-| NE PROUVE PAS | pas une reproduction publiee : aucun nombre n'est confronte a un article (ni effondrement de Jeans, ni benchmark plasma). Le signe physique de $dE$ n'est pas deductible du travail $\int\rho\,v\cdot g$ (qui est positif des deux cotes, section 4.3) : il se lit sur l'assert qui passe. $E_{tot}=U[3].\mathrm{sum}()$ est l'energie fluide seule (sans potentiel de champ), c'est un proxy de signe, pas une integrale physique calibree. Regime quasi-lineaire ($\epsilon=0.01$, 20 pas) : aucune dynamique non lineaire |
+| Prouve | masse conservee a $2.6\times10^{-14}$ relatif (les deux runs) ; impulsion nette $8.9\times10^{-16}$ ; $dE_{grav}=-5.857667\times10^{-4}<0$ et $dE_{plas}=+6.137105\times10^{-4}>0$ (signes opposes, magnitude $\gg$ TOL_DE) ; la pente $|dE|$ vs $\epsilon$ vaut 2.000 (figure 2) |
+| Ne prouve pas | pas une reproduction publiee : aucun nombre n'est confronte a un article (ni effondrement de Jeans, ni benchmark plasma). Le signe physique de $dE$ n'est pas deductible du travail $\int\rho\,v\cdot g$ (qui est positif des deux cotes, section 4.3) : il se lit sur l'assert qui passe. $E_{tot}=U[3].\mathrm{sum}()$ est l'energie fluide seule (sans potentiel de champ), c'est un proxy de signe, pas une integrale physique calibree. Regime quasi-lineaire ($\epsilon=0.01$, 20 pas) : aucune dynamique non lineaire |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $64^2$, ~0.3 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi le meme code donne deux signes de $dE$ opposes (mecanisme), pourquoi
@@ -25,7 +25,7 @@ etablit reellement.
 
 ---
 
-## 1. Le mecanisme physique (justifie PROUVE : contraste de signe)
+## 1. Le mecanisme physique (justifie Prouve : contraste de signe)
 
 Un fluide compressible au repos, de densite $\rho=\rho_0(1+\epsilon\cos kx)$ avec $k=2\pi/L$, cree
 son propre champ de force via Poisson. Trois ingredients enchaines :
@@ -108,7 +108,7 @@ derivation ci-dessus, qui ne sert qu'a montrer que le code est coherent.
 
 ---
 
-## 4. Maths : pourquoi le signe de $dE$ ne se lit pas sur le travail (justifie NE PROUVE PAS)
+## 4. Maths : pourquoi le signe de $dE$ ne se lit pas sur le travail (justifie Ne prouve pas)
 
 ### 4.1 Ce que $E_{tot}$ est reellement
 
@@ -150,7 +150,7 @@ pour $\mathrm{sign}=+1$ et $\mathrm{sign}=-1$. Ecrire "le travail $v\cdot g$ est
 $dE<0$" est faux. Le cas le sait : il assere $dE_{grav}<0$ comme un fait mesure, pas comme
 une consequence du travail.
 
-### 4.4 La prediction falsifiable : $|dE|\propto\epsilon^2$ (justifie PROUVE : pente 2)
+### 4.4 La prediction falsifiable : $|dE|\propto\epsilon^2$ (justifie Prouve : pente 2)
 
 A $\epsilon=0$, le second membre $f=\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$ est identiquement nul,
 la force est nulle, et $dE=0$ exactement (mesure : $dE_{grav}(\epsilon{=}0)=dE_{plas}
@@ -246,27 +246,27 @@ Generees par `python make_figures.py` (memes parametres que `run.py`), versionne
 
 ![E_tot(t) - E_tot(0) pour gravite (descend) et plasma (monte), cote a cote](figures/energy_vs_t.png)
 
-- PROUVE (asserte `run.py:177-180`) : $E_{tot}$ diminue pour la gravite
+- Prouve (asserte `run.py:177-180`) : $E_{tot}$ diminue pour la gravite
   ($dE_{grav}=-5.858\times10^{-4}$) et augmente pour le plasma ($dE_{plas}=+6.137\times10^{-4}$).
   Les deux courbes partent de 0 (meme etat au repos) et divergent en sens opposes : signes
   strictement opposes, magnitudes $\gg$ TOL_DE.
-- SUGGERE (non assere) : la quasi-symetrie miroir des deux courbes (gravite et plasma ont des
+- Suggéré (non assere) : la quasi-symetrie miroir des deux courbes (gravite et plasma ont des
   $|dE|$ proches a ~5 %) est visible mais aucun assert ne la verifie ; elle n'est pas exacte (la
   reponse compressible n'est pas lineaire en $\mathrm{sign}$).
-- NON MONTRE : ce graphe ne dit rien du travail de la force (positif des deux cotes, section
+- Non montré : ce graphe ne dit rien du travail de la force (positif des deux cotes, section
   4.3) ; le titre rappelle que le signe est asserte, pas deduit de $v\cdot g$.
 
 ### `de_vs_eps.png` : la prediction $|dE|\propto\epsilon^2$
 
 ![|dE| vs epsilon en log-log : droites de pente 2 pour gravite et plasma, superposees a la reference](figures/de_vs_eps.png)
 
-- PROUVE : sur $\epsilon\in\{0.005,0.01,0.02,0.04,0.08\}$, la regression log-log donne une pente
+- Prouve : sur $\epsilon\in\{0.005,0.01,0.02,0.04,0.08\}$, la regression log-log donne une pente
   2.000 (gravite 1.99998, plasma 1.99998), confondue avec la droite de reference $\propto
   \epsilon^2$. Doubler $\epsilon$ quadruple $|dE|$ : $1.46\times10^{-4}\to5.86\times10^{-4}\to
   2.34\times10^{-3}$, chaque pas $\times 4$. La linearisation (section 4.4) est confirmee.
-- SUGGERE : gravite et plasma ont des $|dE|$ tres proches (les deux droites se chevauchent) ;
+- Suggéré : gravite et plasma ont des $|dE|$ tres proches (les deux droites se chevauchent) ;
   l'asymetrie est du second ordre et non testee.
-- NON MONTRE : aucune deviation de pente n'apparait jusqu'a $\epsilon=0.08$, donc on ne voit pas
+- Non montré : aucune deviation de pente n'apparait jusqu'a $\epsilon=0.08$, donc on ne voit pas
   l'entree du regime non lineaire (qui donnerait pente $>2$ aux plus grands $\epsilon$). Le controle
   $dE(\epsilon{=}0)=0.0$ (bit-machine) borne la tolerance par le bas mais n'est pas sur l'axe log.
 
@@ -274,11 +274,11 @@ Generees par `python make_figures.py` (memes parametres que `run.py`), versionne
 
 ![Cartes de densite : CI, gravite finale, plasma finale, perturbation en bandes verticales](figures/density_map.png)
 
-- PROUVE / mesure : la perturbation reste 1D selon $x$ (ecart-type en $y$ : $3.8\times
+- Prouve / mesure : la perturbation reste 1D selon $x$ (ecart-type en $y$ : $3.8\times
   10^{-16}$, bit-machine) ; aucune structure transverse n'apparait. L'amplitude max-min passe de
   $2.00\times10^{-2}$ (CI) a $1.76\times10^{-2}$ (gravite) et $1.75\times10^{-2}$ (plasma) : les
   deux s'aplatissent legerement sur 20 pas.
-- NON MONTRE : a $\epsilon=0.01$, le contraste gravite/plasma n'est pas visible a l'oeil sur
+- Non montré : a $\epsilon=0.01$, le contraste gravite/plasma n'est pas visible a l'oeil sur
   la densite (les deux panneaux sont quasi identiques) ; le contraste de signe vit dans l'energie
   integree $dE\sim6\times10^{-4}$, pas dans la carte de densite. Aucun effondrement ni formation de
   structure : le regime est quasi-lineaire et a horizon court.
@@ -327,7 +327,7 @@ Contraste energetique (attractif vs repulsif) :
 OK euler_poisson
 ```
 
-avec `max derive masse relative = 2.598e-14` (GRAVITE) / `2.098e-14` (PLASMA), `max |p| =
+avec `max derive masse relative = 2.598e-14` (gravité) / `2.098e-14` (plasma), `max |p| =
 8.882e-16`. Cout : ~0.3 s temps mur (import numpy inclus), 2 runs $\times$ 20 pas $\times$ grille
 $64^2$ + un Poisson multigrille par etage. Caveat plateforme : les signes, l'ordre de grandeur
 ($\sim6\times10^{-4}$), la pente (2.000) et le verdict `OK` sont stables d'une plateforme a l'autre ;

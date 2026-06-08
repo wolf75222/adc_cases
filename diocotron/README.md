@@ -14,8 +14,8 @@ numpy) et aux cibles du papier.
 | Entrees | grille $192^2$, $L=1$, non periodique, paroi conductrice cercle $R_w=0.40$ ; anneau $R_0{:}R_1=0.15{:}0.20$, perturbation $\delta\sin(l\theta)$ ($\delta=0.01$ mesure, $0.1$ gif) ; $B_0=1$, $\alpha=1$ ; modes $l\in\{3,4,5\}$ |
 | Sorties | $\gamma_l$ mesure (3 modes) ; 4 figures dans `figures/` ; `figures/provenance.json` |
 | Invariants garantis | l'oracle analytique colle au papier a 3 chiffres ; l'amplitude $|c_l|$ croit (pente log positive sur la fenetre lineaire) |
-| PROUVE | (1) notre relation de dispersion numpy reproduit le papier ($\gamma_3{=}0.772$, $\gamma_4{=}0.912$, $\gamma_5{=}0.687$) ; (2) la simulation `adc` est instable aux 3 modes, dans le bon ordre |
-| NE PROUVE PAS | la simulation ne reproduit pas le taux quantitatif : elle sous-estime de $-22$ a $-27\%$ (modes 3-4). Ceci reproduit la limite de derive E x B, pas le systeme Euler-Poisson magnetise complet (voir [`hoffart_euler_poisson_dsl`](../hoffart_euler_poisson_dsl/)). Aucun assert ne teste la valeur de $\gamma$ ; `run.py` la mesure et l'affiche |
+| Prouve | (1) notre relation de dispersion numpy reproduit le papier ($\gamma_3{=}0.772$, $\gamma_4{=}0.912$, $\gamma_5{=}0.687$) ; (2) la simulation `adc` est instable aux 3 modes, dans le bon ordre |
+| Ne prouve pas | la simulation ne reproduit pas le taux quantitatif : elle sous-estime de $-22$ a $-27\%$ (modes 3-4). Ceci reproduit la limite de derive E x B, pas le systeme Euler-Poisson magnetise complet (voir [`hoffart_euler_poisson_dsl`](../hoffart_euler_poisson_dsl/)). Aucun assert ne teste la valeur de $\gamma$ ; `run.py` la mesure et l'affiche |
 | Provenance | adc_cpp `7598316a`, adc_cases `5112be06`, backend natif serie, $192^2$, ~60 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : pourquoi un anneau de charge devient instable (mecanisme), comment se calcule
@@ -75,7 +75,7 @@ la physique est une composition de briques generiques.
 `run.py` calcule $\gamma_l$ par deux chemins independants et les confronte :
 (A) un oracle analytique numpy (section 4) ; (B) la simulation `adc` (section 5). La figure
 `dispersion.png` superpose les deux + les points du papier. L'ecart (A)-(B) est l'analyse centrale
-(section 7). Justifie la clause PROUVE (l'oracle == papier) et la clause NE PROUVE PAS (la simu
+(section 7). Justifie la clause Prouve (l'oracle == papier) et la clause Ne prouve pas (la simu
 sous-estime).
 
 ---
@@ -178,23 +178,23 @@ $n_e\approx\mathbb{1}_{[R_0,R_1]}(1-\delta+\delta\sin(l\theta))$. $\delta=0.01$ 
 
 ![Taux de croissance gamma_l vs mode l : courbe analytique Petri, carres papier, etoiles adc](figures/dispersion.png)
 
-- **PROUVE** : la courbe analytique (gris) passe sur les carres rouges du papier
+- **Prouve** : la courbe analytique (gris) passe sur les carres rouges du papier
   ($\gamma_3{=}0.772$, $\gamma_4{=}0.912$, $\gamma_5{=}0.687$) : notre oracle reproduit le papier a 3
   chiffres. Les etoiles bleues (mesure `adc`) sont toutes sous la courbe, dans le bon ordre de
   modes.
-- **SUGGERE (non assere)** : le maximum vers $l=4$ (mode le plus instable de cette geometrie) est
+- **Suggéré (non assere)** : le maximum vers $l=4$ (mode le plus instable de cette geometrie) est
   visible mais aucun assert ne classe les modes.
-- **NON MONTRE** : aucun point ne teste la valeur de $\gamma$ par assert ; `run.py` la mesure et
+- **Non montré** : aucun point ne teste la valeur de $\gamma$ par assert ; `run.py` la mesure et
   l'affiche, il ne la valide pas contre une tolerance.
 
 ### `amplitude.png` : croissance exponentielle
 
 ![|c_l|(t) en echelle log pour les modes 3,4,5 : droites en phase lineaire](figures/amplitude.png)
 
-- **PROUVE** : sur l'echelle semilog, chaque mode trace une droite sur la fenetre d'ajustement :
+- **Prouve** : sur l'echelle semilog, chaque mode trace une droite sur la fenetre d'ajustement :
   croissance $|c_l|\propto e^{\gamma t}$ confirmee (pente positive = instable). La pente est le
   $\gamma$ reporte en etoile sur `dispersion.png`.
-- **NON MONTRE** : la saturation (aplatissement en haut) est non lineaire et hors fenetre de mesure.
+- **Non montré** : la saturation (aplatissement en haut) est non lineaire et hors fenetre de mesure.
 
 ### `diocotron.gif` + `snapshots.png` : enroulement non lineaire (l=4)
 
@@ -202,9 +202,9 @@ $n_e\approx\mathbb{1}_{[R_0,R_1]}(1-\delta+\delta\sin(l\theta))$. $\delta=0.01$ 
 
 ![Quatre instantanes de densite (t croissant), mode l=4](figures/snapshots.png)
 
-- **PROUVE / visible** : l'anneau developpe exactement 4 lobes ($l=4$) qui s'enroulent en
+- **Prouve / visible** : l'anneau developpe exactement 4 lobes ($l=4$) qui s'enroulent en
   spirale (roll-up de Kelvin-Helmholtz) : la signature de l'instabilite.
-- **SUGGERE** : la phase non lineaire (au-dela de la fenetre lineaire) ; sa dynamique exacte n'est
+- **Suggéré** : la phase non lineaire (au-dela de la fenetre lineaire) ; sa dynamique exacte n'est
   pas comparee au papier.
 
 ---

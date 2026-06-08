@@ -74,7 +74,7 @@ dans `diocotron/figures/` (tracké) avec un `provenance.json` ; le statut de cha
 `tutoriel`, `reproduction`, `reproduction-candidate`, `experimental`) et indique s'il tourne en
 CI (`ci = true`). La CI ne lance que les cas légers (`ci = true`) ; les cas longs
 (reproduction `diocotron/run.py` avec figures/gif), les reproductions-candidates non encore
-établies (`hoffart_euler_poisson_dsl/run.py`, table PENDING) et les expérimentaux (`dsl_euler`
+établies (`hoffart_euler_poisson_dsl/run.py`, table pending) et les expérimentaux (`dsl_euler`
 DSL interprété, `schur_magnetized_cartesian`) restent hors CI et se lancent à la main.
 
 ## Lancer un cas
@@ -101,7 +101,7 @@ python3 diocotron_dsl/run.py              # diocotron en formules, prouvé bit-i
 python3 two_species_dsl/run.py            # électrons + ions en formules, Poisson couplé
 python3 magnetic_isothermal_dsl/run.py    # fluide isotherme magnétisé (Lorentz via B_z) en formules
 python3 schur_magnetized_cartesian/run.py # étage source Schur vs explicite (mesure, expérimental)
-python3 hoffart_euler_poisson_dsl/run.py  # Euler-Poisson magnétisé (Hoffart) : reproduction-candidate PENDING
+python3 hoffart_euler_poisson_dsl/run.py  # Euler-Poisson magnétisé (Hoffart) : reproduction-candidate pending
 ```
 
 ## Les cas (un dossier par cas)
@@ -132,7 +132,7 @@ un prototype non finalisé.
 | [`magnetic_isothermal_dsl/`](magnetic_isothermal_dsl/README.md) | validation (needs `cxx`) | Fluide isotherme magnétisé en formules (DSL) | Fluide isotherme magnétisé en formules avec force de Lorentz `q ρ E + v×B` pilotée par un champ B_z constant lu sur le canal `aux` étendu (indice 3, peuplé depuis Python via `set_magnetic_field`). Aucun modèle natif de référence : correction prouvée par parité inter-backend (production == aot quand les deux se lient) + oracle Lorentz numpy + invariants (masse, positivité, rotation de la quantité de mouvement). |
 | [`schur_magnetized_cartesian/`](schur_magnetized_cartesian/README.md) | experimental (needs `cxx`) | Étage source Schur vs explicite | Mesure de l'effet temporel de l'étage source condensé par Schur (`adc.Split(Explicit, CondensedSchur)`) face à l'intégration explicite de la même source de Lorentz raide, sur un fluide isotherme magnétisé cartésien (même DSL que `magnetic_isothermal_dsl`). Balaie le plus grand `dt` stable explicite vs Schur (θ=0.5 / θ=1.0), reporte `dt·ω_c` et le gain. Prototype de mesure, hors CI. |
 | [`dsl_euler/`](dsl_euler/README.md) | experimental | Euler en formules (DSL interprété) | Euler compressible 2D en formules (mini-DSL `adc.dsl`), version prototype interprétée CPU : l'arbre symbolique est évalué en numpy et branché sur le backend hôte `adc.PythonFlux` (Rusanov, périodique). Démonstrateur déclaratif côté utilisateur, pas le chemin de production (qui reste les briques compilées). Vérifie masse conservée, dynamique acoustique non triviale, état physique. |
-| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | reproduction-candidate PENDING | Euler-Poisson magnétisé (Hoffart), étage Schur | Vise [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La reproduction quantitative n'est pas encore établie (table de validation PENDING) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un oracle analytique du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
+| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | reproduction-candidate pending | Euler-Poisson magnétisé (Hoffart), étage Schur | Vise [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La reproduction quantitative n'est pas encore établie (table de validation pending) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un oracle analytique du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
 
 ## API
 

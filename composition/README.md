@@ -16,8 +16,8 @@ demontre une capacite d'API, il ne valide aucun resultat physique publie.
 | Entrees | A : grille $48^2$, $L=1$, periodique ; electrons $\rho=1+0.02\cos(2\pi x/L)$ (Euler $\gamma=1.4$, $q=-1$), ions $\rho=1$ (isotherme $c_s^2=0.5$, $q=+1$) ; $dt=0.001$, 8 pas. B/D : grille $32^2$ periodique, diocotron ($B_0=1$, $\alpha=1$, fond $n_{i0}=\overline{\rho}$) ; B : $dt=0.002$, 12 pas ; D : $dt=0.001$, 20 pas Python |
 | Sorties | diagnostics imprimes (aucun fichier produit par `run.py`) ; les figures sont generees a part par `make_figures.py` dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py` : A masse electrons/ions $<$ `MASS_TOL=1e-10` ET $\|\phi\|_\infty>10^{-8}$ ET evolution electrons $>10^{-9}$ (`run.py:124-137`) ; B ecart deux compositions $==0$ exactement (`run.py:166`) ; C les 3 combinaisons invalides levent ET `n_species()==0` (`run.py:185-209`) ; D masse $<10^{-9}$ ET etat fini (`run.py:243-244`) |
-| PROUVE | (A) deux fluides au schema different coexistent dans un meme `adc.System`, chacun conserve sa masse ($2.7\times10^{-12}$ electrons, $1.8\times10^{-12}$ ions), le Poisson couple est actif ($\|\phi\|_\infty=5.06\times10^{-4}$), les electrons evoluent ($3.5\times10^{-5}$) ; (B) un meme modele compose deux fois donne un etat identique au bit (ecart $=0$, `np.array_equal` vrai) ; (C) HLLC sur transport scalaire, source fluide sur scalaire, et modele incoherent sont rejetes a la composition/a l'ajout, sans bloc ajoute ; (D) un integrateur SSPRK2 ecrit en Python conserve la masse ($2.3\times10^{-13}$) et reste fini |
-| NE PROUVE PAS | demontre une capacite d'API, ne valide aucun resultat physique publie. Aucun nombre n'est confronte a un article ; les CI sont des cosinus simples, les horizons sont courts (8/12/20 pas), aucune dynamique physique n'est interpretee. Le determinisme bit (B, D) est une propriete d'implementation (memes briques C++ figees, memes operations flottantes dans le meme ordre), pas une garantie cross-plateforme : il peut casser entre BLAS, ordre de sommation ou architecture. La conservation de masse mesuree n'est pas une validation de schema : c'est le minimum attendu d'un volumes-finis conservatif |
+| Prouve | (A) deux fluides au schema different coexistent dans un meme `adc.System`, chacun conserve sa masse ($2.7\times10^{-12}$ electrons, $1.8\times10^{-12}$ ions), le Poisson couple est actif ($\|\phi\|_\infty=5.06\times10^{-4}$), les electrons evoluent ($3.5\times10^{-5}$) ; (B) un meme modele compose deux fois donne un etat identique au bit (ecart $=0$, `np.array_equal` vrai) ; (C) HLLC sur transport scalaire, source fluide sur scalaire, et modele incoherent sont rejetes a la composition/a l'ajout, sans bloc ajoute ; (D) un integrateur SSPRK2 ecrit en Python conserve la masse ($2.3\times10^{-13}$) et reste fini |
+| Ne prouve pas | demontre une capacite d'API, ne valide aucun resultat physique publie. Aucun nombre n'est confronte a un article ; les CI sont des cosinus simples, les horizons sont courts (8/12/20 pas), aucune dynamique physique n'est interpretee. Le determinisme bit (B, D) est une propriete d'implementation (memes briques C++ figees, memes operations flottantes dans le meme ordre), pas une garantie cross-plateforme : il peut casser entre BLAS, ordre de sommation ou architecture. La conservation de masse mesuree n'est pas une validation de schema : c'est le minimum attendu d'un volumes-finis conservatif |
 | Provenance | adc_cpp `01873299`, adc_cases (deeptut) `a9541ba4`, backend natif serie, $48^2$ (A) / $32^2$ (B,D), ~1 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : comment `adc.System` compose un systeme bloc par bloc, ce que signifie "chaque
@@ -27,7 +27,7 @@ sortir le calcul par cellule du C++.
 
 ---
 
-## 1. Le niveau d'abstraction demontre (justifie PROUVE : composition heterogene)
+## 1. Le niveau d'abstraction demontre (justifie Prouve : composition heterogene)
 
 Le mot d'ordre est : Python compose, le C++ calcule. La config du systeme ne porte que le
 maillage ; toute la physique est portee par les blocs :
@@ -125,7 +125,7 @@ elle ne tolere aucun bruit, contrairement aux tolerances de conservation (sectio
 
 ---
 
-## 5. Les garde-fous : combinaisons invalides rejetees (justifie PROUVE : C)
+## 5. Les garde-fous : combinaisons invalides rejetees (justifie Prouve : C)
 
 `partie_C` (`run.py:169-209`) verifie que trois compositions invalides levent une erreur claire au
 lieu de produire un calcul faux. `doit_lever(fn, why)` (`run.py:175-181`) execute `fn`, attend une
@@ -154,7 +154,7 @@ choisi par `add_block`.
 
 ---
 
-## 6. Partie D : un integrateur temporel ecrit en Python (justifie PROUVE : D)
+## 6. Partie D : un integrateur temporel ecrit en Python (justifie Prouve : D)
 
 Au lieu d'appeler `sim.advance(...)` (boucle en temps compilee), `partie_D` (`run.py:212-244`) ecrit
 sa propre boucle avec `adc.integrate.ssprk2_step` (`integrate.py:27-44`), un SSPRK2 (Heun fort-stable)
@@ -196,15 +196,15 @@ Generees par `python make_figures.py` (memes parametres que `run.py`), versionne
 
 ![Cartes : densite electron CI et finale, densite ion finale, potentiel |phi| couple](figures/density_maps.png)
 
-- **PROUVE** (asserte `run.py:124-137`) : le Poisson couple est actif ($\|\phi\|_\infty=5.06\times
+- **Prouve** (asserte `run.py:124-137`) : le Poisson couple est actif ($\|\phi\|_\infty=5.06\times
   10^{-4}$, panneau 4) et les electrons evoluent (la densite finale, $[0.980, 1.020]$, differe de la
   CI ; ecart max $3.5\times10^{-5}$). Les deux blocs au schema different coexistent : le panneau
   electron porte la perturbation Euler/HLLC/IMEX, le panneau ion porte la reponse isotherme.
-- **SUGGERE** (non assere) : la densite ion finale s'ecarte de l'uniforme par $\sim6\times10^{-7}$
+- **Suggéré** (non assere) : la densite ion finale s'ecarte de l'uniforme par $\sim6\times10^{-7}$
   (echelle `1e-6+1`) : le couplage Poisson pousse les ions, mais l'effet est minuscule sur 8 pas et
   aucun assert ne le quantifie (l'assert ne teste que la conservation de masse ionique). La structure
   reste 1D selon $x$ (la CI ne depend pas de $y$).
-- **NON MONTRE** : aucun resultat physique. Les profils sont des cosinus a horizon court (8 pas) ;
+- **Non montré** : aucun resultat physique. Les profils sont des cosinus a horizon court (8 pas) ;
   rien ici ne reproduit ni ne valide un regime publie. C'est un tutoriel : les cartes montrent que
   la composition produit des champs couples, pas qu'ils sont physiquement significatifs.
 
@@ -212,14 +212,14 @@ Generees par `python make_figures.py` (memes parametres que `run.py`), versionne
 
 ![Deux heatmaps |a-b| identiquement noires (B compose, D pas Python) + histogramme du residu a zero](figures/determinism.png)
 
-- **PROUVE** (asserte `run.py:166` pour B ; mesure pour D) : les deux heatmaps $|a-b|$ sont
+- **Prouve** (asserte `run.py:166` pour B ; mesure pour D) : les deux heatmaps $|a-b|$ sont
   identiquement noires (echelle $[0,10^{-15}]$). Panneau B : deux compositions independantes du
   meme diocotron, ecart max $0.0$, `np.array_equal` vrai. Panneau D : deux executions de
   l'integrateur SSPRK2 ecrit en Python, ecart max $0.0$, `np.array_equal` vrai. L'histogramme
   concentre toutes les cellules ($32^2$ par chemin) exactement a $0$.
-- **SUGGERE** : que l'egalite reste vraie pour d'autres schemas/CI est plausible (memes briques
+- **Suggéré** : que l'egalite reste vraie pour d'autres schemas/CI est plausible (memes briques
   figees, memes operations), mais le cas ne teste que ces deux configurations.
-- **NON MONTRE** : ce determinisme est une propriete de l'implementation sur cette plateforme, pas
+- **Non montré** : ce determinisme est une propriete de l'implementation sur cette plateforme, pas
   une garantie cross-plateforme. Il peut casser entre BLAS differentes, ordres de sommation ou
   architectures (cf. caveat plateforme, section 9). Une seule cellule non noire signalerait un etat
   global cache entre compositions, un parcours dependant de l'allocation, ou une reduction Poisson

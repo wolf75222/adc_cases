@@ -15,8 +15,8 @@ couteux, sans le reimplementer.
 | Entrees | grille $96^2$, $L=1$, periodique ; CI bande gaussienne mode 4 `band_density(96, L, amp=1, width=0.05, mode=4, disp=0.02)` ($n=1+e^{-(y-y_0)^2/w^2}$, $y_0=0.5L+0.02\cos(8\pi x/L)$) ; $B_0=1$, $\alpha=1$, fond neutralisant $n_{i0}=\langle n\rangle$ ; CFL $=0.4$, 200 pas SSPRK2 |
 | Sorties | densite numpy $n$ (lue/ecrite en numpy), potentiel $\phi$ rendu par `sim.potential()` ; figures `figures/density_evolution.png`, `figures/phi_evolution.png`, `figures/diagnostics.png` + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py` : `assert_finite(n, ...)` a chaque pas (`run.py:94`) ; `assert drel < 1e-12` (masse, `run.py:101`) ; `assert moved > 1e-3` (la bande a evolue, `run.py:102`) ; `assert |phi|_max > 1e-8` (Poisson actif, `run.py:83`) |
-| PROUVE | (1) le schema numpy conserve la masse a $2.040\times10^{-16}$ relatif sur 200 pas (flux upwind en forme flux, domaine periodique) ; (2) le couplage Poisson est actif : `adc` rend $\|phi\|_\infty=6.12\times10^{-3}\neq0$ ; (3) la dynamique est non triviale : $\max|n-n_0|=3.28\times10^{-1}$ |
-| NE PROUVE PAS | demontre une capacite d'API, ne valide aucun resultat physique publie. Le schema maison (upwind ordre 1 + differences centrees pour $\nabla\phi$) n'est pas le schema valide du cas [`diocotron`](../diocotron/) (MUSCL minmod + Rusanov) : il est plus diffusif et aucun taux de croissance n'est mesure ni compare. Aucun assert ne teste la physique (pas de $\gamma_l$, pas d'oracle analytique). La conservation et la finitude sont des proprietes du schema, pas une reproduction. La CI est une bande (mode 4), pas l'anneau du benchmark : elle cisaille mais ne developpe pas l'instabilite annulaire du papier |
+| Prouve | (1) le schema numpy conserve la masse a $2.040\times10^{-16}$ relatif sur 200 pas (flux upwind en forme flux, domaine periodique) ; (2) le couplage Poisson est actif : `adc` rend $\|phi\|_\infty=6.12\times10^{-3}\neq0$ ; (3) la dynamique est non triviale : $\max|n-n_0|=3.28\times10^{-1}$ |
+| Ne prouve pas | demontre une capacite d'API, ne valide aucun resultat physique publie. Le schema maison (upwind ordre 1 + differences centrees pour $\nabla\phi$) n'est pas le schema valide du cas [`diocotron`](../diocotron/) (MUSCL minmod + Rusanov) : il est plus diffusif et aucun taux de croissance n'est mesure ni compare. Aucun assert ne teste la physique (pas de $\gamma_l$, pas d'oracle analytique). La conservation et la finitude sont des proprietes du schema, pas une reproduction. La CI est une bande (mode 4), pas l'anneau du benchmark : elle cisaille mais ne developpe pas l'instabilite annulaire du papier |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend natif serie (Poisson `geometric_mg`), $96^2$, ~1.2 s 1 coeur CPU ; `figures/provenance.json` |
 
 A la fin tu sauras : ou tracer la frontiere Python / lib quand on ecrit son propre schema (Python
@@ -25,7 +25,7 @@ numpy, pourquoi la masse est conservee a la precision machine, et ce que ce tuto
 
 ---
 
-## 1. Ce que demontre ce cas (justifie PROUVE : capacite d'API)
+## 1. Ce que demontre ce cas (justifie Prouve : capacite d'API)
 
 La physique du diocotron (derive E x B, rotation differentielle, instabilite de cisaillement) est
 derivee une fois pour toutes dans [`../diocotron/`](../diocotron/) ; ce tutoriel ne la rejoue pas.
@@ -146,7 +146,7 @@ garde-fou contre une divergence du schema maison.
 
 ---
 
-## 4. Pourquoi la masse est conservee a la precision machine (justifie PROUVE 1 et les tolerances)
+## 4. Pourquoi la masse est conservee a la precision machine (justifie Prouve 1 et les tolerances)
 
 La conservation n'est pas un hasard : elle suit de deux proprietes du schema, independantes l'une de
 l'autre.
@@ -184,46 +184,46 @@ $t\in\{0,\ 4.39,\ 11.28,\ 23.03\}$ avec le pas adaptatif CFL.
 
 ![Densite n a 4 instants : bande mode 4 qui se cisaille et s'aplatit](figures/density_evolution.png)
 
-- PROUVE / mesure (asserte `run.py:102`) : la bande evolue ($\max|n-n_0|=3.28\times10^{-1}$,
+- Prouve / mesure (asserte `run.py:102`) : la bande evolue ($\max|n-n_0|=3.28\times10^{-1}$,
   $\gg 10^{-3}$). L'ondulation initiale (mode 4 du `disp=0.02`) est entrainee par la rotation
   differentielle E x B : les 4 bosses du panneau $t=0$ se cisaillent et s'etirent en filaments fins,
   puis la bande s'aplatit autour de $y=0.5$ ($t=23$).
-- PROUVE (asserte `run.py:101`) : malgre cette deformation, la masse totale est conservee a
+- Prouve (asserte `run.py:101`) : malgre cette deformation, la masse totale est conservee a
   $2.04\times10^{-16}$ relatif : le transport numpy est strictement conservatif (section 4).
-- SUGGERE (non assere) : la formation de filaments fins evoque un cisaillement de type
+- Suggéré (non assere) : la formation de filaments fins evoque un cisaillement de type
   Kelvin-Helmholtz, mais aucun taux n'est mesure et la CI est une bande, pas l'anneau du benchmark
   diocotron.
-- NON MONTRE : ce schema upwind ordre 1 est plus diffusif que le MUSCL minmod du cas
+- Non montré : ce schema upwind ordre 1 est plus diffusif que le MUSCL minmod du cas
   [`diocotron`](../diocotron/) ; la comparaison de fidelite n'est pas faite ici.
 
 ### `phi_evolution.png` : le potentiel resolu par adc (le seul role de la lib)
 
 ![|phi| a 4 instants : potentiel self-consistant suivant la bande de charge](figures/phi_evolution.png)
 
-- PROUVE (asserte `run.py:83`) : $\phi\neq0$, $\|phi\|_\infty=6.12\times10^{-3}$ a $t=0$,
+- Prouve (asserte `run.py:83`) : $\phi\neq0$, $\|phi\|_\infty=6.12\times10^{-3}$ a $t=0$,
   $6.01\times10^{-3}$ a $t=23$ : le Poisson de `adc` est actif a chaque sous-pas. Le potentiel est
   concentre sur la bande de charge (jaune) et change de structure de part et d'autre (bandes sombres
   en $y\approx0.27$ et $y\approx0.73$, le fond neutralisant $n_{i0}$ rendant le second membre de
   moyenne nulle, condition de compatibilite du Laplacien periodique).
-- SUGGERE : $\phi$ se lisse au cours du temps (les bosses azimutales visibles a $t=0$ s'effacent
+- Suggéré : $\phi$ se lisse au cours du temps (les bosses azimutales visibles a $t=0$ s'effacent
   a $t=23$) en suivant l'aplatissement de la densite : le couplage est self-consistant. Non assere
   (aucun test sur la forme de $\phi$).
-- NON MONTRE : la magnitude absolue de $\phi$ n'est comparee a rien (pas d'unites physiques
+- Non montré : la magnitude absolue de $\phi$ n'est comparee a rien (pas d'unites physiques
   calibrees, $\alpha=1$ sans dimension) ; seule sa non-nullite est testee.
 
 ### `diagnostics.png` : conservation, evolution, couplage en fonction du temps
 
 ![Trois series temporelles : derive de masse, max|dn|, |phi|_max et vitesse ExB](figures/diagnostics.png)
 
-- PROUVE : (gauche) la derive de masse relative reste collee au bruit machine
+- Prouve : (gauche) la derive de masse relative reste collee au bruit machine
   ($\sim10^{-16}$, plusieurs ordres sous le trait rouge de tolerance $10^{-12}$) sur les 200 pas ;
   (milieu) $\max|n-n_0|$ franchit le seuil $10^{-3}$ des les premiers pas, culmine $\approx0.48$ puis
   oscille autour de $0.33$ ; (droite) $\|phi\|_\infty$ ($\sim6\times10^{-3}$) et la vitesse ExB max
   ($\sim3.5\times10^{-2}$) restent quasi constantes : le couplage Poisson est actif et stable du
   debut a la fin.
-- SUGGERE : la lente decroissance de la vitesse ExB max (de $3.81\times10^{-2}$ a
+- Suggéré : la lente decroissance de la vitesse ExB max (de $3.81\times10^{-2}$ a
   $3.54\times10^{-2}$) accompagne le lissage diffusif de la bande ; non testee.
-- NON MONTRE : aucune comparaison a une solution de reference ou a un taux analytique ; ces
+- Non montré : aucune comparaison a une solution de reference ou a un taux analytique ; ces
   series diagnostiquent la mecanique du schema (conservatif, actif, non trivial), pas la fidelite
   physique.
 

@@ -22,15 +22,15 @@ le mirroir, cote `adc_cases`, du tutoriel Sphinx d'adc_cpp (`docs/sphinx/getting
 | **Entrees** | aucune ; tout est code (grille $96^2$, bande mode $l=2$, 60 pas CFL 0.4) |
 | **Sorties** | `figures/tutorial_growth.png`, `figures/tutorial.gif`, `figures/tutorial_bricks_vs_dsl.png`, `figures/provenance.json` ; stdout `OK tutorial` |
 | **Invariants** | masse conservee (transport advectif, domaine periodique) ; amplitude finale > initiale |
-| **PROUVE** | les trois constructions (helper / briques / formules DSL) donnent un etat final bit-identique (`np.array_equal`, donc `max|ecart| = 0`, aucune tolerance) ; la masse derive de $< 10^{-6}$ (relatif) ; l'amplitude L2 de la perturbation croit (facteur ~1.5 sur 60 pas) |
-| **NE PROUVE PAS** | ce n'est pas une reproduction d'un taux de croissance publie (cf. cas `diocotron` pour la confrontation a arXiv:2510.11808) ; le schema (NoSlope + Rusanov, ordre 1) est volontairement dissipatif et sous-estimerait un taux mesure ; 60 pas ne menent pas l'instabilite jusqu'aux vortex satures (on voit le debut de l'enroulement, pas l'etat non lineaire final) |
+| **Prouve** | les trois constructions (helper / briques / formules DSL) donnent un etat final bit-identique (`np.array_equal`, donc `max|ecart| = 0`, aucune tolerance) ; la masse derive de $< 10^{-6}$ (relatif) ; l'amplitude L2 de la perturbation croit (facteur ~1.5 sur 60 pas) |
+| **Ne prouve pas** | ce n'est pas une reproduction d'un taux de croissance publie (cf. cas `diocotron` pour la confrontation a arXiv:2510.11808) ; le schema (NoSlope + Rusanov, ordre 1) est volontairement dissipatif et sous-estimerait un taux mesure ; 60 pas ne menent pas l'instabilite jusqu'aux vortex satures (on voit le debut de l'enroulement, pas l'etat non lineaire final) |
 | **Provenance** | `figures/provenance.json` (SHA adc_cpp + adc_cases, backend DSL retenu, resolution, commande) |
 
 Chaque section ci-dessous nomme la clause qu'elle justifie.
 
 ---
 
-## 1. Physique : le diocotron en deux equations (justifie PROUVE, Invariants)
+## 1. Physique : le diocotron en deux equations (justifie Prouve, Invariants)
 
 Le diocotron est l'instabilite d'une colonne (ici d'une bande) de charge non neutre dans un champ
 magnetique uniforme $B_0 \hat{z}$. Les electrons derivent a la vitesse $E \times B$ :
@@ -67,7 +67,7 @@ $y_0$ est la graine du mode $l=2$.
 
 ---
 
-## 2. Les trois fronts (le coeur du tutoriel ; justifie PROUVE)
+## 2. Les trois fronts (le coeur du tutoriel ; justifie Prouve)
 
 Les trois constructions different uniquement par la facon de decrire le modele ; la grille, le
 Poisson, la condition initiale, le schema (minmod + Rusanov) et l'integrateur (SSPRK2) sont
@@ -161,7 +161,7 @@ plateforme : `production`).
 
 ---
 
-## 3. Pourquoi les trois coincident, et ce qu'une divergence trahirait (justifie PROUVE)
+## 3. Pourquoi les trois coincident, et ce qu'une divergence trahirait (justifie Prouve)
 
 ```python
 assert np.array_equal(final_helper, final_bricks)   # helper == briques
@@ -217,19 +217,19 @@ incompressible et le schema volumes finis est conservatif.
 
 ## 5. Figures (generees par `run.py`, dans `figures/`)
 
-### `tutorial_bricks_vs_dsl.png` : la preuve visuelle de l'equivalence (justifie PROUVE)
+### `tutorial_bricks_vs_dsl.png` : la preuve visuelle de l'equivalence (justifie Prouve)
 
 ![Etats finals briques vs DSL, max|ecart| = 0](figures/tutorial_bricks_vs_dsl.png)
 
 Les deux panneaux sont l'etat final, a gauche par les briques natives, a droite par les
 formules DSL.
 
-- **PROUVE** : le titre affiche `max|briques - DSL| = 0e+00`, c'est le `np.array_equal` de la
+- **Prouve** : le titre affiche `max|briques - DSL| = 0e+00`, c'est le `np.array_equal` de la
   section 3 rendu visible. Les deux cartes sont pixel pour pixel identiques.
-- **SUGGERE** (non assere) : a l'oeil, la bande mode $l=2$ commence a s'epaissir aux cretes et a
+- **Suggéré** (non assere) : a l'oeil, la bande mode $l=2$ commence a s'epaissir aux cretes et a
   s'amincir aux noeuds : le debut de l'enroulement Kelvin-Helmholtz. Aucun assert ne mesure cette
   forme.
-- **NON MONTRE** : la figure ne dit rien d'un troisieme code de reference ni d'un taux de croissance ;
+- **Non montré** : la figure ne dit rien d'un troisieme code de reference ni d'un taux de croissance ;
   elle prouve l'identite briques/DSL, pas la justesse physique absolue (cf. cas `diocotron`).
 
 ### `tutorial_growth.png` : croissance de l'instabilite + carte finale (justifie Invariants)
@@ -239,21 +239,21 @@ formules DSL.
 A gauche, l'amplitude L2 de la perturbation en fonction du temps (echelle semilog) ; a droite, la
 densite finale $n_e$.
 
-- **PROUVE** : la courbe est monotone croissante apres un court transitoire ($t \lesssim 1$), de
+- **Prouve** : la courbe est monotone croissante apres un court transitoire ($t \lesssim 1$), de
   $6.8\times10^{-2}$ a $1.0\times10^{-1}$ sur 60 pas (facteur ~1.5), c'est l'assert `ampf > amp0`.
-- **SUGGERE** (non assere) : la portion quasi rectiligne en semilog ($t \in [2, 6]$) suggere une
+- **Suggéré** (non assere) : la portion quasi rectiligne en semilog ($t \in [2, 6]$) suggere une
   croissance exponentielle $\sim e^{\gamma t}$, signature attendue d'une instabilite lineaire ;
   mais on ne mesure pas $\gamma$ ici (le cas `diocotron` le fait et le confronte au papier).
-- **NON MONTRE** : la carte de droite montre le debut de l'enroulement (bande $l=2$ epaissie), pas
+- **Non montré** : la carte de droite montre le debut de l'enroulement (bande $l=2$ epaissie), pas
   les vortex satures de l'etat non lineaire ; 60 pas a $96^2$ s'arretent avant la saturation.
 
 ### `tutorial.gif` : l'evolution de la densite
 
 ![Animation : la bande mode l=2 s'enroule](figures/tutorial.gif)
 
-- **PROUVE / visible** : l'animation est la sortie du solveur (front 2) ; la bande $l=2$ se
+- **Prouve / visible** : l'animation est la sortie du solveur (front 2) ; la bande $l=2$ se
   deforme continument. C'est le meme champ que la carte finale, anime.
-- **NON MONTRE** : pas de comparaison cote a cote uniforme/AMR ici (voir le cas `diocotron_amr`), pas
+- **Non montré** : pas de comparaison cote a cote uniforme/AMR ici (voir le cas `diocotron_amr`), pas
   d'etat sature.
 
 ---

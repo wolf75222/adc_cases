@@ -20,8 +20,8 @@ elles renvoient aux briques du coeur et au cas magnetise complet
 | Entrees | grille $32^2$, $L=1$, **periodique** ; CI $\rho=1+0.05\cos(2\pi x)$, $m_x=0.3\rho$ ($u=0.3$), $m_y=0$ ; $c_s^2=1$, $q=-1$, $B_z=2$ (constant) ; schema minmod + Rusanov, SSPRK2, 40 pas a CFL$=0.4$ |
 | Sorties | etat `(3,n,n)=[\rho,m_x,m_y]` via `get_state("plasma")` ; `eval_rhs("plasma")` (residu local) ; 2 figures dans `figures/` + `figures/provenance.json` ; les `.so` DSL sous `out/magnetic_isothermal_dsl/` |
 | Invariants garantis | les `assert` de `run.py` : oracle Lorentz `err_x == 0 and err_y == 0` (`run.py:217`) et canal densite `max\|dR[0]\| == 0` (`run.py:221`) ; `lor_contrib > 0` (`run.py:222`) ; parite inter-backend `np.array_equal` SI $\geq 2$ backends (`run.py:196`) ; masse `drift < 1e-9` (`run.py:240`) ; rotation `\|\langle m_y\rangle\| > 1e-6` (`run.py:242`) |
-| PROUVE | le terme magnetique compile vaut exactement $(B_z m_y,\,-B_z m_x)$ : `err_x = err_y = 0.000e+00` (egalite bit, numpy) ; $B_z$ ne touche jamais la densite (`dR[0]==0`) ; il est non nul ($\max\|dR\|=6.299\times10^{-1}$) ; la masse derive de $2.887\times10^{-15}$ ; la quantite de mouvement moyenne tourne de $\langle m\rangle=(0.3,0)\to(0.2162,-0.2080)$, angle $-43.88^\circ$, a comparer a $\omega_c t=-43.88^\circ$ |
-| NE PROUVE PAS | pas une reproduction publiee, et pas de parite DSL-vs-natif ici (aucune brique native "magnetic_isothermal" n'existe ; le `MagneticLorentzForce` du coeur n'est pas branche en Python dans ce cas). Sur macOS le backend `production` ne se lie pas (ABI en-tetes) : la parite inter-backend est sautee, un seul chemin (`aot`) est verifie. L'oracle ne teste que le terme magnetique (difference $B_z\!=\!B_0$ moins $B_z\!=\!0$), pas le flux ni l'electrostatique. Regime explicite (pas le Schur condense raide) ; $B_z$ uniforme |
+| Prouve | le terme magnetique compile vaut exactement $(B_z m_y,\,-B_z m_x)$ : `err_x = err_y = 0.000e+00` (egalite bit, numpy) ; $B_z$ ne touche jamais la densite (`dR[0]==0`) ; il est non nul ($\max\|dR\|=6.299\times10^{-1}$) ; la masse derive de $2.887\times10^{-15}$ ; la quantite de mouvement moyenne tourne de $\langle m\rangle=(0.3,0)\to(0.2162,-0.2080)$, angle $-43.88^\circ$, a comparer a $\omega_c t=-43.88^\circ$ |
+| Ne prouve pas | pas une reproduction publiee, et pas de parite DSL-vs-natif ici (aucune brique native "magnetic_isothermal" n'existe ; le `MagneticLorentzForce` du coeur n'est pas branche en Python dans ce cas). Sur macOS le backend `production` ne se lie pas (ABI en-tetes) : la parite inter-backend est sautee, un seul chemin (`aot`) est verifie. L'oracle ne teste que le terme magnetique (difference $B_z\!=\!B_0$ moins $B_z\!=\!0$), pas le flux ni l'electrostatique. Regime explicite (pas le Schur condense raide) ; $B_z$ uniforme |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend DSL `aot` (production non lie), $32^2$, ~19 s temps mur (2 figures, recompile la `.so` deux fois), macOS arm64 ; `figures/provenance.json` |
 
 A la fin tu sauras : quelles conventions du coeur les formules DSL reproduisent (table ancree
@@ -89,7 +89,7 @@ effective est $\omega_c=q_{om}B_z=q B_z=(-1)(2)=-2$, signe negatif (giration hor
 
 ---
 
-## 3. La prediction falsifiable : egalite bit + oracle analytique (justifie PROUVE / NE PROUVE PAS)
+## 3. La prediction falsifiable : egalite bit + oracle analytique (justifie Prouve / Ne prouve pas)
 
 Le cas calcule la prediction par deux voies independantes, parce qu'il n'a pas d'oracle natif :
 
@@ -199,15 +199,15 @@ versionnees avec `figures/provenance.json`. Commande exacte en section 8.
 
 ![Trois cartes du residu err_rho, err_mx, err_my, toutes blanches a l'echelle eps machine](figures/lorentz_oracle.png)
 
-- **PROUVE** (asserte `run.py:217,221`) : les trois cartes du residu ($\Delta R_\rho-0$,
+- **Prouve** (asserte `run.py:217,221`) : les trois cartes du residu ($\Delta R_\rho-0$,
   $\Delta R_{m_x}-B_0 m_y$, $\Delta R_{m_y}-(-B_0 m_x)$) sont identiquement au centre neutre (blanc),
   `max|.| = 0.0e+00` partout. L'echelle de couleur est ancree a $\pm\epsilon_{\text{mach}}=2.22\times
   10^{-16}$ : tout pixel non nul (au-dela du dernier bit) saturerait en bleu ou rouge. Aucun ne
   sature : le terme magnetique compile egale la forme numpy au bit pres, et la densite (panneau
   gauche) n'est jamais touchee.
-- **SUGGERE (non assere)** : rien. L'egalite est exacte, pas approchee ; il n'y a pas de structure a
+- **Suggéré (non assere)** : rien. L'egalite est exacte, pas approchee ; il n'y a pas de structure a
   lire au-dela du zero.
-- **NON MONTRE** : la figure ne couvre que la difference $B_z\!=\!B_0$ moins $B_z\!=\!0$, donc le seul
+- **Non montré** : la figure ne couvre que la difference $B_z\!=\!B_0$ moins $B_z\!=\!0$, donc le seul
   terme magnetique. Elle ne teste ni le flux isotherme, ni l'electrostatique, ni la parite
   inter-backend (un seul backend lie). Un residu sur le flux passerait inapercu ici.
 
@@ -215,18 +215,18 @@ versionnees avec `figures/provenance.json`. Commande exacte en section 8.
 
 ![A gauche la trajectoire de (m_x, m_y) sur le cercle cyclotron ; a droite le module conserve](figures/cyclotron_trajectory.png)
 
-- **PROUVE / mesure** (asserte `run.py:240,242`) : partant de $\langle m\rangle=(0.3,0)$ (purement
+- **Prouve / mesure** (asserte `run.py:240,242`) : partant de $\langle m\rangle=(0.3,0)$ (purement
   longitudinal, $m_y=0$), la quantite de mouvement moyenne tourne vers $(0.2162,-0.2080)$ apres 40
   pas ($t=0.3829$). L'angle final mesure $-43.88^\circ$ coincide avec la prediction cyclotron
   $\omega_c t=(-2)(0.3829)=-43.88^\circ$ (rapport $1.00006$). Le module $|\langle m\rangle|$ (panneau
   droit) est conserve : derive relative $-1.3\times10^{-7}$ sur l'horizon. La masse derive de
   $2.887\times10^{-15}$. Comme $m_y(0)=0$, toute composante transverse apparue ($\langle m_y\rangle=
   -0.2080$) vient exclusivement du terme de Lorentz : la physique magnetique est exercee.
-- **SUGGERE (non assere)** : le tres leger ecart au cercle analytique (rapport $1.00006$) et la
+- **Suggéré (non assere)** : le tres leger ecart au cercle analytique (rapport $1.00006$) et la
   legere variation du module ($\sim10^{-7}$) sont la signature de la discretisation en temps finie
   (SSPRK2, $\omega_c\,dt$ non infinitesimal) et de la dynamique de pression/Poisson superposee a la
   rotation ; aucun assert ne quantifie cet ecart.
-- **NON MONTRE** : pas de regime raide (le Schur condense de
+- **Non montré** : pas de regime raide (le Schur condense de
   [`../schur_magnetized_cartesian/`](../schur_magnetized_cartesian/) n'est pas teste) ; horizon court
   (40 pas, moins d'un quart de tour) ; pas de comparaison a une trajectoire publiee.
 
