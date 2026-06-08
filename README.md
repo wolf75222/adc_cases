@@ -7,18 +7,10 @@ module Python `adc` (bindings pybind11). Ici, Python compose et pilote : un doss
 cas, chacun important `adc`, écrivant ses conditions initiales en numpy, et lançant la
 simulation. La quasi-totalité des cas est donc du Python pur.
 
-> **Principe** : *Python dit quoi assembler, le C++ compilé fait le calcul.*
-
-Un cas sur mesure peut porter son propre C++ (un scénario qui n'est pas une brique
-générique du cœur) : il est alors compilé à la volée contre les en-têtes génériques
-d'`adc_cpp` et chargé dans le process (`ctypes`). C'est le cas de [`two_fluid_ap/`](two_fluid_ap/)
-(solveur asymptotic-preserving). Cela exige un compilateur C++20 ; le dossier `include/`
-d'`adc_cpp` est localisé automatiquement depuis le module `adc`, ou via `ADC_INCLUDE`. La
-mécanique commune (localisation des en-têtes, compilation, chargement) vit dans
-`adc_cases.common.native` : la bibliothèque compilée va dans `out/<cas>/build/` (jamais à côté
-du `.cpp`), elle est recompilée dès que sa clé d'ABI change (compilateur, flags, sources,
-en-têtes du cœur) et toute incompatibilité d'ABI (symbole attendu absent) lève une erreur
-explicite au chargement plutôt qu'une panne opaque au premier appel.
+Un cas sur mesure (par exemple [`two_fluid_ap/`](two_fluid_ap/), solveur asymptotic-preserving)
+peut porter son propre C++ : il est compilé à la volée contre les en-têtes d'`adc_cpp` et chargé
+via `ctypes`. La mécanique commune (localisation des en-têtes, compilation, contrôle d'ABI) vit
+dans `adc_cases.common.native` ; les artefacts vont dans `out/<cas>/build/`.
 
 ## Prérequis : construire le module `adc`
 
@@ -64,28 +56,17 @@ pip install -e .                 # numpy tiré automatiquement
 pip install -e '.[figures]'      # + matplotlib (repro diocotron)
 ```
 
-Sans installation, chaque cas reste lançable directement (`python3 diocotron/run.py`) : un
-court préambule tente `import adc_cases` et, seulement s'il échoue (paquet non installé), met
-la racine du dépôt sur le chemin d'import. Une fois le paquet installé, ce préambule ne touche
-plus du tout à `sys.path` : les cas s'appuient sur le paquet importable, pas sur un bricolage
-de chemin.
-
-(Dépendances des cas : `numpy` ; `matplotlib` pour la repro diocotron ; un compilateur C++20
-pour `two_fluid_ap` (solveur compilé à la volée).)
+Sans installation, chaque cas reste lançable directement : un court préambule met la racine du
+dépôt sur le chemin d'import seulement si le paquet n'est pas installé. Dépendances : `numpy` ;
+`matplotlib` pour la repro diocotron ; un compilateur C++20 pour `two_fluid_ap`.
 
 ## Sorties
 
-Les cas qui produisent des fichiers éphémères (figures de travail, gif, `.so`) écrivent sous
-`out/<cas>/` à la racine du dépôt, pas dans leur dossier source. Idem pour les artefacts de
-compilation à la volée (`two_fluid_ap`), placés sous `out/<cas>/build/`. `out/` est ignoré par git.
-On peut surcharger la racine via `ADC_CASES_OUT=<chemin>`.
-
-**Exception, figures canoniques versionnées.** `diocotron/run.py` écrit ses figures directement
-dans `diocotron/figures/` (tracké) et y dépose un `provenance.json` (SHA `adc_cpp`/`adc_cases`,
-backend, résolution, commande, taux mesurés) : une re-exécution les rafraîchit en place. La
-provenance et le statut de chaque asset (committé vs éphémère) sont décrits dans
-[`ASSETS.md`](ASSETS.md). Les figures de `hoffart_euler_poisson_dsl` restent éphémères et non
-committées (cas `reproduction-candidate` PENDING : ne pas les présenter comme une reproduction).
+Les fichiers éphémères (figures de travail, gif, `.so`) vont sous `out/<cas>/` (ignoré par git,
+surchargeable par `ADC_CASES_OUT`). Exception : `diocotron/run.py` écrit ses figures canoniques
+dans `diocotron/figures/` (tracké) avec un `provenance.json` ; le statut de chaque asset est dans
+[`ASSETS.md`](ASSETS.md). Les figures de `hoffart_euler_poisson_dsl` restent éphémères (cas
+`reproduction-candidate` non encore établi).
 
 ## Manifeste des cas et CI
 
@@ -151,22 +132,13 @@ un prototype non finalisé.
 | [`magnetic_isothermal_dsl/`](magnetic_isothermal_dsl/README.md) | validation (needs `cxx`) | Fluide isotherme magnétisé en formules (DSL) | Fluide isotherme magnétisé en formules avec force de Lorentz `q ρ E + v×B` pilotée par un champ B_z constant lu sur le canal `aux` étendu (indice 3, peuplé depuis Python via `set_magnetic_field`). Aucun modèle natif de référence : correction prouvée par parité inter-backend (production == aot quand les deux se lient) + oracle Lorentz numpy + invariants (masse, positivité, rotation de la quantité de mouvement). |
 | [`schur_magnetized_cartesian/`](schur_magnetized_cartesian/README.md) | experimental (needs `cxx`) | Étage source Schur vs explicite | Mesure de l'effet temporel de l'étage source condensé par Schur (`adc.Split(Explicit, CondensedSchur)`) face à l'intégration explicite de la même source de Lorentz raide, sur un fluide isotherme magnétisé cartésien (même DSL que `magnetic_isothermal_dsl`). Balaie le plus grand `dt` stable explicite vs Schur (θ=0.5 / θ=1.0), reporte `dt·ω_c` et le gain. Prototype de mesure, hors CI. |
 | [`dsl_euler/`](dsl_euler/README.md) | experimental | Euler en formules (DSL interprété) | Euler compressible 2D en formules (mini-DSL `adc.dsl`), version prototype interprétée CPU : l'arbre symbolique est évalué en numpy et branché sur le backend hôte `adc.PythonFlux` (Rusanov, périodique). Démonstrateur déclaratif côté utilisateur, pas le chemin de production (qui reste les briques compilées). Vérifie masse conservée, dynamique acoustique non triviale, état physique. |
-| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | **reproduction-candidate** PENDING | Euler-Poisson magnétisé (Hoffart), étage Schur | Vise [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La reproduction quantitative n'est pas encore établie (table de validation PENDING) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un oracle analytique du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
+| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | reproduction-candidate PENDING | Euler-Poisson magnétisé (Hoffart), étage Schur | Vise [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La reproduction quantitative n'est pas encore établie (table de validation PENDING) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un oracle analytique du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
 
-## L'API en deux niveaux
+## API
 
-- **Composition générique** (`adc.System`) : on ajoute des blocs, chacun avec son
-  modèle, son schéma spatial (`adc.Spatial(limiter, flux)`), son traitement temporel
-  (`adc.Explicit` / `adc.IMEX` / `adc.Implicit`) et son sous-cyclage ; ils partagent un
-  Poisson de système. Idéal pour coupler ions/électrons/neutres. Un modèle est une
-  composition de briques `adc.Model(state, transport, source, elliptic)` ; les compositions
-  nommées (`diocotron`, `electron_euler`, ...) sont définies dans [`models.py`](models.py).
-- **Composition sur AMR** (`adc.AmrSystem`) : un bloc porté sur une hiérarchie raffinée
-  (même API que `System`, plus `set_refinement`).
-- **Scénario sur mesure** (AP deux-fluides) : schéma asymptotic-preserving non composable
-  bloc à bloc (la stabilisation AP couple la raideur au pas de temps dans l'elliptique). Ce
-  n'est pas une brique générique du cœur : sa physique C++ vit dans `two_fluid_ap/`,
-  compilée à la volée contre les en-têtes génériques d'`adc_cpp` et chargée via `ctypes`.
-
-Détails de l'API et de l'architecture : [adc_cpp/README.md](../adc_cpp/README.md) et
-[adc_cpp/docs/ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
+Deux niveaux de composition : générique (`adc.System` : des blocs partageant un Poisson de
+système, idéal pour coupler ions/électrons/neutres) et sur AMR (`adc.AmrSystem`, même API plus
+`set_refinement`). Un modèle est une composition `adc.Model(state, transport, source, elliptic)` ;
+les compositions nommées (`diocotron`, `electron_euler`, ...) sont dans [`models.py`](models.py).
+Un scénario sur mesure (AP deux-fluides) porte son C++ à part. Détails :
+[adc_cpp/README.md](../adc_cpp/README.md), [ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
