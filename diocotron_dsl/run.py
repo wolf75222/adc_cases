@@ -136,14 +136,16 @@ def run_dsl(ne0, n_i0, n_steps):
     so_dir = case_output_dir("diocotron_dsl")
     model = diocotron_dsl_model(n_i0)
 
-    # Backend : on PREFERE "production" (chemin natif zero-copie, cible du plan) ; si le chemin natif
-    # echoue (compilation OU branchement -- ex. cle d'ABI du loader != cle du module quand les en-tetes
-    # ne concordent pas), on retombe sur "aot" (numerique identique, host-marshale). On enrobe la
-    # compilation ET le add_equation : la garde d'ABI se declenche a add_native_block, PAS a la
-    # compilation, donc le fallback doit couvrir les deux. Les deux backends donnent un etat
-    # bit-identique au natif ; le choix n'affecte pas le resultat verifie.
+    # Backend : on PREFERE "production" (chemin natif zero-copie, cible du plan) ; si la compilation
+    # native echoue OU si add_equation refuse le bloc natif sur cette plateforme, on retombe sur
+    # "aot" (numerique identique, host-marshale). Le chemin natif (add_native_block) verifie une cle
+    # ABI incluant la signature des en-tetes : quand le module compile (_adc) a ete bati contre des
+    # en-tetes differents de include/, la compilation REUSSIT mais add_native_block leve un
+    # RuntimeError "ABI incompatible". On enveloppe donc TOUTE la construction (compile + aiguillage
+    # add_equation + run) dans le try : un echec sur "production" rejoue le tout en "aot" (qui passe
+    # par add_compiled_block, sans cle ABI). Les deux donnent un etat bit-identique au natif ; le
+    # choix n'affecte pas le resultat verifie.
     import os
-    last = None
     for cand in ("production", "aot"):
         try:
             compiled = model.compile(os.path.join(so_dir, "diocotron_dsl_%s.so" % cand),
@@ -159,10 +161,8 @@ def run_dsl(ne0, n_i0, n_steps):
                 sim.step_cfl(0.4)
             return np.asarray(sim.density("ne")), sim.time(), sim.mass("ne"), cand
         except Exception as exc:  # noqa: BLE001 (diagnostic : on essaie le backend suivant)
-            last = exc
-            print("backend %r indisponible (%s: %s), essai suivant"
-                  % (cand, type(exc).__name__, str(exc).splitlines()[0][:80]))
-    raise RuntimeError("aucun backend DSL n'a pu etre branche au System") from last
+            print("backend %r indisponible (%s), essai suivant" % (cand, type(exc).__name__))
+    raise RuntimeError("aucun backend DSL n'a compile ni execute le modele diocotron")
 
 
 def main():
