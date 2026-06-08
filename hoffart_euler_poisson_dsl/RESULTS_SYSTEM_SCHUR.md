@@ -215,11 +215,33 @@ ExB scalaire sur grille carree.
   bien que la grille polaire. Le cut-cell (#236) et la resolution (converge 0.035) ne corrigent PAS ce
   facteur geometrique -> limitation FONDAMENTALE du FV cartesien pour cette instabilite d'anneau tournant.
 
+### 7bis. Ratio Im/Re (scale-invariant) -> LE MECANISME : rotation captee, CROISSANCE etouffee
+Mesure du complexe c_l(t) sur r0 (cartesien, full ET reduit) : on extrait gamma_raw (pente de log|c_l|)
+ET Omega_raw (pente de la phase = frequence de rotation azimutale du mode), fenetres papier, n=128.
+
+| l | gamma_raw | Omega_raw | ratio gamma/Om |
+|---|---|---|---|
+| 3 | 0.032 | **0.527** | 0.06 |
+| 4 | -0.004 | **0.664** | -0.01 |
+| 5 | 0.107 | **0.706** | 0.15 |
+
+(full ~= reduit, encore.) LE FAIT DECISIF : **Omega_raw ~ 0.5-0.7** -- le mode TOURNE fortement (la
+derive E×B azimutale autour de l'anneau EST captee par la grille carree), mais **gamma_raw ~ 0.03**
+(vs ~0.77 attendu). **Le cartesien capte la ROTATION mais ETOUFFE la CROISSANCE** (facteur ~15-25x).
+L'instabilite diocotron croit du cisaillement RADIAL d_rho/d_r aux bords d'anneau r0/r1 ; sur grille
+carree ces bords radiaux sont diffuses -> la retro-action de croissance meurt, l'advection azimutale
+survit. Ce n'est PAS une normalisation de temps (le ratio differe du polaire/analytique -> pas que des
+unites) ni la chaine moment/Schur (full=reduit). C'est l'incapacite de la grille carree a resoudre la
+STRUCTURE RADIALE de bord d'anneau qui PILOTE la croissance -> exactement pourquoi la grille POLAIRE
+(bords d'anneau = lignes radiales du maillage) reproduit et la carree non.
+
 ### CONCLUSION : l'investigation CARTESIENNE est CLOSE
-Le deficit cartesien = **2 pi (normalisation) x geometrie carree (anneau tournant sous-resolu)**, COMMUN
-a tous les modeles cartesiens (full = reduit). Ce n'est AUCUN knob fixable du moteur (10 causes ecartees :
-resolution, geometrie de bord, temps, Gauss, temperature, contraste, beta/omega, non-positivite,
-dissipation de flux, structure du modele). **La repro N'EST PAS atteignable proprement en FV cartesien.**
+Le deficit cartesien = la grille carree **capte la rotation E×B mais diffuse la structure RADIALE de
+bord d'anneau qui pilote la croissance** (+ normalisation 2 pi). COMMUN a tous les modeles cartesiens
+(full = reduit). Ce n'est AUCUN knob fixable du moteur (10 causes ecartees : resolution, geometrie de
+bord, temps, Gauss, temperature, contraste, beta/omega, non-positivite, dissipation de flux, structure
+du modele ; + ratio Im/Re : rotation OK, croissance etouffee). **La repro N'EST PAS atteignable
+proprement en FV cartesien** -- il faut un maillage qui resout le cisaillement radial de l'anneau (polaire).
 
 Voies de repro restantes (toutes hors cartesien) :
 1. **ExB reduit POLAIRE + 2 pi** : reproduit l=4 EXACT, l=3/l=5 partiels. **Voie credible etablie** (l'objet
