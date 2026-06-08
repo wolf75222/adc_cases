@@ -4,8 +4,11 @@
 But (PR6)
 ---------
 MESURER, sur un fluide isotherme magnetise CARTESIEN, l'effet temporel de l'etage
-source condense par Schur (`adc.Split(Explicit, CondensedSchur)`, #118-128) face a
-l'integration EXPLICITE de la meme source.
+source condense par Schur (`CondensedSchur`, #118-128) face a l'integration EXPLICITE
+de la meme source. NB : l'etage Schur est branche ici via le hook bas niveau
+`sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)` (cf. plus
+bas) et NON via `adc.Split(Explicit, CondensedSchur)` : sur le backend AOT, l'ABI du
+.so ne transporte pas le sous-pas SSPRK3 attendu par `adc.Split` (cf. section Backend).
 
 Le terme raide est la force de Lorentz `m x Omega` (Omega = omega_c e_z, omega_c =
 B_z). Integree EXPLICITEMENT, la rotation cyclotronique impose la borne de

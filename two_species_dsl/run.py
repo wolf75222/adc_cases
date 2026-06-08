@@ -163,40 +163,45 @@ def run_native(n, ne2d, ni2d, n_steps):
             sim.mass("electrons"), sim.mass("ions"))
 
 
-def _compile(model, tag):
-    """Compile @p model en preferant le backend "production" (natif), sinon "aot". Renvoie
-    (CompiledModel, backend)."""
+def _compile(model, tag, backend):
+    """Compile @p model avec le backend DEMANDE (sans fallback interne : le fallback est gere au
+    niveau de run_dsl pour que les DEUX especes partagent le meme backend). Renvoie le CompiledModel."""
     import os
     include = adc_include()
     so_dir = case_output_dir("two_species_dsl")
-    for cand in ("production", "aot"):
-        try:
-            c = model.compile(os.path.join(so_dir, "%s_%s.so" % (tag, cand)), include, backend=cand)
-            return c, cand
-        except Exception as exc:  # noqa: BLE001
-            print("backend %r indisponible pour %s (%s)" % (cand, tag, type(exc).__name__))
-    raise RuntimeError("aucun backend DSL n'a compile le modele %s" % tag)
+    return model.compile(os.path.join(so_dir, "%s_%s.so" % (tag, backend)), include, backend=backend)
 
 
 def run_dsl(n, ne2d, ni2d, n_steps):
     """Le MEME systeme, mais les deux blocs sont des modeles DSL compiles (meme schema et meme temps
-    que le natif). Renvoie (etat_e, etat_i, masse_e, masse_i, backend)."""
-    ce, be = _compile(electron_dsl_model(), "electron")
-    ci, bi = _compile(ion_dsl_model(), "ion")
-    sim = adc.System(n=n, L=1.0, periodic=True)
-    sim.add_equation("electrons", model=ce,
-                     spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                     time=adc.Explicit())
-    sim.add_equation("ions", model=ci,
-                     spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                     time=adc.Explicit())
-    sim.set_poisson(rhs="charge_density", solver="geometric_mg")
-    sim.set_density("electrons", ne2d)
-    sim.set_density("ions", ni2d)
-    for _ in range(n_steps):
-        sim.step_cfl(0.4)
-    return (np.asarray(sim.get_state("electrons")), np.asarray(sim.get_state("ions")),
-            sim.mass("electrons"), sim.mass("ions"), be if be == bi else "%s/%s" % (be, bi))
+    que le natif). On PREFERE "production" (natif) ; si le chemin natif echoue (compilation OU
+    branchement add_native_block -- la garde d'ABI se declenche au branchement, pas a la compilation),
+    on retombe sur "aot" pour les DEUX especes a la fois (un backend coherent par run). Renvoie
+    (etat_e, etat_i, masse_e, masse_i, backend)."""
+    last = None
+    for backend in ("production", "aot"):
+        try:
+            ce = _compile(electron_dsl_model(), "electron", backend)
+            ci = _compile(ion_dsl_model(), "ion", backend)
+            sim = adc.System(n=n, L=1.0, periodic=True)
+            sim.add_equation("electrons", model=ce,
+                             spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
+                             time=adc.Explicit())
+            sim.add_equation("ions", model=ci,
+                             spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
+                             time=adc.Explicit())
+            sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+            sim.set_density("electrons", ne2d)
+            sim.set_density("ions", ni2d)
+            for _ in range(n_steps):
+                sim.step_cfl(0.4)
+            return (np.asarray(sim.get_state("electrons")), np.asarray(sim.get_state("ions")),
+                    sim.mass("electrons"), sim.mass("ions"), backend)
+        except Exception as exc:  # noqa: BLE001 (diagnostic : on essaie le backend suivant)
+            last = exc
+            print("backend %r indisponible (%s: %s), essai suivant"
+                  % (backend, type(exc).__name__, str(exc).splitlines()[0][:80]))
+    raise RuntimeError("aucun backend DSL n'a pu etre branche au System") from last
 
 
 def main():

@@ -75,10 +75,17 @@ pour `two_fluid_ap` (solveur compilé à la volée).)
 
 ## Sorties
 
-Les cas qui produisent des fichiers (figures, gif) écrivent sous **`out/<cas>/`** à la racine du
-dépôt, **pas** dans leur dossier source. Idem pour les artefacts de compilation à la volée
-(`two_fluid_ap`), placés sous `out/<cas>/build/`. `out/` est ignoré par git. On peut surcharger
-la racine via `ADC_CASES_OUT=<chemin>`.
+Les cas qui produisent des fichiers éphémères (figures de travail, gif, `.so`) écrivent sous
+**`out/<cas>/`** à la racine du dépôt, **pas** dans leur dossier source. Idem pour les artefacts de
+compilation à la volée (`two_fluid_ap`), placés sous `out/<cas>/build/`. `out/` est ignoré par git.
+On peut surcharger la racine via `ADC_CASES_OUT=<chemin>`.
+
+**Exception -- figures canoniques versionnées.** `diocotron/run.py` écrit ses figures directement
+dans `diocotron/figures/` (tracké) et y dépose un `provenance.json` (SHA `adc_cpp`/`adc_cases`,
+backend, résolution, commande, taux mesurés) : une re-exécution les **rafraîchit en place**. La
+provenance et le statut de chaque asset (committé vs éphémère) sont décrits dans
+[`ASSETS.md`](ASSETS.md). Les figures de `hoffart_euler_poisson_dsl` restent **éphémères et non
+committées** (cas `reproduction-candidate` PENDING : ne pas les présenter comme une reproduction).
 
 ## Manifeste des cas et CI
 

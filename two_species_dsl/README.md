@@ -175,23 +175,31 @@ echoue**. Les deux backends sont numeriquement identiques ; seul l'AOT marshale 
 tableaux au lieu d'installer le modele comme bloc natif.
 
 ```python
-def _compile(model, tag):
+def _compile(model, tag, backend):           # backend EXPLICITE (pas de fallback interne)
     include = adc_include()
     so_dir = case_output_dir("two_species_dsl")
-    for cand in ("production", "aot"):
+    return model.compile(os.path.join(so_dir, "%s_%s.so" % (tag, backend)), include, backend=backend)
+
+def run_dsl(n, ne2d, ni2d, n_steps):
+    for backend in ("production", "aot"):     # fallback au niveau du SYSTEME (compile + branchement)
         try:
-            c = model.compile(os.path.join(so_dir, "%s_%s.so" % (tag, cand)), include, backend=cand)
-            return c, cand
-        except Exception as exc:
-            print("backend %r indisponible pour %s (%s)" % (cand, tag, type(exc).__name__))
-    raise RuntimeError("aucun backend DSL n'a compile le modele %s" % tag)
+            ce = _compile(electron_dsl_model(), "electron", backend)
+            ci = _compile(ion_dsl_model(), "ion", backend)
+            sim = adc.System(n=n, L=1.0, periodic=True)
+            sim.add_equation("electrons", model=ce, spatial=..., time=adc.Explicit())
+            sim.add_equation("ions",      model=ci, spatial=..., time=adc.Explicit())
+            sim.set_poisson(...); sim.set_density(...); ...   # puis step_cfl
+            return ..., backend
+        except Exception:                     # echec production -> on reessaie tout en aot
+            print("backend %r indisponible, essai suivant" % backend)
+    raise RuntimeError("aucun backend DSL n'a pu etre branche au System")
 ```
 
-**Limite importante du fallback** (cf. section 14) : ce `try/except` ne couvre que l'etape
-de **compilation**. Le backend `"production"` compile sans erreur ; l'incompatibilite
-d'ABI eventuelle n'est detectee que plus tard, au **branchement** (`add_native_block`,
-dans `run_dsl`), donc hors de ce `try/except` -- le fallback AOT ne se declenche alors pas
-automatiquement.
+**Fallback robuste** : la boucle de backend vit dans `run_dsl` et enrobe la compilation **ET** le
+branchement (`add_equation` -> `add_native_block`). La garde d'ABI se declenche au BRANCHEMENT (pas
+a la compilation) ; comme il est dans le `try`, un echec `production` -- p.ex. un module **pre-construit**
+aux en-tetes divergents -- retombe automatiquement sur `aot`, pour les DEUX especes a la fois (un
+backend coherent par run). Avec un module fraichement construit contre les memes en-tetes : `production`.
 
 ---
 
@@ -374,33 +382,28 @@ section 12). La preuve du cas est la sortie console + le code de retour (0 si to
 
 | Backend DSL | Adder `System` | Statut dans CE cas / cet environnement |
 | --- | --- | --- |
-| `production` (loader natif zero-copie) | `add_native_block` | **Tente en premier**, **compile**, mais **REJETE au branchement** dans l'environnement teste (ABI de headers divergente, cf. ci-dessous et section 16). |
+| `production` (loader natif zero-copie) | `add_native_block` | **Tente en premier**. Si l'ABI des en-tetes ne concorde pas (module **pre-construit**, cf. ci-dessous), `run_dsl` **retombe automatiquement sur `aot`**. Avec un module aux en-tetes concordants : **utilise**. |
 | `aot` (`.so` autosuffisant, host-marshale) | `add_compiled_block` | **Fonctionne** ; numerique identique au natif. C'est le backend reellement emprunte ici. |
 | `prototype` (JIT, dispatch virtuel hote) | `add_dynamic_block` | Non utilise par ce cas (`_compile` n'essaie que `production` puis `aot`). |
 
-**Etat reel observe a l'execution.** Avec la commande de la section 8 **sans modification**,
-le backend `production` compile les deux `.so` puis `add_native_block` echoue avec :
+**Etat reel observe a l'execution.** Avec la commande de la section 8 **sans modification** et un
+module `_adc` **pre-construit** dont les en-tetes ont diverge (ici `build-master` ; le superprojet
+montre `M adc_cpp`), le backend `production` compile les deux `.so` puis `add_native_block` rejette
+au branchement :
 
 ```
 RuntimeError: add_native_block : ABI incompatible -- cle du loader
 '...;headers=408168b4...' != cle du module '...;headers=f8273719...'.
-Recompiler le loader avec le MEME compilateur, standard C++ et en-tetes adc que le module _adc.
 ```
 
-Le compilateur (`Apple LLVM 21.0.0`) et le standard (`std=202302L`) **concordent** ; seule
-la **signature des en-tetes** differe : les en-tetes `include/` du depot ont evolue depuis
-le build du module `_adc` (le superprojet montre `M adc_cpp` -- sous-module modifie). Comme
-ce rejet survient **hors** du `try/except` de `_compile` (au branchement, pas a la
-compilation), le **fallback AOT automatique ne se declenche pas** et le cas s'arrete en
-erreur **dans cet environnement precis**.
-
-**Le cas lui-meme est correct.** En forcant le backend `aot` (ABI tolerante par
-construction : `.so` autosuffisant, pas de partage d'ABI avec `_adc`), le cas passe
-**integralement** avec les valeurs de la section 11. La cause racine est purement un
-**desynchronisation build/headers** de l'environnement (le module `_adc` de `build-master`
-a ete bati contre un instantane anterieur des en-tetes), pas un defaut du cas. Pour faire
-passer la voie nominale `production` : **rebatir le module `_adc`** contre les en-tetes
-courants (ou utiliser des en-tetes correspondant exactement au module).
+Le compilateur (`Apple LLVM 21.0.0`) et le standard (`std=202302L`) **concordent** ; seule la
+**signature des en-tetes** differe (les en-tetes `include/` ont evolue depuis le build du module).
+La boucle de backend de `run_dsl` **enrobe le branchement** : ce rejet est rattrape et le cas
+**retombe automatiquement sur `aot`** (ABI tolerante : `.so` autosuffisant, pas de partage d'ABI
+avec `_adc`), puis **passe integralement** avec les valeurs de la section 11 (sortie : `backend DSL
+retenu : 'aot'`). Avec un module `_adc` **rebati** contre les en-tetes courants, la voie nominale
+`production` (natif, zero-copie) est selectionnee. La divergence build/headers est une condition
+d'environnement, pas un defaut du cas.
 
 ---
 
@@ -409,10 +412,11 @@ courants (ou utiliser des en-tetes correspondant exactement au module).
 Mesure (temps mur, `/usr/bin/time -p`), machine de developpement (Apple Silicon, macOS,
 Python 3.12) :
 
-- **Execution forcee en AOT** (cas complet : compilation des deux `.so` + run natif +
-  run DSL + asserts) : **`real ~6.3 s`** (`user ~5.8 s`, `sys ~0.8 s`).
-- **Execution nominale (tente production puis echoue au branchement)** : **`real ~5.4 s`**
-  (arret apres compilation des deux `.so` production et l'echec `add_native_block`).
+- **Execution nominale** (cas complet : compilation des `.so` + run natif + run DSL + asserts) :
+  **`real ~6 s`** (`user ~5.8 s`, `sys ~0.8 s`). Avec un module `_adc` aux en-tetes concordants,
+  seuls les deux `.so` `production` sont compiles.
+- Avec un module **pre-construit** aux en-tetes divergents, le run compile aussi les deux `.so`
+  `production` AVANT de retomber sur `aot` (un jeu de compilation supplementaire, ~+1-2 s).
 
 L'essentiel du cout est la **compilation C++** des modeles DSL (deux invocations du
 compilateur). Sur un re-run, le cache hors source du DSL (`adc_cache_dir`, keye par
@@ -434,12 +438,11 @@ dit (48x48, 15 pas, deux fois) est negligeable devant la compilation.
   bit-identiques. Ne pas presenter ce cas comme "DSL == natif bit-a-bit en toutes
   circonstances" : c'est vrai **par espece a 1 pas** et pour les ions, **a epsilon machine**
   pour les electrons sur plusieurs pas couples.
-- **Backend `production` non operationnel dans l'environnement teste.** Voir section 14 :
-  l'echec est une **divergence d'ABI de headers** (module `_adc` bati contre un instantane
-  anterieur des en-tetes), pas un bug du cas. La voie reellement validee ici est l'**AOT**.
-- **Fallback AOT non automatique sur l'echec production.** Le `try/except` de `_compile`
-  ne couvre que la **compilation** ; le rejet ABI de `production` survient au **branchement**
-  (`add_native_block`) et n'est donc pas rattrape. C'est une limite du script telle qu'ecrite.
+- **Backend `production` selon l'environnement.** Avec un module `_adc` aux en-tetes concordants,
+  la voie nominale est `production` (natif zero-copie). Avec un module **pre-construit** aux en-tetes
+  divergents (divergence d'ABI de headers, pas un bug du cas), `run_dsl` **retombe automatiquement
+  sur `aot`** : la boucle de backend enrobe la compilation **ET** le branchement `add_native_block`,
+  donc le rejet d'ABI au branchement est rattrape. Le cas passe dans les deux cas.
 - **Pas de sous-cyclage, pas d'IMEX, pas de magnetisme.** Le cas fige explicitement un
   schema strictement identique (minmod + rusanov + SSPRK2, meme `dt`) pour rendre la
   comparaison possible ; toute variation (substeps, IMEX, `B_z`) romprait l'equivalence
@@ -465,8 +468,8 @@ dit (48x48, 15 pas, deux fois) est negligeable devant la compilation.
   reussite = tous les `assert` de `main()` passent (equivalence par espece + invariants
   physiques) et code de retour 0.
 - `needs = ["cxx"]` : la CI doit fournir un compilateur C++ (le DSL compile les modeles en
-  `.so`). En CI, la voie nominale `production` exige en plus que les en-tetes correspondent
-  au module `_adc` (cf. section 14) ; a defaut, seul l'`aot` est exploitable et le script,
-  tel qu'ecrit, ne bascule pas automatiquement (limite a connaitre pour la CI).
+  `.so`). En CI, le module `_adc` est construit a partir des memes en-tetes -> la voie nominale
+  `production` (natif) est selectionnee ; si les en-tetes divergeaient, `run_dsl` retombe
+  automatiquement sur `aot` (compilation ET branchement enrobes). Le cas passe dans les deux cas.
 - Aucun test unitaire C++ dedie n'accompagne ce cas (pas de C++ sur mesure : tout est
   genere par `adc.dsl`).

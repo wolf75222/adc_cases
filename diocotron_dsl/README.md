@@ -251,30 +251,14 @@ uniforme le long de x, ce qui reste porte l'instabilite.
 
 ## 12. Sorties attendues
 
-ATTENTION : sur la machine de redaction, le run nominal (`run.py` tel quel) ECHOUE avec une
-erreur d'ABI au branchement du backend "production" (en-tetes du dossier `include/` diverges de
-ceux du module `_adc` de `build-master` ; cf. sections 7 et 16). Sortie reelle observee :
-
-```
-=== diocotron_dsl : modele ecrit en formules (adc.dsl.Model) vs briques natives ===
-grille n = 96 x 96, 60 pas, CFL = 0.4
-fond ionique n_i0 = 1.088623e+00 (moyenne de ne)
-Traceback (most recent call last):
-  ...
-  File ".../adc/__init__.py", line 979, in add_equation
-    self._s.add_native_block(name, compiled.so_path, spatial.limiter, spatial.flux, ...)
-RuntimeError: add_native_block : ABI incompatible -- cle du loader '...;headers=408168b4...'
- != cle du module '...;headers=f8273719...'. Recompiler le loader avec le MEME compilateur,
- standard C++ et en-tetes adc que le module _adc.
-```
-
-Le backend "production" COMPILE bien (la `.so` est produite, voir section 13) ; l'echec survient
-au branchement, hors du try/except de `run.py`. Le prerequis manquant est un module `_adc`
-construit contre les MEMES en-tetes que le dossier `include/` (rebuild du module, ou un
-`build-master` a jour). Une fois cette coherence retablie, le run nominal selectionne "production".
-
-Quand le branchement reussit (ici verifie en forcant le backend "aot", numerique identique au
-natif), la sortie attendue est :
+Le run essaie d'abord le backend `production` (chemin natif zero-copie), puis **retombe
+automatiquement sur `aot`** si le chemin natif echoue. Le fallback enrobe la compilation ET le
+branchement `add_native_block` (la garde d'ABI se declenche au BRANCHEMENT, pas a la compilation).
+Le chemin natif echoue quand les en-tetes du module `_adc` deja charge ne concordent pas avec le
+dossier `include/` -- typiquement un module **pre-construit** comme `build-master` dont la cle d'ABI
+de headers differe (`headers=408168b4...` != `headers=f8273719...`). Avec un module fraichement
+construit contre les memes en-tetes, le run selectionne `production`. Dans les deux cas l'etat est
+bit-identique au natif. Sortie reelle (ici via le fallback `aot`) :
 
 ```
 === diocotron_dsl : modele ecrit en formules (adc.dsl.Model) vs briques natives ===
@@ -317,14 +301,15 @@ Trois backends DSL existent (`python/adc/dsl.py`) ; ce cas en essaie deux, dans 
 
 | Backend | Adder System | Chemin | Statut dans ce cas |
 |---|---|---|---|
-| `production` | `add_native_block` | loader natif zero-copie, inline `add_compiled_model<ProdModel>`, parite stricte `add_block`, MPI/AMR-ready | PREFERE. Compile, MAIS rejete au branchement sur la machine de redaction (cle d'ABI en-tetes `408168b4...` != module `f8273719...`). |
+| `production` | `add_native_block` | loader natif zero-copie, inline `add_compiled_model<ProdModel>`, parite stricte `add_block`, MPI/AMR-ready | PREFERE. Si l'ABI des en-tetes ne concorde pas (module **pre-construit**, cle `408168b4...` != module `f8273719...`), `run_dsl` **retombe sur `aot`**. Avec un module concordant : **utilise**. |
 | `aot` | `add_compiled_block` | chemin de production host-marshale, numerique inlinee, **identique** au natif | FALLBACK. VERIFIE fonctionnel : etat bit-identique au natif (`max|d| = 0`). |
 | `prototype` | `add_dynamic_block` | JIT IModel, dispatch virtuel, Rusanov ordre 1 (hote) | NON utilise par ce cas. |
 
 Capacites declarees (`_BACKEND_CAPS`) : `production` cpu/mpi/amr=True, gpu=False (validation
-device end-to-end depuis Python = PR dediee) ; `aot` cpu seul. Backend EFFECTIVEMENT valide pour
-l'equivalence sur cette plateforme : **aot**. Le backend "production" est la cible nominale mais
-exige une coherence d'ABI module <-> en-tetes (cf. sections 7, 12, 16).
+device end-to-end depuis Python = PR dediee) ; `aot` cpu seul. La boucle de backend de `run_dsl`
+enrobe compilation ET branchement : avec un module aux en-tetes concordants -> **production** ;
+avec un module pre-construit divergent -> **aot** (fallback automatique). Sur la machine de
+redaction (module `build-master` stale) c'est donc **aot** qui est emprunte (cf. sections 7, 12, 16).
 
 ---
 
@@ -350,14 +335,12 @@ recompilee a chaque run.
   3 invariants legers ; il ne reproduit aucune figure ni taux de croissance publie. La
   reproduction est l'objet de `diocotron/run.py` (`reproduction`, hors CI).
 
-- **Fallback de backend incomplet (defaut reel de `run.py`).** Le `try/except` n'entoure QUE
-  `model.compile()`. Le backend "production" COMPILE sans exception, donc `backend="production"`
-  est retenu et la boucle s'arrete ; l'echec d'ABI survient ensuite a `sim.add_equation(...)`
-  (`add_native_block`), HORS du `try`, et n'est PAS rattrape vers "aot". Sur une plateforme ou
-  l'ABI du module et les en-tetes du dossier `include/` ont diverge, le run nominal echoue donc
-  malgre la promesse de fallback de la docstring. Deux corrections possibles : (a) rebuild du
-  module `_adc` contre les MEMES en-tetes que `include/` (retablit "production") ; (b) elargir le
-  `try/except` pour couvrir le branchement `add_equation` et retomber reellement sur "aot".
+- **Fallback de backend robuste.** La boucle de backend de `run_dsl` enrobe la compilation **ET**
+  le branchement (`sim.add_equation` -> `add_native_block`). La garde d'ABI se declenche au
+  branchement ; comme il est dans le `try`, un echec "production" -- p.ex. un module **pre-construit**
+  dont les en-tetes ont diverge de `include/` -- **retombe automatiquement sur "aot"** (numerique
+  identique, etat bit-identique au natif). Avec un module `_adc` rebati contre les memes en-tetes que
+  `include/`, "production" (natif zero-copie) est selectionne.
 
 - **Egalite bit-pour-bit conditionnee a la coherence des conventions.** L'assertion
   `np.array_equal` est SANS tolerance : elle ne tient que parce que les formules DSL reproduisent
