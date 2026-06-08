@@ -83,7 +83,7 @@ ISOLE la raideur de la SOURCE (le transport n'est pas limitant).
   variables="conservative")` (limiteur minmod, flux de Riemann Rusanov,
   reconstruction sur variables conservatives).
 - Temporel (transport) : `adc.Explicit()`. Sur le backend AOT effectivement
-  utilise, cela correspond a SSPRK2 (l'ABI AOT n'expose PAS SSPRK3 — cf. section
+  utilise, cela correspond a SSPRK2 (l'ABI AOT n'expose PAS SSPRK3 -- cf. section
   14). Le schema RK du transport n'influe PAS sur la conclusion temporelle : le
   facteur mesure vient de la SOURCE, pas du transport.
 - Poisson : `sim.set_poisson(rhs="charge_density", solver="geometric_mg",
@@ -146,7 +146,7 @@ Il n'y a PAS de `check_model.py` ni de `band_instability.py` dans ce cas.
 
 ## 7. Prerequis
 
-- Le module C++ `adc` (bindings pybind11 d'adc_cpp) sur le `PYTHONPATH` — ici le
+- Le module C++ `adc` (bindings pybind11 d'adc_cpp) sur le `PYTHONPATH` -- ici le
   build `build-master/python`.
 - Le paquet `adc_cases` importable (depot sur le `PYTHONPATH`, ou installe).
 - Un compilateur C++20 (`needs = ["cxx"]`) : le DSL compile les deux modeles a la
@@ -284,7 +284,7 @@ uniquement avec `--csv`). Il n'a pas besoin de `matplotlib`.
 
 - Backend DSL `aot` (host-marshale) : SEUL backend utilise par le cas. Il supporte
   `set_source_stage` et la force de Lorentz via `B_z`. Le chemin AOT n'expose que
-  l'integrateur explicite SSPRK2 pour le transport (pas SSPRK3) — sans incidence
+  l'integrateur explicite SSPRK2 pour le transport (pas SSPRK3) -- sans incidence
   sur la conclusion, qui porte sur l'etage SOURCE.
 - Backend DSL `production` (natif zero-copie) : ECHOUE au `dlopen` sur macOS arm64
   avec ce build (espace de noms a deux niveaux). Le cas ne l'emploie donc pas.
@@ -296,7 +296,7 @@ uniquement avec `--csv`). Il n'a pas besoin de `matplotlib`.
   execute le MEME C++ (`CondensedSchurSourceStepper`, #126) que ce que produirait
   `adc.Split` cote production. Le docstring de `run.py` mentionne encore
   `adc.Split(Explicit, CondensedSchur)` comme INTENTION/cible (#118-128) ; le code
-  reel passe par le hook prive — c'est ce dernier qui fait foi.
+  reel passe par le hook prive -- c'est ce dernier qui fait foi.
 
 
 ## 15. Cout approximatif

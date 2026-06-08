@@ -223,8 +223,8 @@ En CI, le cas est lance par `.github/workflows/ci.yml` apres construction du mod
    (`solve_fields()`), rend le potentiel (`potential()`). C'est l'unique appel a la
    lib.
 
-5. **`rhs(sim, n, dx, B0)`** : compose tout cela — Poisson par `adc`, vitesse +
-   divergence en numpy — et renvoie `(residu, speed)`, ou `speed = max(|v|)` sert au
+5. **`rhs(sim, n, dx, B0)`** : compose tout cela -- Poisson par `adc`, vitesse +
+   divergence en numpy -- et renvoie `(residu, speed)`, ou `speed = max(|v|)` sert au
    CFL.
 
 6. **`main()`** :
@@ -316,7 +316,7 @@ d'`arXiv:2510.11808`), voir le cas `diocotron/` (`category = "reproduction"`,
 ## 14. Backends reellement supportes
 
 - **Schema (transport + temps)** : **CPU Python/numpy uniquement**. Aucun backend
-  GPU ni MPI cote transport — c'est du numpy host, mono-processus.
+  GPU ni MPI cote transport -- c'est du numpy host, mono-processus.
 - **Solveur Poisson** : `solver="geometric_mg"` (multigrille geometrique), execute
   sur le backend du module `adc` charge (CPU dans le build de reference). Le cas ne
   selectionne pas d'autre solveur ; il ne tente pas `fft` (qui serait pourtant

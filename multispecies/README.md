@@ -33,7 +33,7 @@ script :
 3. Pose une **separation de charge initiale** (electrons perturbes par un cosinus, ions
    uniformes), avance 20 pas de `dt = 0.001`, et **verifie par assert** :
    - la **conservation de la masse PAR ESPECE** (`|m_e - m_e0| < 1e-9` et `|m_i - m_i0| < 1e-9`,
-     en ABSOLU) : c'est le test fort du decouplage des bilans de masse — meme couplees par le
+     en ABSOLU) : c'est le test fort du decouplage des bilans de masse -- meme couplees par le
      champ, les deux especes conservent independamment leur masse ;
    - la **finitude** des densites (pas de NaN/Inf) ;
    - la **positivite** des densites (un fluide physique reste `> 0`) ;
@@ -48,7 +48,7 @@ Le cas n'introduit pas de nouvelle physique : il **reutilise** les briques gener
 exposees par deux modeles nommes (cf. [`adc_cases/models.py`](../adc_cases/models.py)). Sur le
 domaine periodique `[0, L]^2` (L = 1).
 
-**Electrons (Euler compressible)** — `models.electron_euler(charge=-1.0, gamma=5/3)`, etat
+**Electrons (Euler compressible)** -- `models.electron_euler(charge=-1.0, gamma=5/3)`, etat
 conservatif `U_e = (rho, rho u, rho v, E)` :
 
 ```
@@ -58,7 +58,7 @@ d_t E         + div((E + p) v)             = (q/m) rho v . E
 p = (gamma - 1) (E - 1/2 rho |v|^2),   gamma = 5/3,   q = -1
 ```
 
-**Ions (Euler isotherme)** — `models.ion_isothermal(charge=+1.0, cs2=1.0)`, etat
+**Ions (Euler isotherme)** -- `models.ion_isothermal(charge=+1.0, cs2=1.0)`, etat
 `U_i = (rho, rho u, rho v)` (PAS d'equation d'energie : fermeture par la vitesse du son) :
 
 ```
@@ -66,7 +66,7 @@ d_t rho       + div(rho v)                 = 0
 d_t (rho v)   + div(rho v(x)v + cs2 rho I) = (q/m) rho E,   cs2 = 1.0,   q = +1
 ```
 
-**Couplage elliptique (Poisson de systeme)** — le champ `E = -grad phi` est self-consistant.
+**Couplage elliptique (Poisson de systeme)** -- le champ `E = -grad phi` est self-consistant.
 Le second membre est la **somme** des briques elliptiques portees par les blocs ; ici les deux
 blocs portent une `ChargeDensity(charge=q)`, donc :
 
@@ -119,14 +119,14 @@ Minmod sur les ions).
 - **Reconstruction spatiale** (`adc.Spatial(minmod=True)`) : limiteur MUSCL **minmod** sur les
   variables `conservative` (defaut), pour les DEUX blocs.
 - **Flux numerique de Riemann** : `rusanov` (defaut de `adc.Spatial`), robuste, valable sur tout
-  transport — pas besoin de la pression de HLLC ici.
+  transport -- pas besoin de la pression de HLLC ici.
 - **Traitement temporel** : `adc.Explicit()` (defaut SSPRK2, Shu-Osher 2 etages ordre 2),
   `substeps = 1`, `stride = 1`, pour les DEUX blocs. Pas de sous-pas ni de cadence (multirate)
   dans ce cas.
 - **Poisson** : operateur `div(eps grad)` a `eps = 1` (Poisson), second membre `charge_density`
   (somme des briques elliptiques = `q_e n_e + q_i n_i`), solveur `geometric_mg` (multigrille
   geometrique), BC `auto` (periodique ici, herite de `System(periodic=True)`).
-- **Avancee en temps** : `sim.advance(dt=0.001, nsteps=20)` — boucle en temps **compilee** en
+- **Avancee en temps** : `sim.advance(dt=0.001, nsteps=20)` -- boucle en temps **compilee** en
   C++ (pas d'integrateur Python ici, contrairement au cas `composition` partie D ou
   `custom_scheme`).
 
@@ -227,16 +227,16 @@ python3 multispecies/run.py
 
 Tout vit dans la fonction `main()` de [`run.py`](run.py) :
 
-1. **Systeme** (lignes 49-53) : `sim = adc.System(n=48, L=1.0, periodic=True)` — config =
+1. **Systeme** (lignes 49-53) : `sim = adc.System(n=48, L=1.0, periodic=True)` -- config =
    maillage seul (grille 48x48, domaine carre `[0, 1]^2`, CL periodiques).
 2. **Bloc electrons** (lignes 57-62) : `sim.add_block("electrons",
    model=models.electron_euler(charge=-1.0, gamma=5/3), spatial=adc.Spatial(minmod=True),
-   time=adc.Explicit())` — Euler compressible complet, charge `-1`, minmod, explicite.
+   time=adc.Explicit())` -- Euler compressible complet, charge `-1`, minmod, explicite.
 3. **Bloc ions** (lignes 64-69) : `sim.add_block("ions",
    model=models.ion_isothermal(charge=+1.0, cs2=1.0), spatial=adc.Spatial(minmod=True),
-   time=adc.Explicit())` — Euler isotherme, charge `+1`, minmod, explicite.
+   time=adc.Explicit())` -- Euler isotherme, charge `+1`, minmod, explicite.
 4. **Poisson couple** (ligne 72) : `sim.set_poisson(rhs="charge_density",
-   solver="geometric_mg")` — UN Poisson de systeme, second membre = densite de charge agregee,
+   solver="geometric_mg")` -- UN Poisson de systeme, second membre = densite de charge agregee,
    multigrille geometrique.
 5. **CI separation de charge** (lignes 78-85) : `x = (i + 0.5)/n` (centres de cellules) ;
    `ne = 1.0 + 0.02 cos(2 pi x)` ; `ne2d` broadcaste `ne` le long de `axis=1` (x varie le long
@@ -251,10 +251,10 @@ Tout vit dans la fonction `main()` de [`run.py`](run.py) :
 8. **Diagnostics finaux** (lignes 111-120) : `mass_e1`, `mass_i1`, separation de charge
    `qmax1`, impression de l'horloge `sim.time()`.
 9. **Verification des invariants** (lignes 125-139), via `adc_cases.common.checks` :
-   - `assert_mass_conserved(mass_e1, mass_e0, tol=1e-9, relative=False)` puis idem ions —
+   - `assert_mass_conserved(mass_e1, mass_e0, tol=1e-9, relative=False)` puis idem ions --
      conservation de masse PAR ESPECE en ABSOLU ; renvoie la derive `|dM|` ;
-   - `assert_finite(de, ...)` et `assert_finite(di, ...)` — pas de NaN/Inf ;
-   - `assert_positive(de, ...)` et `assert_positive(di, ...)` — densites strictement `> 0` ;
+   - `assert_finite(de, ...)` et `assert_finite(di, ...)` -- pas de NaN/Inf ;
+   - `assert_positive(de, ...)` et `assert_positive(di, ...)` -- densites strictement `> 0` ;
    - impression des intervalles `[n.min(), n.max()]` de chaque densite.
 10. **Succes** (ligne 141) : `print("OK multispecies")`.
 
@@ -360,7 +360,7 @@ des figures d'instabilite, voir le cas [`../diocotron/`](../diocotron/) (categor
   `n = 48` n'est pas une puissance de 2, donc FFT serait inapplicable).
 - **Limiteur** exerce : `minmod` (sur les deux blocs). **Flux** : `rusanov` (defaut). **Temporel**
   : `Explicit` (SSPRK2), `substeps = 1`, `stride = 1`. Pas de HLLC/Roe, pas de WENO5, pas d'IMEX,
-  pas de multirate dans ce cas (l'API les permettrait — cf. recette `two_fluid` /
+  pas de multirate dans ce cas (l'API les permettrait -- cf. recette `two_fluid` /
   `plasma` de `recipes.py`).
 - La machine de test est **macOS arm64 (Darwin)**, module compile avec
   `_adc.cpython-312-darwin.so`. La CI tourne sur **ubuntu-latest** (build Release du module,
