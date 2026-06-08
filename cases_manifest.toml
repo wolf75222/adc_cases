@@ -92,6 +92,20 @@ needs = ["cxx"]
 desc = "Diocotron ecrit ENTIEREMENT en formules (adc.dsl.Model) ; etat bit-identique au natif."
 
 [[case]]
+path = "tutorial/equivalence.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Tutoriel (smoke CI) : diocotron helper == briques == formules DSL, etat bit-identique."
+
+[[case]]
+path = "tutorial/run.py"
+category = "tutoriel"
+ci = false
+needs = ["matplotlib", "cxx"]
+desc = "Tutoriel : le meme diocotron en helper / briques / formules (equivalence) + figures + gif."
+
+[[case]]
 path = "two_species_dsl/run.py"
 category = "validation"
 ci = true

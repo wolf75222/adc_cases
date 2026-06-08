@@ -111,6 +111,10 @@ python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
 python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python, Poisson par adc
 python3 dsl_euler/run.py          # Euler écrit en formules (mini-DSL adc.dsl, expérimental)
 
+# Tutoriel : le même diocotron écrit en helper / briques / formules (équivalence prouvée) + figures
+python3 tutorial/run.py                   # tutoriel complet (3 fronts équivalents) + figures + gif
+python3 tutorial/equivalence.py           # smoke CI : helper == briques == formules, bit-identique
+
 # Cas écrits en formules via adc.dsl (génération + compilation C++ : compilateur C++20 requis)
 python3 diocotron_dsl/run.py              # diocotron en formules, prouvé bit-identique au natif
 python3 two_species_dsl/run.py            # électrons + ions en formules, Poisson couplé
@@ -124,7 +128,7 @@ python3 hoffart_euler_poisson_dsl/run.py  # Euler-Poisson magnétisé (Hoffart) 
 **Chaque dossier de cas dispose désormais d'un `README.md` rédigé selon le gabarit
 commun** (objectif, équations, modèle, méthode, architecture, carte des fichiers,
 commande exacte, conditions initiales, invariants, sorties, coût, limites, CI). La table
-ci-dessous couvre les **15 cas** ; la colonne *Catégorie* est celle du
+ci-dessous couvre les **16 cas** ; la colonne *Catégorie* est celle du
 [manifeste](cases_manifest.toml) (`validation` / `tutoriel` / `reproduction` /
 `reproduction-candidate` / `experimental`). Les descriptions sont honnêtes : un cas
 `reproduction-candidate` n'est **pas** une reproduction établie, un cas `experimental` est
@@ -133,6 +137,7 @@ un prototype non finalisé.
 | Dossier | Catégorie | Cas | Ce qu'il montre |
 |---|---|---|---|
 | [`diocotron/`](diocotron/README.md) | reproduction | Instabilité diocotron (dérive E×B) | **Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808)** : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (briques `ExB` + `BackgroundDensity` + paroi conductrice), figures + gif ; LONG, hors CI. Le sous-script `band_instability.py` est une **variante périodique minimale** (croissance de l'instabilité, sans figures) classée `validation` (en CI). |
+| [`tutorial/`](tutorial/README.md) | tutoriel | Le diocotron écrit de 3 façons | La **même** physique diocotron construite via le **helper** `models.diocotron`, via les **briques** natives reconstruites à la main, et via les **formules** `adc.dsl.Model` : les trois états finals sont **bit-identiques** (`np.array_equal`). Mirroir côté `adc_cases` du tutoriel Sphinx d'adc_cpp ; figures (croissance + gif + briques vs DSL). La variante CI `tutorial/equivalence.py` (`validation`, `cxx`) verrouille l'équivalence sans figures. |
 | [`composition/`](composition/README.md) | tutoriel | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc **réversible** ; garde-fous ; **intégrateur temporel écrit en Python** (`adc.integrate.ssprk2_step`). |
 | [`euler_poisson/`](euler_poisson/README.md) | validation | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
 | [`multispecies/`](multispecies/README.md) | validation | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |

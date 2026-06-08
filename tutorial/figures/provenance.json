@@ -1,0 +1,23 @@
+{
+  "script": "tutorial/run.py",
+  "command": "python tutorial/run.py",
+  "produces": [
+    "tutorial_growth.png",
+    "tutorial.gif",
+    "tutorial_bricks_vs_dsl.png"
+  ],
+  "demontre": "diocotron construit 3 facons (helper / briques / formules DSL) ; sorties bit-identiques (np.array_equal) ; figures de croissance + enroulement KH",
+  "backend_dsl": "production",
+  "equivalence": {
+    "helper_eq_bricks": true,
+    "bricks_eq_dsl": true
+  },
+  "adc_cpp_sha": "cace7e79914054ed2412af7689f771c4cfada55d",
+  "adc_cases_sha": "c9bc48805f11af6a6819c32977f63d4f2aa545ad",
+  "resolution": "96x96",
+  "n_steps": 60,
+  "cfl": 0.4,
+  "mode": 2,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py"
+}
