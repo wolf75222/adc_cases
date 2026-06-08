@@ -3,10 +3,10 @@
 
 Rejoue la MEME configuration que run.py (memes grille / CI / Poisson / nombre de pas), recupere
 l'etat final des DEUX chemins (composition native de briques vs modele ecrit en formules adc.dsl),
-et trace la SEULE figure qui prouve l'equivalence : la carte de |state_dsl - state_natif|, qui DOIT
-etre identiquement noire (max = 0). Une seule cellule non noire = une formule DSL qui devie d'une
-brique du coeur (ExBVelocity / BackgroundDensity). Ecrit aussi le panneau des deux densites finales
-(controle visuel : meme dynamique) et figures/provenance.json (nombres mesures du run).
+et trace UNE figure a 3 panneaux (densite natif, densite DSL, ecart |state_dsl - state_natif|) :
+les deux premiers montrent des champs reels identiques, le troisieme l'ecart qui DOIT etre noir
+(max = 0). Une seule cellule non noire = une formule DSL qui devie d'une brique du coeur. Ecrit
+aussi figures/provenance.json (nombres mesures du run).
 
 Lancement (meme interpreteur que celui qui a compile _adc) :
   PYTHONPATH=<build>/python:/private/tmp/adc_cases-deeptut python3.12 make_figures.py
@@ -55,49 +55,34 @@ def main():
     max_abs = float(diff.max())
     identical = bool(np.array_equal(dd, dn))
 
-    # --- Figure 1 : carte d'equivalence |DSL - natif| (DOIT etre identiquement noire) ---
-    fig, ax = plt.subplots(figsize=(5.4, 4.6))
-    # echelle fixe 0..1e-15 : a max = 0 toute la carte sature au noir ; un seul pixel au niveau
-    # machine (1e-15) ressortirait clairement. On NE laisse PAS matplotlib auto-scaler (sinon le
-    # bruit numerique serait dramatise sur une carte pourtant exactement nulle).
-    im = ax.imshow(diff, origin="lower", cmap="inferno", vmin=0.0, vmax=1e-15,
-                   extent=[0, L, 0, L])
-    cb = fig.colorbar(im, ax=ax, label=r"$|n_{\mathrm{DSL}} - n_{\mathrm{natif}}|$ (echelle 0 a 1e-15)")
-    cb.formatter.set_powerlimits((0, 0))
-    cb.ax.yaxis.get_offset_text().set_visible(False)
-    ax.set_title("Equivalence bit : carte de l'ecart DSL - natif\n"
-                 r"max $= %.1e$ (bit-identique : %s, backend : %s)" % (max_abs, identical, backend))
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
+    # --- Figure unique : 3 panneaux (natif | DSL | ecart). On MONTRE les deux champs reels
+    # (structures, identiques a l'oeil) PUIS l'ecart, plutot qu'un carre noir seul (qui aurait
+    # l'air vide / casse). Les deux premiers panneaux prouvent que les champs sont reels et de
+    # meme dynamique ; le troisieme prouve qu'ils sont bit-identiques (max = 0). ---
+    fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.4))
+    vmin, vmax = 1.0, max(float(dn.max()), float(dd.max()))
+    im0 = axes[0].imshow(dn, origin="lower", cmap="viridis", vmin=vmin, vmax=vmax, extent=[0, L, 0, L])
+    axes[0].set_title("natif : briques ExB + BackgroundDensity")
+    fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label=r"$n$")
+    im1 = axes[1].imshow(dd, origin="lower", cmap="viridis", vmin=vmin, vmax=vmax, extent=[0, L, 0, L])
+    axes[1].set_title("DSL : formules adc.dsl.Model")
+    fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label=r"$n$")
+    # ecart : echelle fixe 0..1e-15 (a max = 0 le panneau est noir ; un seul pixel au niveau
+    # machine ressortirait). On annote le max pour lever toute ambiguite "carte vide vs cassee".
+    im2 = axes[2].imshow(diff, origin="lower", cmap="inferno", vmin=0.0, vmax=1e-15, extent=[0, L, 0, L])
+    axes[2].set_title(r"$|n_{\mathrm{DSL}} - n_{\mathrm{natif}}|$" + "\n"
+                      r"max $= %.1e$ (bit-identique : %s)" % (max_abs, identical))
+    cb = fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label="ecart (echelle 0 a 1e-15)")
+    cb.formatter.set_powerlimits((0, 0)); cb.ax.yaxis.get_offset_text().set_visible(False)
+    for ax in axes:
+        ax.set_xlabel("x"); ax.set_ylabel("y")
+    fig.suptitle(r"diocotron_dsl : deux chemins, etat bit-identique apres %d pas (grille $%d^2$, "
+                 r"CFL 0.4, backend %s)" % (n_steps, n, backend), y=1.03)
     fig.tight_layout()
     p1 = os.path.join(FIGDIR, "equivalence_heatmap.png")
-    fig.savefig(p1, dpi=130)
+    fig.savefig(p1, dpi=130, bbox_inches="tight")
     plt.close(fig)
-
-    # --- Figure 2 : controle visuel des deux etats finaux (meme dynamique diocotron) ---
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.2))
-    vmax = max(float(dn.max()), float(dd.max()))
-    for ax, field, title in (
-            (axes[0], dn, "natif (briques ExB + BackgroundDensity)"),
-            (axes[1], dd, "DSL (formules adc.dsl.Model)"),
-            (axes[2], diff, "ecart |DSL - natif|")):
-        if title.startswith("ecart"):
-            im = ax.imshow(field, origin="lower", cmap="inferno", vmin=0.0, vmax=1e-15,
-                           extent=[0, L, 0, L])
-            ax.set_title(title + r" (max $= %.1e$)" % max_abs)
-        else:
-            im = ax.imshow(field, origin="lower", cmap="viridis", vmin=1.0, vmax=vmax,
-                           extent=[0, L, 0, L])
-            ax.set_title(title)
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-    fig.suptitle(r"diocotron_dsl : densite finale $n$ apres %d pas (grille $%d^2$, CFL 0.4)"
-                 % (n_steps, n), y=1.02)
-    fig.tight_layout()
-    p2 = os.path.join(FIGDIR, "final_density.png")
-    fig.savefig(p2, dpi=120, bbox_inches="tight")
-    plt.close(fig)
+    p2 = p1  # une seule figure desormais (l'ancien final_density.png est fusionne ici)
 
     # --- Provenance : nombres MESURES de ce run (rien d'invente) ---
     amp0 = case.perturbation_amplitude(ne0)
@@ -107,7 +92,7 @@ def main():
     prov = {
         "script": "diocotron_dsl/make_figures.py",
         "command": "python diocotron_dsl/make_figures.py",
-        "produces": ["equivalence_heatmap.png", "final_density.png"],
+        "produces": ["equivalence_heatmap.png"],
         "adc_cpp_sha": git_sha("/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"),
         "adc_cases_sha": git_sha(HERE),
         "backend": backend,
@@ -134,7 +119,6 @@ def main():
 
     print("backend %r | max|DSL - natif| = %.3e | bit-identique = %s" % (backend, max_abs, identical))
     print("ecrit : %s" % p1)
-    print("ecrit : %s" % p2)
     print("ecrit : %s" % os.path.join(FIGDIR, "provenance.json"))
 
 

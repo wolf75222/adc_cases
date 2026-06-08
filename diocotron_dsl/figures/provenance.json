@@ -2,11 +2,10 @@
   "script": "diocotron_dsl/make_figures.py",
   "command": "python diocotron_dsl/make_figures.py",
   "produces": [
-    "equivalence_heatmap.png",
-    "final_density.png"
+    "equivalence_heatmap.png"
   ],
-  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
-  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "adc_cpp_sha": "dec3f1857f248db0049d1a3c2999fbaa26ba7cd4",
+  "adc_cases_sha": "b34bacc70e1a9bb54ebb4ab509b2dd7d27059306",
   "backend": "aot",
   "backend_preference": [
     "production",

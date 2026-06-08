@@ -5,9 +5,9 @@
     "equivalence_electrons.png",
     "equivalence_ions.png"
   ],
-  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
-  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
-  "backend_dsl": "aot",
+  "adc_cpp_sha": "aca7036abb70b0d72819f95c8f6d86581c3a83e1",
+  "adc_cases_sha": "b34bacc70e1a9bb54ebb4ab509b2dd7d27059306",
+  "backend_dsl": "production",
   "backend_native": "natif serie (adc.System, models.electron_euler + ion_isothermal)",
   "resolution": "48x48",
   "n_steps": 15,
@@ -23,6 +23,8 @@
   "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
   "max_abs_diff_electrons": 4.930380657631324e-32,
   "max_abs_diff_ions": 0.0,
+  "max_abs_diff_rho_electrons": 0.0,
+  "max_abs_diff_rho_ions": 0.0,
   "electrons_bit_identical": false,
   "ions_bit_identical": true,
   "max_abs_diff_per_var_electrons": {
