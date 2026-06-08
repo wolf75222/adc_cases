@@ -18,7 +18,7 @@ depose `provenance.json` a cote : une re-execution **rafraichit les assets en pl
 manuelle depuis `out/`, qui etait la source de derive). Cout ~60 s (n=192, modes 3/4/5, CPU serie).
 Le `provenance.json` courant enregistre notamment : `adc_cpp_sha`, `adc_cases_sha`, `backend = natif
 serie`, `resolution = 192x192`, et les taux mesures `gamma_num` (l=3 ~0.599, l=4 ~0.662, l=5 ~0.652,
-soit -22/-27/-5 % vs l'oracle analytique — cf. `diocotron/README.md`, section « Limites »).
+soit -22/-27/-5 % vs l'oracle analytique -- cf. `diocotron/README.md`, section « Limites »).
 
 ## Assets EPHEMERES (non committes, ecrits sous `out/`, gitignore)
 
@@ -27,9 +27,9 @@ soit -22/-27/-5 % vs l'oracle analytique — cf. `diocotron/README.md`, section 
   `reproduction-candidate` **PENDING** (la reproduction quantitative d'arXiv:2510.11808 n'est pas
   etablie, cf. `hoffart_euler_poisson_dsl/README.md` et `adc_cpp/docs/HOFFART_FIDELITY.md`).
   Committer ces figures laisserait croire a une reproduction validee. La variante `amr-imex` exige
-  en plus un build Kokkos/MPI (ROMEO/GH200) — hors de portee d'un poste local.
+  en plus un build Kokkos/MPI (ROMEO/GH200) -- hors de portee d'un poste local.
 - Les cas DSL et de validation (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`,
-  `two_fluid_ap`, `schur_magnetized_cartesian`, …) ecrivent leurs `.so`/`.csv` sous `out/`
+  `two_fluid_ap`, `schur_magnetized_cartesian`, ...) ecrivent leurs `.so`/`.csv` sous `out/`
   (gitignore) : artefacts de build/mesure, non versionnes.
 
 ## Cas sans asset
