@@ -225,10 +225,10 @@ Tous verifies a l'execution (valeurs reelles capturees ci-dessous) :
 
 | Assertion (`run.py`) | Seuil | Valeur mesuree |
 |----------------------|-------|----------------|
-| `mass0` finie et `> 0` | — | `mass0 = 1.088622692545e+00` |
+| `mass0` finie et `> 0` | -- | `mass0 = 1.088622692545e+00` |
 | `npatch >= 2` a chaque pas | `>= 2` | `2` a tous les pas (patchs observes : `[2]`) |
 | `drel < TOL_MASS` (masse conservee) | `< 1e-9` | `drel` final `= 8.159e-16` (arrondi machine) |
-| `assert_finite(density)` | — | densite finie partout (min `1.0`, max `1.966797`) |
+| `assert_finite(density)` | -- | densite finie partout (min `1.0`, max `1.966797`) |
 | `min(patches_seen) >= 2` | `>= 2` | `2` |
 | `min(patches_seen) > npatch_ctrl` (le seuil discrimine) | `2 > 1` | nominal `2`, controle `1` |
 | `gap > MIN_SOLUTION_GAP` (le raffinement change la solution) | `> 1e-3` | `gap = 6.395745e-02` |

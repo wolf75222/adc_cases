@@ -80,7 +80,7 @@ Les cas qui produisent des fichiers éphémères (figures de travail, gif, `.so`
 compilation à la volée (`two_fluid_ap`), placés sous `out/<cas>/build/`. `out/` est ignoré par git.
 On peut surcharger la racine via `ADC_CASES_OUT=<chemin>`.
 
-**Exception — figures canoniques versionnées.** `diocotron/run.py` écrit ses figures directement
+**Exception -- figures canoniques versionnées.** `diocotron/run.py` écrit ses figures directement
 dans `diocotron/figures/` (tracké) et y dépose un `provenance.json` (SHA `adc_cpp`/`adc_cases`,
 backend, résolution, commande, taux mesurés) : une re-exécution les **rafraîchit en place**. La
 provenance et le statut de chaque asset (committé vs éphémère) sont décrits dans
@@ -137,7 +137,7 @@ un prototype non finalisé.
 | [`euler_poisson/`](euler_poisson/README.md) | validation | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
 | [`multispecies/`](multispecies/README.md) | validation | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par **un** Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
 | [`two_euler/`](two_euler/README.md) | validation | Deux Euler indépendants | Électrons + ions, **deux gaz d'Euler non couplés**, mêmes briques (`CompressibleFlux` + HLLC + **reconstruction primitive**) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
-| [`plasma/`](plasma/README.md) | validation | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g→n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
+| [`plasma/`](plasma/README.md) | validation | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par **sources inter-espèces** : ionisation (`add_ionization`, n_g->n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
 | [`two_fluid_ap/`](two_fluid_ap/README.md) | validation (needs `cxx`) | Bi-fluide raide AP | Intégrateur AP **sur mesure**, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). **Scénario**, pas une brique générique : sa physique C++ (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) vit ici, compilée à la volée contre les en-têtes génériques d'`adc_cpp` puis pilotée depuis Python (`ctypes`). |
 | [`diocotron_amr/`](diocotron_amr/README.md) | validation | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
 | [`custom_scheme/`](custom_scheme/README.md) | tutoriel | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) **écrit en numpy** ; `adc` ne sert que d'**oracle de Poisson** (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |

@@ -45,7 +45,7 @@ Le cas n'introduit pas de nouvelle physique : il **reutilise** les briques gener
 exposees par trois modeles nommes (cf. [`adc_cases/models.py`](../adc_cases/models.py)). Sur
 le domaine periodique `[0, L]^2` :
 
-**Electrons (Euler compressible)** — `models.electron_euler(charge=-1.0, gamma=1.4)` :
+**Electrons (Euler compressible)** -- `models.electron_euler(charge=-1.0, gamma=1.4)` :
 etat conservatif `U_e = (rho, rho u, rho v, E)`,
 
 ```
@@ -55,7 +55,7 @@ d_t E         + div((E + p) v)             = (q/m) rho v · E
 p = (gamma - 1) (E - 1/2 rho |v|^2),   q = -1
 ```
 
-**Ions (Euler isotherme)** — `models.ion_isothermal(charge=1.0, cs2=0.5)` :
+**Ions (Euler isotherme)** -- `models.ion_isothermal(charge=1.0, cs2=0.5)` :
 etat `U_i = (rho, rho u, rho v)`,
 
 ```
@@ -63,14 +63,14 @@ d_t rho       + div(rho v)                 = 0
 d_t (rho v)   + div(rho v⊗v + cs2 rho I)   = (q/m) rho E,   q = +1
 ```
 
-**Diocotron (transport scalaire ExB)** — `models.diocotron(B0, alpha, n_i0)` :
+**Diocotron (transport scalaire ExB)** -- `models.diocotron(B0, alpha, n_i0)` :
 etat scalaire `n`,
 
 ```
 d_t n + div(v_E n) = 0,   v_E = (E × B) / B0^2 = (-d_y phi, d_x phi) / B0
 ```
 
-**Couplage elliptique (Poisson)** — le champ `E = -grad phi` est self-consistant. Le second
+**Couplage elliptique (Poisson)** -- le champ `E = -grad phi` est self-consistant. Le second
 membre est la SOMME des briques elliptiques portees par les blocs :
 
 - electrons/ions portent `ChargeDensity(charge=q)` -> contribuent `q n` ;
@@ -83,7 +83,7 @@ lap phi = f,   f = somme_blocs (contribution elliptique du bloc),   E = -grad ph
 
 > Honnetete : ce sont des modeles JOUETS pour le tutoriel. La partie (A) n'est PAS un plasma
 > physique calibre ; la partie (B)/(D) n'est PAS une reproduction du benchmark diocotron
-> (arXiv:2510.11808) — ce dernier vit dans [`../diocotron/`](../diocotron/) (categorie
+> (arXiv:2510.11808) -- ce dernier vit dans [`../diocotron/`](../diocotron/) (categorie
 > `reproduction`) avec un anneau de charge et des figures. Ici, on ne mesure aucun taux de
 > croissance.
 
@@ -220,11 +220,11 @@ python3 composition/run.py
 `_meshgrid_centres(n, L)` delegue a `meshgrid_xy`.
 
 **`partie_A()` (composition heterogene, lignes 89-137)** :
-1. `sim = adc.System(n=48, L=1.0, periodic=True)` — config = maillage seul.
+1. `sim = adc.System(n=48, L=1.0, periodic=True)` -- config = maillage seul.
 2. `sim.add_block("electrons", model=electron_euler(), spatial=Spatial(vanleer=True,
-   flux="hllc"), time=IMEX(substeps=10))` — bloc Euler, VanLeer + HLLC, IMEX, 10 sous-pas.
+   flux="hllc"), time=IMEX(substeps=10))` -- bloc Euler, VanLeer + HLLC, IMEX, 10 sous-pas.
 3. `sim.add_block("ions", model=ion_isothermal(), spatial=Spatial(minmod=True,
-   flux="rusanov"), time=Explicit())` — bloc isotherme, Minmod + Rusanov, explicite, 1 sous-pas.
+   flux="rusanov"), time=Explicit())` -- bloc isotherme, Minmod + Rusanov, explicite, 1 sous-pas.
 4. `assert sim.n_species() == 2` ; impression des noms de blocs.
 5. `sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="auto")`.
 6. CI : electrons perturbes `1 + 0.02 cos(2 pi X / L)`, ions uniformes `1.0`.
@@ -392,7 +392,7 @@ PYTHONPATH=... python3.12 run.py
   ExB avec un fond neutralisant `BackgroundDensity`, sur grille periodique carree, sans
   anneau de charge ni etude de mode. La reproduction du benchmark arXiv:2510.11808 (anneau,
   modes azimutaux, figures, GIF) vit dans [`../diocotron/`](../diocotron/) (categorie
-  `reproduction`, hors CI) — ne pas confondre.
+  `reproduction`, hors CI) -- ne pas confondre.
 - **IMEX = source-only.** Le `adc.IMEX(substeps=10)` de la partie (A) traite la SOURCE de
   maniere implicite (backward-Euler, Newton local), pas le transport ni le Poisson. Ce n'est
   PAS un solveur implicite global PDE (Newton-Krylov / Schur), qui est un chantier distinct.

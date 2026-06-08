@@ -1,4 +1,4 @@
-# two_fluid_ap — bi-fluide isotherme raide (asymptotic-preserving)
+# two_fluid_ap -- bi-fluide isotherme raide (asymptotic-preserving)
 
 Solveur deux-fluides isotherme 2D en regime RAIDE (frequence plasma elevee), integre
 par un schema IMEX / asymptotic-preserving (AP). Le coeur du terme raide (couplage
@@ -289,7 +289,7 @@ Parametres des deux scenarios (constructeur `TwoFluidAP`, defauts `n=64`,
 | `omega_ce` / `omega_ci` | `0` / `0` | `4.0` / `0.2` |
 | `dt` | `5e-3` (= `5/1e3`) | `1e-2` |
 | `nsteps` | `200` | `100` |
-| `dt * omega_pe` | `5` (explicite exploserait) | — |
+| `dt * omega_pe` | `5` (explicite exploserait) | -- |
 | `stabilize` | `true` | `true` |
 
 ---
@@ -300,7 +300,7 @@ Les assertions du code (et leurs valeurs REELLES mesurees, cf. section 12) :
 
 **Run 1** (`run_stiff`, `run.py:195-202`) :
 
-- `np.isfinite(max_dev)`, `np.isfinite(max_charge)`, `np.isfinite(mass_e)` — le grand
+- `np.isfinite(max_dev)`, `np.isfinite(max_charge)`, `np.isfinite(mass_e)` -- le grand
   pas n'a pas explose. **Mesure** : toutes finies.
 - `max_dev < 0.1` (quasi-neutralite maintenue). **Mesure** : `max_dev = 5.325451e-07`.
 - `max_charge < 0.1` (charge nette locale faible). **Mesure** : `6.697598e-11`.

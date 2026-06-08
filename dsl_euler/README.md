@@ -1,4 +1,4 @@
-# dsl_euler — Euler 2D ecrit en formules (mini-DSL adc.dsl, interprete CPU)
+# dsl_euler -- Euler 2D ecrit en formules (mini-DSL adc.dsl, interprete CPU)
 
 Cas `dsl_euler` du depot `adc_cases`. Categorie **experimental**, `ci = false`, `needs = []`
 (cf. `cases_manifest.toml`).
@@ -9,7 +9,7 @@ EXPRESSIONS SYMBOLIQUES (variables, primitives, flux, valeurs propres), `adc.dsl
 arbre en numpy, et le branche sur le backend hote `adc.PythonFlux` qui assemble `-div(F*)` par
 volumes finis (Rusanov, ordre 1, periodique). Avance par Euler avant explicite.
 
-IMPORTANT — honnetete sur le statut. Ce cas est un **prototype declaratif interprete sur CPU**, PAS
+IMPORTANT -- honnetete sur le statut. Ce cas est un **prototype declaratif interprete sur CPU**, PAS
 le chemin de production. Il se distingue des autres cas `*_dsl` du manifeste
 (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`, `hoffart_euler_poisson_dsl`) qui,
 eux, COMPILENT le meme genre d'arbre en C++/Kokkos (`emit_cpp*` -> `add_compiled_model`, etat
@@ -108,13 +108,13 @@ gaussienne au centre du domaine. La detente de cette bulle produit une onde acou
 Le cas n'utilise du module `adc` que le sous-systeme DSL/prototype, PAS les briques compilees ni
 `adc.System` :
 
-- `adc.dsl.HyperbolicModel` — modele hyperbolique declaratif (arbre d'expressions). Methodes
+- `adc.dsl.HyperbolicModel` -- modele hyperbolique declaratif (arbre d'expressions). Methodes
   employees : `conservative_vars`, `primitive`, `set_flux`, `set_eigenvalues`, `check`,
   proprietes `n_vars` / `cons_names`, et `to_python_flux`.
-- `adc.dsl.sqrt` — racine carree symbolique (noeud `Sqrt`), pour la vitesse du son.
+- `adc.dsl.sqrt` -- racine carree symbolique (noeud `Sqrt`), pour la vitesse du son.
 - `adc.dsl.Expr` et ses sous-classes (`Const`, `Var`, `Add`, `Sub`, `Mul`, `Div`, `Pow`, `Neg`,
-  `Sqrt`) — l'arbre construit par surcharge d'operateurs Python (`__add__`, `__mul__`...).
-- `adc.PythonFlux` — backend HOTE numpy (defini dans `adc/__init__.py`). C'est lui qui contient le
+  `Sqrt`) -- l'arbre construit par surcharge d'operateurs Python (`__add__`, `__mul__`...).
+- `adc.PythonFlux` -- backend HOTE numpy (defini dans `adc/__init__.py`). C'est lui qui contient le
   flux de Rusanov, la periodicite par `np.roll`, `residual` et `cfl_dt`. `HyperbolicModel`
   l'instancie via `to_python_flux()` en lui passant deux closures (le flux et la vitesse d'onde
   max).
@@ -176,7 +176,7 @@ Le premier chemin du `PYTHONPATH` fournit le module `adc` (build), le second fou
 1. **Imports** : `numpy`, `from adc import dsl`, et les helpers `assert_finite`, `relative_drift`,
    `meshgrid_xy`, `euler_pressure`. `GAMMA = 1.4`.
 
-2. **`make_euler()` — declaration du modele en formules** :
+2. **`make_euler()` -- declaration du modele en formules** :
    - `e = dsl.HyperbolicModel("euler")` cree un modele vide.
    - `rho, rhou, rhov, E = e.conservative_vars("rho", "rho_u", "rho_v", "E")` declare 4 variables
      conservatives (retourne des noeuds `Var`).
@@ -239,7 +239,7 @@ Les 4 assertions de `run.py` (toutes verifiees lors de l'execution, cf. section 
 
 - `drel = relative_drift(U[0].sum(), mass0)` : derive relative de la masse totale. Le flux de
   masse est en forme conservative et le domaine periodique, donc la masse est conservee a l'arrondi
-  pres — ici exactement `0.00e+00` (les flux de bord s'annulent par `np.roll`).
+  pres -- ici exactement `0.00e+00` (les flux de bord s'annulent par `np.roll`).
 - `moved = max|pressure(U) - p_init|` : ecart maximal de pression vs l'instant initial, preuve que
   la bulle s'est detendue (sinon le cas validerait un etat fige). Mesure `0.394`.
 

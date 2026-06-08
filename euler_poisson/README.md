@@ -1,4 +1,4 @@
-# euler_poisson — Euler compressible couple a Poisson : auto-gravite (attractif) vs plasma (repulsif)
+# euler_poisson -- Euler compressible couple a Poisson : auto-gravite (attractif) vs plasma (repulsif)
 
 Cas de **validation** (manifeste `cases_manifest.toml`, categorie `validation`, `ci = true`,
 `needs = []`). Ce n'est PAS une reproduction d'un resultat publie : c'est un test numerique leger
@@ -100,14 +100,14 @@ domaine periodique `[0, L]^2`, `n x n` cellules.
 
 - **Reconstruction** : limiteur **van Leer** (`adc.Spatial(vanleer=True)`) -> ordre 2 avec
   capture sans oscillation pres des gradients.
-- **Flux de Riemann** : **HLLC** (`flux="hllc"`) — solveur approche restituant l'onde de contact,
+- **Flux de Riemann** : **HLLC** (`flux="hllc"`) -- solveur approche restituant l'onde de contact,
   adapte au transport compressible (HLLC exige une pression, fournie par l'etat compressible).
 - **Variables reconstruites** : `conservative` (defaut de `adc.Spatial`, non surcharge ici).
-- **Integration en temps** : explicite **SSPRK2** (Shu-Osher 2 etages, ordre 2) — c'est le defaut
+- **Integration en temps** : explicite **SSPRK2** (Shu-Osher 2 etages, ordre 2) -- c'est le defaut
   de `adc.Explicit()` (`method="ssprk2"`, `substeps=1`, `stride=1`). Pas de temps **fixe**
   `dt = 0.004`, **20 pas** (`NSTEPS`).
 - **Poisson** : second membre `charge_density` (alias generique : somme des briques elliptiques par
-  bloc — ici l'unique `GravityCoupling`), solveur **`geometric_mg`** (multigrille geometrique),
+  bloc -- ici l'unique `GravityCoupling`), solveur **`geometric_mg`** (multigrille geometrique),
   conditions aux limites **periodiques** (heritees de `adc.System(periodic=True)`).
 
 A chaque pas de temps : transport explicite SSPRK2 ; a chaque etage, le Poisson de systeme est
@@ -210,7 +210,7 @@ Le premier chemin du `PYTHONPATH` fournit le module C++ `adc` ; le second rend l
    `from adc_cases.common.checks import assert_opposite_sign, relative_drift`.
 2. **Tolerances** (l.57-63) : `TOL_MASS = 1e-9` (derive relative de masse), `TOL_MOM = 1e-8`
    (impulsion nette), `TOL_DE = 1e-5` (magnitude minimale du contraste energetique pour que le
-   signe soit significatif — `dE = 0` exactement a perturbation nulle).
+   signe soit significatif -- `dE = 0` exactement a perturbation nulle).
 3. **Parametres** (l.65-72) : `N=64`, `L=1.0`, `GAMMA=1.4`, `EPS=0.01`, `RHO0=1.0`, `DT=0.004`,
    `NSTEPS=20`.
 4. **`initial_density()`** (l.75-79) : densite au repos faiblement perturbee par un cosinus selon x
@@ -267,7 +267,7 @@ Quatre controles, tous **passes** a l'execution (valeurs reelles capturees, sect
 1. **Conservation de la masse** (`assert res["max_rel_mass"] < TOL_MASS`, TOL = `1e-9`) : le schema
    volumes finis est conservatif sur domaine periodique. La masse de reference est
    `mass0 = sim.mass("gas") = 4096` (somme de `rho` sur les `64x64` cellules, `RHO0=1`). Derive
-   relative max **mesuree** : `2.598e-14` (GRAVITE), `2.098e-14` (PLASMA) — du bruit machine, tres
+   relative max **mesuree** : `2.598e-14` (GRAVITE), `2.098e-14` (PLASMA) -- du bruit machine, tres
    en dessous de `1e-9`.
 2. **Impulsion totale nulle** (`assert res["max_mom"] < TOL_MOM`, TOL = `1e-8`) : la force de
    Poisson derive d'un potentiel ; sur domaine periodique homogene, sa somme spatiale est nulle,
@@ -319,7 +319,7 @@ OK euler_poisson
 ```
 
 Lecture : la masse est strictement constante (`4.096e+03`), l'energie **decroit** lentement pour
-GRAVITE (de `1.0240000e+04` a `1.0239999e+04`) et **croit** pour PLASMA — exactement le contraste
+GRAVITE (de `1.0240000e+04` a `1.0239999e+04`) et **croit** pour PLASMA -- exactement le contraste
 de signe attendu. `p_x`, `p_y` restent au niveau du bruit machine (`~1e-16` ou moins). Le code se
 termine sur `OK euler_poisson` (tous les `assert` passent) et un code de retour 0.
 
@@ -347,7 +347,7 @@ cas `diocotron` qui demande `matplotlib`). Il n'ecrit aucun fichier sur disque.
 - **Pas de compilation a la volee** : aucun chemin `ctypes`/`.so` JIT, aucun DSL interprete. Tout
   le natif est deja dans le module `adc` (`needs = []`).
 - **Reconstruction/flux** : van Leer + HLLC sont disponibles sur le chemin natif `add_block`.
-  HLLC exige un transport compressible (pression) — satisfait ici par `FluidState(compressible)`.
+  HLLC exige un transport compressible (pression) -- satisfait ici par `FluidState(compressible)`.
 
 ---
 

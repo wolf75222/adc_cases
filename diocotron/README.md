@@ -266,7 +266,7 @@ cd ../adc_cpp && cmake -B build-py -DADC_BUILD_PYTHON=ON && cmake --build build-
 
 Les CI vivent dans `adc_cases/common/initial_conditions.py` (numpy, convention `field[j, i]`).
 
-### Anneau (colonne creuse) — `run.py`
+### Anneau (colonne creuse) -- `run.py`
 
 ```python
 # ring_density(n, L=1.0, r0=0.15, r1=0.20, mode=l, delta=0.01, floor=1e-3)
@@ -279,7 +279,7 @@ ne[anneau] = 1 - delta + delta * sin(mode * th)    # ~1 + perturbation azimutale
 Anneau `r0:r1:Rwall = 0.15:0.20:0.40` (ratios `6:8:16`), centre du domaine `(L/2, L/2)`,
 perturbation faible `delta=0.01` pour la mesure de taux, `delta=0.1` pour le gif (visible).
 
-### Bande — `band_instability.py`
+### Bande -- `band_instability.py`
 
 ```python
 # band_density(n, L=1.0, amp=1.0, width=0.05, mode=2, disp=0.02, floor=1.0)
@@ -333,7 +333,7 @@ OK diocotron
 Diagnostic cle : masse constante (1.00327467e+04 du pas 10 au pas 120), facteur de croissance
 de l'amplitude **1.9092** (> 1, instabilite observee). Exit 0, ligne finale `OK diocotron`.
 
-### `run.py` (non relance ici — sorties decrites)
+### `run.py` (non relance ici -- sorties decrites)
 
 Console : tableau analytique (gamma par mode), tableau numerique mode 3/4/5 (gamma_num vs
 analytique vs papier, ecart en %), puis le log d'evolution du gif (`OK repro_paper_2510_11808`).
