@@ -1,0 +1,53 @@
+{
+  "script": "composition/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "density_maps.png",
+    "determinism.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "natif serie (adc.System, blocs = compositions de briques models.*)",
+  "resolution": {
+    "partie_A": "48x48",
+    "parties_BD": "32x32"
+  },
+  "periodic": true,
+  "schemes": {
+    "electrons": "electron_euler() | Spatial(vanleer, hllc) | IMEX(substeps=10)",
+    "ions": "ion_isothermal() | Spatial(minmod, rusanov) | Explicit()",
+    "diocotron_B": "diocotron() | Spatial(minmod, rusanov) | Explicit(substeps=1)",
+    "diocotron_D": "diocotron() | Spatial(minmod) | integrateur SSPRK2 ECRIT EN PYTHON (adc.integrate.ssprk2_step)"
+  },
+  "dt_nsteps": {
+    "A": [
+      0.001,
+      8
+    ],
+    "B": [
+      0.002,
+      12
+    ],
+    "D": [
+      0.001,
+      20
+    ]
+  },
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "measured": {
+    "phi_amp_initial_A": 0.0005062436842361012,
+    "mass_drift_electrons_A": 2.7284841053187847e-12,
+    "mass_drift_ions_A": 1.8189894035458565e-12,
+    "electron_evolution_A": 3.505648295265562e-05,
+    "rho_e_min_fin_A": 0.9800778780181804,
+    "rho_e_max_fin_A": 1.0199221500278064,
+    "rho_i_min_fin_A": 0.9999993603578,
+    "rho_i_max_fin_A": 1.0000006396427583,
+    "compose_bit_diff_B": 0.0,
+    "compose_array_equal_B": true,
+    "pystep_bit_diff_D": 0.0,
+    "pystep_array_equal_D": true,
+    "mass_drift_pystep_D": 2.2737367544323206e-13
+  }
+}

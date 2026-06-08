@@ -1,0 +1,40 @@
+{
+  "script": "multispecies/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "masse.png",
+    "densite.png",
+    "potentiel.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "7c7a340348d752c85a03bfc25f93e31f2d536f8a",
+  "backend": "natif serie (adc.System, deux blocs heterogenes + Poisson de systeme charge_density)",
+  "resolution": "48x48",
+  "periodic": true,
+  "species": {
+    "electrons": "Euler compressible (4 var), charge -1, gamma = 5/3",
+    "ions": "Euler isotherme (3 var), charge +1, cs2 = 1.0"
+  },
+  "dt": 0.001,
+  "nsteps": 20,
+  "delta_cos": 0.02,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "measured": {
+    "mass_e0": 2304.0,
+    "mass_i0": 2304.0,
+    "drift_e_max_abs": 4.229150363244116e-11,
+    "drift_i_max_abs": 3.183231456205249e-11,
+    "drift_e_final_abs": 5.9117155615240335e-12,
+    "drift_i_final_abs": 6.821210263296962e-12,
+    "tol_mass_assert": 1e-09,
+    "ne_min": 0.9802551487063368,
+    "ne_max": 1.019745034347048,
+    "ni_min": 0.9999960159159913,
+    "ni_max": 1.0000039841053403,
+    "phi_absmax": 0.0005025005705180816,
+    "phi_analytic_absmax": 0.0005055212360530199,
+    "phi_vs_analytic_resid_max": 3.021686341730923e-06,
+    "qmax_final": 0.019749018431056697
+  }
+}

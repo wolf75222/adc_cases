@@ -1,408 +1,346 @@
-# euler_poisson -- Euler compressible couple a Poisson : auto-gravite (attractif) vs plasma (repulsif)
+# euler_poisson : Euler compressible couple a Poisson, attractif vs repulsif
 
-Cas de **validation** (manifeste `cases_manifest.toml`, categorie `validation`, `ci = true`,
-`needs = []`). Ce n'est PAS une reproduction d'un resultat publie : c'est un test numerique leger
-qui verifie par `assert` trois invariants physiques (masse conservee, impulsion nette nulle,
-contraste de signe de la derive d'energie entre force attractive et force repulsive).
+Deux runs Euler-Poisson 2D identiques au signe du couplage pres : `sign=+1` (auto-gravite,
+attractif) et `sign=-1` (charge d'espace, repulsif). Le cas verifie par `assert` trois invariants
+structurels (masse conservee, impulsion nette nulle, derive d'energie de signes opposes) et expose
+une prediction falsifiable de la linearisation : la derive d'energie suit $|dE|\propto\epsilon^2$.
+Ce n'est PAS une reproduction d'un resultat publie.
 
----
+## Contrat
 
-## 1. Objectif du cas
+| Champ | Contenu |
+|---|---|
+| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `euler_poisson/run.py`, `ci = true`, `needs = []`) |
+| Entrees | grille $64^2$, $L=1$, **periodique** ; CI $\rho=\rho_0(1+\epsilon\cos(2\pi x/L))$, $\epsilon=0.01$, repos ($v=0$, $E=\rho/(\gamma-1)$) ; $\gamma=1.4$, $\rho_0=1$, $4\pi G=1$ (sans unites), $dt=0.004$, 20 pas ; van Leer + HLLC + SSPRK2, Poisson `geometric_mg` |
+| Sorties | etat `(4,n,n)=[\rho,\rho u,\rho v,E]` lu par `get_state("gas")` ; diagnostics globaux $E_{tot}=U[3].\mathrm{sum}()$, $p_x=U[1].\mathrm{sum}()$, $p_y=U[2].\mathrm{sum}()$ ; 3 figures dans `figures/` + `figures/provenance.json` |
+| Invariants garantis | les 3 `assert` de `run.py` : masse `max_rel_mass < TOL_MASS=1e-9` ; impulsion `max_mom < TOL_MOM=1e-8` ; contraste `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` PUIS `dE_grav<0` et `dE_plas>0` (`run.py:150-180`) |
+| PROUVE | masse conservee a $2.6\times10^{-14}$ relatif (les deux runs) ; impulsion nette $8.9\times10^{-16}$ ; $dE_{grav}=-5.857667\times10^{-4}<0$ et $dE_{plas}=+6.137105\times10^{-4}>0$ (signes opposes, magnitude $\gg$ TOL_DE) ; **la pente $|dE|$ vs $\epsilon$ vaut 2.000** (figure 2) |
+| NE PROUVE PAS | **pas une reproduction publiee** : aucun nombre n'est confronte a un article (ni effondrement de Jeans, ni benchmark plasma). Le signe physique de $dE$ n'est PAS deductible du travail $\int\rho\,v\cdot g$ (qui est **positif des deux cotes**, section 4.3) : il se lit sur l'assert qui passe. $E_{tot}=U[3].\mathrm{sum}()$ est l'energie **fluide** seule (sans potentiel de champ), c'est un proxy de signe, pas une integrale physique calibree. Regime quasi-lineaire ($\epsilon=0.01$, 20 pas) : aucune dynamique non lineaire |
+| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $64^2$, ~0.3 s 1 coeur CPU ; `figures/provenance.json` |
 
-Demontrer, sur un systeme generique `adc.System` compose d'**un seul bloc** de modele
-`euler_poisson`, que :
-
-1. le solveur natif (C++) integre les equations d'Euler compressibles 2D couplees a une equation
-   de Poisson pour le champ de force **auto-consistant** ;
-2. ce couplage est **piloté par un signe** passe a la brique elliptique : `sign = +1` donne une
-   force **attractive** (auto-gravite), `sign = -1` une force **repulsive** (charge d'espace,
-   plasma) ;
-3. les deux runs (memes CI, meme grille, meme schema, seul le signe change) produisent des derives
-   d'energie de **signes opposes** et physiquement attendus : auto-gravite -> `dE < 0`, plasma ->
-   `dE > 0`, tandis que la **masse** et l'**impulsion totale** restent invariantes.
-
-Python ne fait que **composer** le systeme, poser la condition initiale, avancer en temps et lire
-des diagnostics globaux. Toute la physique (flux d'Euler, force, second membre et solveur de
-Poisson) est en C++.
+A la fin tu sauras : pourquoi le meme code donne deux signes de $dE$ opposes (mecanisme), pourquoi
+le travail de la force ne suffit PAS a predire ce signe (le paradoxe de l'energie fluide), quelle
+est la vraie prediction quantitative testable ($|dE|\propto\epsilon^2$), et ce que chaque assert
+etablit reellement.
 
 ---
 
-## 2. Equations
+## 1. Le mecanisme physique (justifie PROUVE : contraste de signe)
 
-Etat conservatif par cellule, 4 composantes (transport compressible 2D) :
+Un fluide compressible au repos, de densite $\rho=\rho_0(1+\epsilon\cos kx)$ avec $k=2\pi/L$, cree
+son propre champ de force via Poisson. Trois ingredients enchaines :
 
-```
-U = (rho, rho u, rho v, E)
-```
+1. **Champ propre.** La perturbation de densite resout l'equation de Poisson de systeme
+   $\nabla^2\phi = \mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ (brique `GravityCoupling`). Le fond
+   $\rho_0$ rend le second membre de moyenne nulle, condition de compatibilite du Laplacien
+   periodique.
+2. **Force.** Le fluide ressent $g=-\nabla\phi$ (brique `GravityForce`), qui pousse la quantite de
+   mouvement : $\partial_t(\rho v)=\dots+\rho g$.
+3. **Reponse opposee selon le signe.** Pour la gravite ($\mathrm{sign}=+1$), la surdensite creuse
+   un puits de potentiel et $g$ pointe **vers** la crete (attractif). Pour le plasma
+   ($\mathrm{sign}=-1$), le second membre change de signe, $\phi$ s'inverse, et $g$ pointe **loin**
+   de la crete (repulsif). Les deux runs partent du **meme** etat au repos ; seul le signe du
+   couplage les separe.
 
-Euler compressible 2D :
+Ce que ce mecanisme ne dit PAS tout seul : dans quel sens va l'energie fluide $E_{tot}$. On verra
+section 4 que le travail de la force est positif **des deux cotes**, et que le signe de $dE_{tot}$
+vient d'un autre canal (la compression/detente). C'est pour cela que le cas **mesure et assere** le
+signe au lieu de le deduire d'une formule de cours.
 
-```
-d_t rho        + div(rho v)                 = 0
-d_t (rho v)    + div(rho v (x) v + p I)     = rho g        (source : force par unite de volume)
-d_t E          + div((E + p) v)             = rho v . g    (travail de la force)
-```
-
-avec la pression issue de l'EOS gaz parfait (etat `compressible`, `gamma = 1.4`) :
-
-```
-p = (gamma - 1) (E - 1/2 rho |v|^2)
-```
-
-Le champ de force `g = -grad(phi)` derive d'un potentiel `phi` solution de l'equation de Poisson
-de **systeme**, dont le second membre est fourni par la brique elliptique du bloc :
-
-```
-lap(phi) = f,     f = sign * 4 pi G * (rho - rho0)
-```
-
-- `sign = +1` (auto-gravite) : `f = +4 pi G (rho - rho0)`, force attractive vers les surdensites ;
-- `sign = -1` (plasma) : `f = -4 pi G (rho - rho0)`, force repulsive (la surdensite se relaxe).
-
-Le terme de fond `rho0` rend le second membre de **moyenne nulle** (`rho` perturbe autour de
-`rho0`), ce qui est la condition de compatibilite du Poisson **periodique** (un Laplacien
-periodique n'est inversible que pour un second membre de somme nulle, a une constante pres).
-
-> Convention `4 pi G` : ici `four_pi_G = 1.0`. Ce n'est PAS un calcul gravitationnel quantitatif
-> calibre ; le but est le **contraste de signe**, pas une valeur de G physique.
+Le systeme reduit ici est l'Euler-Poisson **electrostatique non magnetise** ; le systeme complet
+magnetise (force de Lorentz, etage Schur) est traite par
+[`hoffart_euler_poisson_dsl`](../hoffart_euler_poisson_dsl/). Ce cas ne couvre PAS le couplage
+magnetique.
 
 ---
 
-## 3. Modele physique
+## 2. Les equations et qui les calcule (justifie : la physique est figee en C++)
 
-Le modele nomme `models.euler_poisson(sign, gamma, four_pi_G, rho0)`
-(`/private/tmp/adc_cases-readmes/adc_cases/models.py`, l.48-55) compose **quatre briques
-generiques natives** de `adc` :
+Etat conservatif par cellule, 4 composantes : $U=(\rho,\rho u,\rho v,E)$.
 
-| Role            | Brique `adc`                                   | Effet physique |
-|-----------------|------------------------------------------------|----------------|
-| etat            | `adc.FluidState(kind="compressible", gamma)`   | EOS gaz parfait, 4 variables (rho, rho u, rho v, E) |
-| transport       | `adc.CompressibleFlux()`                        | flux d'Euler compressible (le `gamma` vient de l'etat) |
-| source          | `adc.GravityForce()`                            | force `rho g` sur la quantite de mouvement + travail `rho v.g` (car 4 variables) |
-| elliptique      | `adc.GravityCoupling(sign, four_pi_G, rho0)`    | second membre de Poisson `f = sign * 4 pi G * (rho - rho0)` |
+| Bloc | Equation | Brique `adc` |
+|---|---|---|
+| Transport | $\partial_t\rho+\nabla\cdot(\rho v)=0$, $\partial_t(\rho v)+\nabla\cdot(\rho v\otimes v+pI)=\rho g$, $\partial_t E+\nabla\cdot((E+p)v)=\rho\,v\cdot g$ | `CompressibleFlux` |
+| Etat / EOS | $p=(\gamma-1)(E-\tfrac12\rho|v|^2)$, $\gamma=1.4$ | `FluidState(kind="compressible")` |
+| Source | $g=-\nabla\phi$ ; $s[1]=\rho g_x$, $s[2]=\rho g_y$, $s[3]=\rho_u g_x+\rho_v g_y$ | `GravityForce` |
+| Elliptique | $\nabla^2\phi=\mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ | `GravityCoupling(sign, four_pi_G, rho0)` |
 
-La docstring native de `adc.GravityForce` (`adc/__init__.py` l.153) : *"Force gravitationnelle
-rho g (+ travail si 4 var)"*. Celle de `adc.GravityCoupling` (l.173) : *"Couplage self-consistant
-f = sign 4piG (rho - rho0). sign = +1 gravite, -1 plasma"*.
+C'est `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`models.py:48-55`), une
+composition `adc.Model(state, transport, source, elliptic)`. Le mot "euler_poisson" vit dans
+`adc_cases` ; cote coeur ce sont quatre briques generiques.
 
-**Difference natif vs charge electrostatique** : ce modele utilise `GravityForce` +
-`GravityCoupling` (signe explicite porte par la brique elliptique), et NON `PotentialForce` +
-`ChargeDensity` (utilises par `electron_euler` / `ion_isothermal`, ou le signe vient de la charge
-`q`). Les deux familles passent par le **meme** chemin numerique cote C++ (somme generique des
-briques elliptiques de chaque bloc), seul le second membre differe.
+Table 3 couches "qui calcule quoi", chaque ligne pinnee a une ligne reelle :
 
----
+| Ligne `run.py` | Couche | Ce qui se passe |
+|---|---|---|
+| `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run.py:94-98`) | Python **compose** | choix du modele, du schema (MUSCL van Leer + HLLC), de l'integrateur (SSPRK2) |
+| `models.euler_poisson(sign=...)` -> `GravityForce` (`source.hpp:52-62`) / `GravityCoupling` (`elliptic.hpp:43-49`) | brique C++ **fige** | la formule exacte de la force ($g=-\nabla\phi$, travail sur l'energie a 4 variables) et du second membre ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |
+| `assemble_rhs<VanLeer, HLLC>` + Poisson de systeme (`GeometricMG`) (`run.py:99` `set_poisson(...)`) | noyau **par cellule** (device) | le calcul reel, sans callback Python dans le hot path |
 
-## 4. Methode numerique
-
-Discretisation **volumes finis 2D** sur grille cartesienne uniforme a centres de cellules,
-domaine periodique `[0, L]^2`, `n x n` cellules.
-
-- **Reconstruction** : limiteur **van Leer** (`adc.Spatial(vanleer=True)`) -> ordre 2 avec
-  capture sans oscillation pres des gradients.
-- **Flux de Riemann** : **HLLC** (`flux="hllc"`) -- solveur approche restituant l'onde de contact,
-  adapte au transport compressible (HLLC exige une pression, fournie par l'etat compressible).
-- **Variables reconstruites** : `conservative` (defaut de `adc.Spatial`, non surcharge ici).
-- **Integration en temps** : explicite **SSPRK2** (Shu-Osher 2 etages, ordre 2) -- c'est le defaut
-  de `adc.Explicit()` (`method="ssprk2"`, `substeps=1`, `stride=1`). Pas de temps **fixe**
-  `dt = 0.004`, **20 pas** (`NSTEPS`).
-- **Poisson** : second membre `charge_density` (alias generique : somme des briques elliptiques par
-  bloc -- ici l'unique `GravityCoupling`), solveur **`geometric_mg`** (multigrille geometrique),
-  conditions aux limites **periodiques** (heritees de `adc.System(periodic=True)`).
-
-A chaque pas de temps : transport explicite SSPRK2 ; a chaque etage, le Poisson de systeme est
-resolu pour le `phi` courant, d'ou `g = -grad(phi)` injecte par `GravityForce` dans la source.
+La distinction natif/electrostatique : `euler_poisson` utilise `GravityForce`+`GravityCoupling`
+(signe porte par la brique elliptique), pas `PotentialForce`+`ChargeDensity` (signe porte par la
+charge $q$, utilises par `electron_euler`/`ion_isothermal` dans `models.py`). Les deux familles
+empruntent le **meme** chemin numerique cote coeur (somme generique des briques elliptiques) ; seul
+le second membre differe.
 
 ---
 
-## 5. Architecture ADC utilisee
+## 3. La chaine de signe REELLE, ligne par ligne (justifie 7 de la checklist : signe par le comportement)
 
+Le guide interdit d'ecrire "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ donc attractif" sans verifier : le
+solveur Poisson a plusieurs couches de signe. Voici la chaine effective, telle qu'elle est codee :
+
+1. **Operateur Poisson** : `poisson_operator.hpp` resout $\nabla^2\phi=f$ (le stencil ecrit
+   $\mathrm{lap}=\sum/dx^2$ sans facteur, $\varepsilon=1$, cf. `elliptic_problem.hpp:24-25`). Donc
+   $f>0$ tend a rendre $\phi$ **convexe** (un minimum local).
+2. **Second membre** : `GravityCoupling::rhs` renvoie `sign * four_pi_G * (u[0] - rho0)`
+   (`elliptic.hpp:47`). Pour la gravite ($\mathrm{sign}=+1$), une surdensite ($\rho>\rho_0$) donne
+   $f>0$, donc $\phi$ a un **puits** sous la crete.
+3. **Stockage du champ** : le coupler stocke $aux=(\phi,+\partial_x\phi,+\partial_y\phi)$,
+   convention `GradSign::Plus` (`elliptic_problem.hpp:35-39`). C'est-a-dire `aux.grad_x = +d\phi/dx`.
+4. **Force** : `GravityForce::apply` pose `gx = -a.grad_x` (`source.hpp:55`), soit
+   $g=-\nabla\phi$. Sous la crete (puits de $\phi$), $g$ pointe vers la crete : attractif.
+
+Cette chaine donne le signe attendu, mais elle empile 4 conventions ; on ne s'y fie PAS comme
+preuve. **La reference est l'assert qui passe** : `run.py:177` impose `dE_grav < 0`, `run.py:179`
+impose `dE_plas > 0`, et le run sort `OK` (section 6). C'est CA le signe physique du cas, pas la
+derivation ci-dessus, qui ne sert qu'a montrer que le code est coherent.
+
+---
+
+## 4. Maths : pourquoi le signe de $dE$ ne se lit PAS sur le travail (justifie NE PROUVE PAS)
+
+### 4.1 Ce que $E_{tot}$ EST reellement
+
+`run.py:85` : `E_tot = U[3].sum()`. La composante 3 de l'etat est l'energie **fluide** totale
+$E=\tfrac12\rho|v|^2+\dfrac{p}{\gamma-1}$ (cinetique + interne). Elle **n'inclut PAS** l'energie
+potentielle du champ $\tfrac12\int\rho\phi$. $E_{tot}$ n'est donc PAS une quantite conservee du
+systeme couple : c'est l'energie d'un des deux reservoirs (le fluide), et le champ peut lui en
+donner ou lui en prendre. Mesure a $t=0$ (repos) : $E_{tot}=1.024\times10^4$, purement interne
+(KE=0).
+
+### 4.2 La decomposition mesuree (le coeur du paradoxe)
+
+On instrumente $E_{tot}=KE+E_{int}$ sur les 20 pas, $\epsilon=0.01$ (script de diagnostic, memes
+parametres que `run.py`) :
+
+| sign | $dKE$ | $dE_{int}$ | $dE_{tot}=dKE+dE_{int}$ |
+|---|---|---|---|
+| $+1$ (gravite) | $+2.189\times10^{-2}$ | $-2.247\times10^{-2}$ | $-5.858\times10^{-4}$ |
+| $-1$ (plasma) | $+2.412\times10^{-2}$ | $-2.351\times10^{-2}$ | $+6.137\times10^{-4}$ |
+
+Lecture : **l'energie cinetique augmente des DEUX cotes** ($dKE>0$). La force, partant du repos,
+accelere le fluide quel que soit son signe : c'est le travail $\int\rho\,v\cdot g\,dt$, et il est
+positif gravite **comme** plasma. Le signe de $dE_{tot}$ n'est donc PAS celui du travail : c'est le
+**residu** d'une quasi-annulation entre $dKE\sim+2\times10^{-2}$ et $dE_{int}\sim-2\times10^{-2}$
+(le fluide se comprime/detend differemment selon le sens de la force). Ce residu vaut $\sim6\times
+10^{-4}$ et c'est lui dont le signe distingue gravite de plasma.
+
+### 4.3 Preuve que le travail est positif des deux cotes (verifiee par sympy)
+
+Au premier ordre, $\rho\approx\rho_0=1$, $\phi$ resout $\nabla^2\phi=\mathrm{sign}\cdot\epsilon\cos
+kx$, soit $\phi=-\dfrac{\mathrm{sign}\cdot\epsilon}{k^2}\cos kx$, donc
+
+$$g=-\partial_x\phi=-\frac{\mathrm{sign}\cdot\epsilon}{k}\sin kx,\qquad g^2=\frac{\epsilon^2}{k^2}\sin^2 kx.$$
+
+Partant du repos, $v\approx g\,t$ aux temps courts, et la puissance volumique
+$\rho\,v\cdot g\approx t\,g^2\ge 0$ est **independante du signe** ($g^2$ ne voit pas
+$\mathrm{sign}$). Le travail cumule $\int_0^T\!\!\int\rho\,v\cdot g\,dt$ est donc strictement positif
+pour $\mathrm{sign}=+1$ ET $\mathrm{sign}=-1$. Ecrire "le travail $v\cdot g$ est negatif d'ou
+$dE<0$" est **faux**. Le cas le sait : il assere $dE_{grav}<0$ comme un **fait mesure**, pas comme
+une consequence du travail.
+
+### 4.4 La prediction falsifiable : $|dE|\propto\epsilon^2$ (justifie PROUVE : pente 2)
+
+A $\epsilon=0$, le second membre $f=\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$ est identiquement nul,
+la force est nulle, et $dE=0$ **exactement** (mesure : $dE_{grav}(\epsilon{=}0)=dE_{plas}
+(\epsilon{=}0)=0.0$, bit-machine). Pres de $\epsilon=0$, la force $g\propto\epsilon$ (4.3), la
+vitesse $v\propto\epsilon$, donc chaque canal energetique en $v\cdot g$ ou $v^2$ est en
+$\epsilon^2$. La linearisation predit donc $|dE|\propto\epsilon^2$ : **doubler $\epsilon$ quadruple
+$|dE|$**. C'est verifiable (figure 2) et transforme un assert booleen en courbe de convergence.
+
+Ce qu'une pente differente trahirait : pente $\approx 1$ = terme lineaire parasite (fond $\rho_0$
+mal soustrait dans le second membre) ; pente $> 2$ aux grands $\epsilon$ = entree de la dynamique
+non lineaire (compression d'amplitude finie). On mesure 2.000 sur $\epsilon\in[0.005,0.08]$ : le
+regime est purement quadratique sur cette plage.
+
+---
+
+## 5. Code, fonction par fonction (justifie : ancrage reel)
+
+`run.py` se lit du haut vers le bas. On glose les lignes porteuses ; la plomberie (import,
+fallback `sys.path`) est liee, pas paraphrasee.
+
+**Condition initiale** `initial_density()` (`run.py:75-79`) :
+
+```python
+x = (np.arange(N) + 0.5) * L / N                     # centres de cellules (run.py:77)
+xx, _ = np.meshgrid(x, x, indexing="ij")
+return RHO0 * (1.0 + EPS * np.cos(2.0 * np.pi * xx / L))   # rho = rho0 (1 + eps cos kx) (run.py:79)
 ```
-Python (application)                         C++ (adc_cpp, via pybind11)
---------------------                         ---------------------------
-adc.System(n, L, periodic=True)  ---------->  facade System (registre de blocs + Poisson de systeme)
-   |
-   +-- sim.add_block("gas",
-   |        model = models.euler_poisson(...)  -> adc.Model(FluidState, CompressibleFlux,
-   |        spatial = adc.Spatial(vanleer,hllc)      GravityForce, GravityCoupling) = ModelSpec
-   |        time = adc.Explicit())               -> compose le bloc natif (transport+source+elliptique)
-   |
-   +-- sim.set_poisson(rhs="charge_density",     -> configure le Poisson de systeme
-   |        solver="geometric_mg")                  (multigrille geometrique, BC periodiques)
-   |
-   +-- sim.set_density("gas", rho_init)          -> ecrit rho, met v=0 et E=rho/(gamma-1) (repos)
-   |
-   +-- sim.advance(dt, 1)  (x 20)                -> 20 pas SSPRK2 + Poisson a chaque etage
-   |
-   +-- sim.mass / sim.get_state / sim.time       -> diagnostics globaux (lus sur l'etat host)
+- Perturbation cosinus de mode 1 selon $x$, **invariante en $y$**, amplitude $\epsilon=0.01$ autour
+  de $\rho_0=1$. `set_density("gas", rho)` (`run.py:100`) ecrit $\rho$ sur la composante 0, met
+  $v=0$ et $E=\rho/(\gamma-1)$ (repos thermique).
+
+**Diagnostics globaux** `energy_and_momentum(sim)` (`run.py:82-85`) :
+
+```python
+U = sim.get_state("gas")                             # (4, n, n) = [rho, rho u, rho v, E]
+return U[3].sum(), U[1].sum(), U[2].sum()            # E_tot, p_x, p_y (run.py:85)
 ```
+- **Sommes sur cellules** des composantes conservatives, **sans poids $dx^2$**. Ce sont des proxys :
+  suffisants pour un invariant **relatif** (conservation de masse) et un invariant de **signe**
+  (contraste), insuffisants comme integrale physique absolue. Le cas ne teste que relatif et signe.
 
-Couches concernees :
+**Boucle d'integration** `run_case(sign, label)` (`run.py:88-137`) :
 
-- **`adc_cases.models.euler_poisson`** : nomme la composition des 4 briques (cote application). Le
-  C++ ne connait que des briques ; le **nom** d'espece vit en Python.
-- **`adc.Model(...)`** (`adc/__init__.py` l.182-235) : valide la coherence etat<->transport et
-  reporte les parametres (gamma, sign, four_pi_G, rho0) dans un `ModelSpec`.
-- **`adc.System.add_block`** : transmet limiteur/flux/recon/kind temporel/substeps/stride au C++.
-- **`set_poisson` / `set_density` / `mass` / `get_state` / `advance` / `time`** : NE sont PAS
-  redefinis cote Python ; ils sont **delegues** a la facade compilee `_System` via
-  `System.__getattr__` (`adc/__init__.py` l.1116-1117).
+```python
+sim = adc.System(n=N, L=L, periodic=True)            # run.py:93
+sim.add_block("gas", model=models.euler_poisson(sign=sign, ...), ...)   # run.py:94-98
+sim.set_poisson(rhs="charge_density", solver="geometric_mg")           # run.py:99
+sim.set_density("gas", initial_density())            # run.py:100
+mass0 = sim.mass("gas")                               # masse de reference (run.py:103)
+for step in range(1, NSTEPS + 1):
+    sim.advance(DT, 1)                               # 1 pas SSPRK2 + Poisson par etage (run.py:115)
+    rel_mass = relative_drift(m, mass0)             # |m - mass0| / |mass0| (run.py:119)
+    max_rel_mass = max(max_rel_mass, rel_mass)      # pire derive sur tous les pas (run.py:120)
+    max_mom = max(max_mom, abs(px), abs(py))        # pire impulsion (run.py:121)
+```
+- `rhs="charge_density"` est l'alias generique du second membre compose (somme des briques
+  elliptiques de chaque bloc ; ici l'unique `GravityCoupling`). `relative_drift`
+  (`common/checks.py:11-13`) protege le denominateur contre zero. `mass("gas")` renvoie la somme de
+  $\rho$ : $64\times64\times1=4096$, conforme a la sortie.
 
-> Important : `System` n'expose PAS de `energy()` ni de `total_momentum()`. Le cas lit ces
-> diagnostics directement sur l'etat conservatif renvoye par `get_state` (cf. section 9).
+**Verification** `main()` (`run.py:140-183`) :
 
----
-
-## 6. Carte des fichiers
-
-| Chemin | Role |
-|--------|------|
-| `/private/tmp/adc_cases-readmes/euler_poisson/run.py` | le cas : 2 runs (signe +/-), invariants par `assert` |
-| `/private/tmp/adc_cases-readmes/adc_cases/models.py` | `euler_poisson(sign,...)` = composition des 4 briques natives (l.48-55) |
-| `/private/tmp/adc_cases-readmes/adc_cases/common/checks.py` | `relative_drift`, `assert_opposite_sign` (utilises par le cas) |
-| `/private/tmp/adc_cases-readmes/adc_cases/__init__.py` | `ensure_importable` (pas appele ici : voir section 9, fallback `sys.path` inline) |
-| `/private/tmp/adc_cases-readmes/cases_manifest.toml` | classe le cas : `validation`, `ci = true` |
-| `/private/tmp/adc_cases-readmes/.github/workflows/ci.yml` | CI qui lance les cas `ci = true` du manifeste |
-| `adc/__init__.py` (build) | facade Python : briques, `Model`, `System` (delegue le reste au C++) |
-
-> Le cas n'ecrit AUCUN fichier de sortie (pas de figure, pas de gif) : tout passe par `print` et
-> les `assert`. `common/io.py`, `common/native.py`, `common/grid.py`,
-> `common/initial_conditions.py`, `recipes.py` ne sont PAS utilises par ce cas (sa CI initiale est
-> auto-portee).
-
----
-
-## 7. Prerequis
-
-- **Module `adc`** : les bindings pybind11 d'adc_cpp, deja construits. Dans cet environnement :
-  `/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/`. Le `.so`
-  present : `_adc.cpython-312-darwin.so` (Python 3.12). En CI, le module est construit a la volee
-  (cf. section 17).
-- **Python 3.12** + **numpy** (seule dependance Python du cas). Ici :
-  `/opt/homebrew/anaconda3/bin/python3.12`.
-- **Paquet `adc_cases`** importable : soit installe (`pip install -e .`, voie CI), soit la racine
-  du depot sur `PYTHONPATH` / `sys.path`. Le cas gere lui-meme le fallback (try/except `ImportError`
-  -> insertion du parent dans `sys.path`, `run.py` l.48-53).
-- **Aucun compilateur C++** requis a l'execution (`needs = []` dans le manifeste) : il n'y a pas de
-  compilation a la volee ; le natif est deja dans le module `adc`.
+```python
+assert res["max_rel_mass"] < TOL_MASS               # masse conservee (run.py:150)
+assert res["max_mom"] < TOL_MOM                     # impulsion nette nulle (run.py:155)
+dE_grav = grav["energy_final"] - grav["energy0"]    # run.py:160
+dE_plas = plas["energy_final"] - plas["energy0"]    # run.py:161
+assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE, ...)   # signes opposes + magnitude (run.py:174)
+assert dE_grav < 0.0                                # gravite attractive (run.py:177)
+assert dE_plas > 0.0                                # plasma repulsif (run.py:179)
+```
+- `assert_opposite_sign` (`common/checks.py:43-54`) exige `|a| > min_mag AND |b| > min_mag` PUIS
+  `a*b < 0` : on ne valide pas trivialement deux quasi-zeros de produit negatif par accident.
 
 ---
 
-## 8. Commande exacte
+## 6. Les tolerances, justifiees par un ordre de grandeur (justifie 8 de la checklist)
+
+| Tolerance | Valeur | Pourquoi cette valeur |
+|---|---|---|
+| `TOL_MASS` | $10^{-9}$ | Le schema volumes finis est **conservatif** : la masse est un invariant exact, la seule derive est l'arithmetique flottante. Mesure : $2.6\times10^{-14}$ relatif, soit ~5 ordres sous la tolerance (`run.py:58`) |
+| `TOL_MOM` | $10^{-8}$ | La force de Poisson derive d'un potentiel periodique : sa somme spatiale est nulle, elle n'injecte aucune impulsion. Mesure : $8.9\times10^{-16}$, ~8 ordres sous la tolerance (`run.py:59`) |
+| `TOL_DE` | $10^{-5}$ | Borne BASSE : $dE=0$ **exactement** a $\epsilon=0$ (verifie). Borne HAUTE : la magnitude physique attendue est $\sim6\times10^{-4}$ ($\epsilon=0.01$, 20 pas, `run.py:60-62`). $10^{-5}$ se situe entre le bruit (0) et le signal ($6\times10^{-4}$) : il rejette un signe non significatif sans rejeter le signal reel (`run.py:63`) |
+
+---
+
+## 7. Figures (generees par `make_figures.py`, dans `figures/`)
+
+Generees par `python make_figures.py` (memes parametres que `run.py`), versionnees avec
+`figures/provenance.json`. Commande exacte en section 9.
+
+### `energy_vs_t.png` : le contraste de signe
+
+![E_tot(t) - E_tot(0) pour gravite (descend) et plasma (monte), cote a cote](figures/energy_vs_t.png)
+
+- **PROUVE** (asserte `run.py:177-180`) : $E_{tot}$ **diminue** pour la gravite
+  ($dE_{grav}=-5.858\times10^{-4}$) et **augmente** pour le plasma ($dE_{plas}=+6.137\times10^{-4}$).
+  Les deux courbes partent de 0 (meme etat au repos) et divergent en sens opposes : signes
+  strictement opposes, magnitudes $\gg$ TOL_DE.
+- **SUGGERE (non assere)** : la quasi-symetrie miroir des deux courbes (gravite et plasma ont des
+  $|dE|$ proches a ~5 %) est visible mais aucun assert ne la verifie ; elle n'est PAS exacte (la
+  reponse compressible n'est pas lineaire en $\mathrm{sign}$).
+- **NON MONTRE** : ce graphe ne dit RIEN du travail de la force (positif des deux cotes, section
+  4.3) ; le titre rappelle que le signe est asserte, pas deduit de $v\cdot g$.
+
+### `de_vs_eps.png` : la prediction $|dE|\propto\epsilon^2$
+
+![|dE| vs epsilon en log-log : droites de pente 2 pour gravite et plasma, superposees a la reference](figures/de_vs_eps.png)
+
+- **PROUVE** : sur $\epsilon\in\{0.005,0.01,0.02,0.04,0.08\}$, la regression log-log donne une pente
+  **2.000** (gravite 1.99998, plasma 1.99998), confondue avec la droite de reference $\propto
+  \epsilon^2$. Doubler $\epsilon$ quadruple $|dE|$ : $1.46\times10^{-4}\to5.86\times10^{-4}\to
+  2.34\times10^{-3}$, chaque pas $\times 4$. La linearisation (section 4.4) est confirmee.
+- **SUGGERE** : gravite et plasma ont des $|dE|$ tres proches (les deux droites se chevauchent) ;
+  l'asymetrie est du second ordre et non testee.
+- **NON MONTRE** : aucune deviation de pente n'apparait jusqu'a $\epsilon=0.08$, donc on ne voit PAS
+  l'entree du regime non lineaire (qui donnerait pente $>2$ aux plus grands $\epsilon$). Le controle
+  $dE(\epsilon{=}0)=0.0$ (bit-machine) borne la tolerance par le bas mais n'est pas sur l'axe log.
+
+### `density_map.png` : la perturbation reste 1D
+
+![Cartes de densite : CI, gravite finale, plasma finale, perturbation en bandes verticales](figures/density_map.png)
+
+- **PROUVE / mesure** : la perturbation reste **1D selon $x$** (ecart-type en $y$ : $3.8\times
+  10^{-16}$, bit-machine) ; aucune structure transverse n'apparait. L'amplitude max-min passe de
+  $2.00\times10^{-2}$ (CI) a $1.76\times10^{-2}$ (gravite) et $1.75\times10^{-2}$ (plasma) : les
+  deux s'aplatissent legerement sur 20 pas.
+- **NON MONTRE** : a $\epsilon=0.01$, le contraste gravite/plasma n'est **PAS visible** a l'oeil sur
+  la densite (les deux panneaux sont quasi identiques) ; le contraste de signe vit dans l'energie
+  integree $dE\sim6\times10^{-4}$, pas dans la carte de densite. Aucun effondrement ni formation de
+  structure : le regime est quasi-lineaire et a horizon court.
+
+---
+
+## 8. Ce que l'invariant ne capture pas (analyse honnete des limites)
+
+- **Pas une reproduction publiee.** Categorie `validation` : on teste des invariants structurels
+  (conservation, signe, pente $\epsilon^2$), pas une courbe d'article. Ne pas presenter comme
+  effondrement de Jeans, formation de structure ou benchmark plasma.
+- **$E_{tot}$ est un proxy, pas l'energie totale du systeme couple.** C'est l'energie fluide
+  (cinetique+interne) sans le potentiel de champ $\tfrac12\int\rho\phi$ ; son signe distingue les
+  regimes, sa valeur absolue n'est comparee a rien. Les diagnostics sont des sommes sur cellules
+  sans poids $dx^2$ : seuls le relatif (masse) et le signe (energie) sont significatifs.
+- **$4\pi G=1$, $\rho_0=1$, sans unites.** Choix de lisibilite, pas un calibrage gravitationnel.
+- **Regime quasi-lineaire, horizon court** ($\epsilon=0.01$, 20 pas, $dt=0.004$, $t_{fin}=0.08$) : on
+  observe la tendance energetique (travail + compression), pas de dynamique non lineaire.
+- **Domaine periodique homogene** : c'est ce qui garantit l'impulsion nette nulle et la
+  compatibilite du Poisson (second membre de moyenne nulle grace au fond $\rho_0$). Des parois ou un
+  second membre non centre casseraient ces deux invariants.
+
+---
+
+## 9. Reproduire (justifie 14 de la checklist : commande + cout mesure)
 
 ```bash
-cd /private/tmp/adc_cases-readmes/euler_poisson && \
-PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-readmes \
-  /opt/homebrew/anaconda3/bin/python3.12 run.py
+cd /private/tmp/adc_cases-deeptut/euler_poisson
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 run.py            # le cas : asserts, ~0.3 s
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 3 figures + provenance.json
 ```
 
-Le premier chemin du `PYTHONPATH` fournit le module C++ `adc` ; le second rend le paquet
-`adc_cases` importable sans installation.
+Prerequis : `numpy` (et `matplotlib` pour les figures, hors `needs` du cas lui-meme), module `adc`
+compile et importe **avec le meme interpreteur** que celui qui l'a compile (suffixe ABI
+`cpython-312`). Le premier chemin du `PYTHONPATH` fournit le module C++ ; le second rend `adc_cases`
+importable sans installation (le cas a aussi un fallback `sys.path`, `run.py:48-53`).
 
----
-
-## 9. Explication du code par etapes
-
-`run.py` (190 lignes) se lit du haut vers le bas :
-
-1. **Imports et fallback** (l.44-55) : `import adc` (C++) ; `import adc_cases` ou, a defaut,
-   insertion du dossier parent dans `sys.path` ; puis `from adc_cases import models` et
-   `from adc_cases.common.checks import assert_opposite_sign, relative_drift`.
-2. **Tolerances** (l.57-63) : `TOL_MASS = 1e-9` (derive relative de masse), `TOL_MOM = 1e-8`
-   (impulsion nette), `TOL_DE = 1e-5` (magnitude minimale du contraste energetique pour que le
-   signe soit significatif -- `dE = 0` exactement a perturbation nulle).
-3. **Parametres** (l.65-72) : `N=64`, `L=1.0`, `GAMMA=1.4`, `EPS=0.01`, `RHO0=1.0`, `DT=0.004`,
-   `NSTEPS=20`.
-4. **`initial_density()`** (l.75-79) : densite au repos faiblement perturbee par un cosinus selon x
-   (cf. section 10).
-5. **`energy_and_momentum(sim)`** (l.82-85) : lit `U = sim.get_state("gas")` de forme `(4, n, n)`
-   et renvoie `(E_tot, p_x, p_y) = (U[3].sum(), U[1].sum(), U[2].sum())`. Ce sont des **sommes sur
-   cellules** des composantes conservatives (PAS d'integrale avec poids `dx^2` ; voir section 11).
-6. **`run_case(sign, label)`** (l.88-137) :
-   - `sim = adc.System(n=N, L=L, periodic=True)` ;
-   - `sim.add_block("gas", model=models.euler_poisson(sign=sign, gamma=GAMMA, four_pi_G=1.0,
-     rho0=RHO0), spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` ;
-   - `sim.set_poisson(rhs="charge_density", solver="geometric_mg")` ;
-   - `sim.set_density("gas", initial_density())` -> pose rho, met v=0 et `E = rho/(gamma-1)` ;
-   - memorise `mass0 = sim.mass("gas")` et `energy0` ;
-   - boucle `for step in 1..20` : `sim.advance(DT, 1)`, relit masse/energie/impulsion, accumule
-     `max_rel_mass` (via `relative_drift`) et `max_mom` ; imprime les pas 1, 5, 10, 15, 20 ;
-   - renvoie un dict de diagnostics (mass0, energy0, energy_final, max_rel_mass, max_mom, time).
-7. **`main()`** (l.140-183) :
-   - lance `run_case(+1.0, "GRAVITE")` puis `run_case(-1.0, "PLASMA ")` ;
-   - **assertions par run** : `max_rel_mass < TOL_MASS` (masse conservee) et `max_mom < TOL_MOM`
-     (impulsion nette nulle) ;
-   - calcule `dE_grav` et `dE_plas` (energie finale - energie initiale) ;
-   - `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE, ...)` : signes opposes ET magnitudes
-     franches ;
-   - `assert dE_grav < 0` (attractif) et `assert dE_plas > 0` (repulsif) ;
-   - imprime le bilan et `OK euler_poisson`.
-
----
-
-## 10. Conditions initiales
-
-Densite (commune aux deux runs), `initial_density()` (`run.py` l.75-79) :
+Sortie attendue de `run.py` (capturee, machine de dev macOS arm64) :
 
 ```
-x_i   = (i + 0.5) * L / N                          (centres de cellules, i = 0..N-1)
-rho(x) = RHO0 * (1 + EPS * cos(2 pi x / L))         RHO0 = 1.0, EPS = 0.01
-```
-
-Une perturbation cosinus de mode 1 selon x, amplitude 1 %, autour de la densite uniforme `RHO0`.
-`set_density("gas", rho)` ecrit cette densite sur la composante 0, met la **quantite de mouvement
-a zero** (v = 0) et fixe l'energie au repos `E = rho / (gamma - 1)` (le bloc compressible convertit
-en variables conservatives cote C++).
-
-> A perturbation nulle (`EPS = 0`), le second membre de Poisson `f = sign*4piG*(rho - rho0)` est
-> identiquement nul, la force est nulle, et `dE = 0` exactement. La perturbation de 1 % est ce qui
-> rend le travail de la force mesurable (et donc le signe de `dE` significatif).
-
----
-
-## 11. Invariants et assertions
-
-Quatre controles, tous **passes** a l'execution (valeurs reelles capturees, section 12) :
-
-1. **Conservation de la masse** (`assert res["max_rel_mass"] < TOL_MASS`, TOL = `1e-9`) : le schema
-   volumes finis est conservatif sur domaine periodique. La masse de reference est
-   `mass0 = sim.mass("gas") = 4096` (somme de `rho` sur les `64x64` cellules, `RHO0=1`). Derive
-   relative max **mesuree** : `2.598e-14` (GRAVITE), `2.098e-14` (PLASMA) -- du bruit machine, tres
-   en dessous de `1e-9`.
-2. **Impulsion totale nulle** (`assert res["max_mom"] < TOL_MOM`, TOL = `1e-8`) : la force de
-   Poisson derive d'un potentiel ; sur domaine periodique homogene, sa somme spatiale est nulle,
-   donc elle n'injecte aucune impulsion nette. `max |p|` **mesure** : `8.882e-16` (les deux runs).
-3. **Contraste de signe** (`assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE)`, TOL = `1e-5`) :
-   les deux derives d'energie doivent etre de signes **strictement opposes** ET de magnitude
-   superieure a `1e-5` (sinon le signe serait du bruit). Mesure : `dE_grav = -5.857667e-04`,
-   `dE_plas = +6.137105e-04` -> produit < 0, magnitudes ~6e-4 (>> 1e-5).
-4. **Signe physique de chaque run** : `assert dE_grav < 0` (auto-gravite, attractif : l'energie
-   totale diagnostiquee baisse) et `assert dE_plas > 0` (charge d'espace, repulsif : elle monte).
-
-> **Honnetete sur les diagnostics** : `mass`, `E_tot`, `p_x`, `p_y` sont des **sommes sur
-> cellules** des composantes conservatives, sans facteur de volume `dx^2`. Ce sont des proxys de
-> masse/energie/impulsion totales, suffisants pour les invariants relatifs (conservation) et de
-> signe (contraste), ce que le cas teste. Ce ne sont PAS des integrales physiques calibrees, et la
-> valeur absolue `dE ~ 6e-4` n'est pas comparee a une reference theorique : seuls comptent sa
-> **conservation** (masse, impulsion) et son **signe** (gravite vs plasma).
-
----
-
-## 12. Sorties attendues
-
-Execution reelle (machine de developpement, sortie integrale capturee) :
-
-```
-[GRAVITE] etat initial : mass=4.096000000000e+03  energy=1.024000000000e+04
-[GRAVITE] pas                  mass               energy            p_x            p_y
-[GRAVITE]   1    4.096000000000e+03   1.023999999840e+04      1.456e-31      0.000e+00
-[GRAVITE]   5    4.096000000000e+03   1.023999996026e+04      1.270e-30      2.220e-16
-[GRAVITE]  10    4.096000000000e+03   1.023999984355e+04     -9.738e-31      0.000e+00
-[GRAVITE]  15    4.096000000000e+03   1.023999965748e+04     -1.233e-32     -8.882e-16
-[GRAVITE]  20    4.096000000000e+03   1.023999941423e+04      2.712e-31      0.000e+00
-
-[PLASMA ] etat initial : mass=4.096000000000e+03  energy=1.024000000000e+04
-[PLASMA ] pas                  mass               energy            p_x            p_y
-[PLASMA ]   1    4.096000000000e+03   1.024000000168e+04      1.791e-31      0.000e+00
-[PLASMA ]   5    4.096000000000e+03   1.024000004180e+04     -8.073e-31      0.000e+00
-[PLASMA ]  10    4.096000000000e+03   1.024000016442e+04     -1.676e-30      0.000e+00
-[PLASMA ]  15    4.096000000000e+03   1.024000035951e+04     -4.117e-30      0.000e+00
-[PLASMA ]  20    4.096000000000e+03   1.024000061371e+04     -1.689e-30      0.000e+00
-
-Bilan des invariants (sur les 20 pas) :
-  GRAVITE : max derive masse relative = 2.598e-14 (< 1e-09)   max |p| = 8.882e-16 (< 1e-08)
-  PLASMA  : max derive masse relative = 2.098e-14 (< 1e-09)   max |p| = 8.882e-16 (< 1e-08)
 Contraste energetique (attractif vs repulsif) :
   dE GRAVITE = -5.857667e-04   dE PLASMA = +6.137105e-04
   -> signes opposes (gravite dE<0, plasma dE>0), magnitudes > 1e-05 : OK
 OK euler_poisson
 ```
 
-Lecture : la masse est strictement constante (`4.096e+03`), l'energie **decroit** lentement pour
-GRAVITE (de `1.0240000e+04` a `1.0239999e+04`) et **croit** pour PLASMA -- exactement le contraste
-de signe attendu. `p_x`, `p_y` restent au niveau du bruit machine (`~1e-16` ou moins). Le code se
-termine sur `OK euler_poisson` (tous les `assert` passent) et un code de retour 0.
+avec `max derive masse relative = 2.598e-14` (GRAVITE) / `2.098e-14` (PLASMA), `max |p| =
+8.882e-16`. Cout : ~0.3 s temps mur (import numpy inclus), 2 runs $\times$ 20 pas $\times$ grille
+$64^2$ + un Poisson multigrille par etage. **Caveat plateforme** : les signes, l'ordre de grandeur
+($\sim6\times10^{-4}$), la pente (2.000) et le verdict `OK` sont stables d'une plateforme a l'autre ;
+les derniers chiffres de $dE$ varient avec la BLAS et l'ordre de sommation (cf.
+`figures/provenance.json`).
 
-> Les chiffres `dE` au-dela de quelques chiffres significatifs peuvent varier legerement selon la
-> plateforme (BLAS, ordre de sommation, version du module). Les **signes**, l'ordre de grandeur
-> (`~6e-4`) et le verdict `OK` sont robustes.
+## Carte des fichiers
 
----
-
-## 13. Generation figures/GIF
-
-**Aucune.** Ce cas ne produit ni figure ni gif : il imprime un tableau de diagnostics et verifie
-des `assert`. Il n'importe pas `matplotlib` (cf. `needs = []` dans le manifeste, contrairement au
-cas `diocotron` qui demande `matplotlib`). Il n'ecrit aucun fichier sur disque.
-
----
-
-## 14. Backends reellement supportes
-
-- **CPU natif (C++ via pybind11)** : le SEUL backend exerce. Le module `adc` est construit pour
-  CPU ; le solveur de Poisson est `geometric_mg` (multigrille geometrique). Pas de GPU, pas de MPI
-  dans ce cas (un seul rang, une seule grille `64x64`).
-- **Mono-bloc, mono-rang** : `adc.System` avec un unique `add_block("gas", ...)`. Pas d'AMR (ce
-  serait `adc.AmrSystem`), pas de multi-especes.
-- **Pas de compilation a la volee** : aucun chemin `ctypes`/`.so` JIT, aucun DSL interprete. Tout
-  le natif est deja dans le module `adc` (`needs = []`).
-- **Reconstruction/flux** : van Leer + HLLC sont disponibles sur le chemin natif `add_block`.
-  HLLC exige un transport compressible (pression) -- satisfait ici par `FluidState(compressible)`.
-
----
-
-## 15. Cout approximatif
-
-Mesure reelle (`/usr/bin/time -p`, `/opt/homebrew/anaconda3/bin/python3.12`, machine de dev macOS
-arm64), **3 executions consecutives** apres une premiere chauffe :
-
-```
-real 0.27   user 1.05   sys 0.74     (1re mesure : real 0.29)
-real 0.28
-real 0.28
-```
-
-- **Temps mur total ~0.27-0.29 s**, import du module/numpy inclus. Le `user > real` reflete des
-  threads internes (BLAS / multigrille).
-- Cout de calcul pur negligeable : 2 runs x 20 pas x une grille `64x64` (4096 cellules, 4
-  variables) + un Poisson multigrille par etage. C'est un cas **leger**, concu pour la CI.
-- Aucune memoire notable (quelques tableaux `(4, 64, 64)` en double).
-
----
-
-## 16. Limites et differences avec les references
-
-- **Pas une reproduction publiee.** Categorie `validation` : le cas teste des invariants
-  (conservation, signes), pas un resultat quantitatif d'un article. Il ne doit PAS etre presente
-  comme une reproduction d'instabilite de Jeans, d'effondrement gravitationnel ou d'un benchmark
-  plasma. Le contraste gravite/plasma est un test de **signe**, pas une simulation calibree.
-- **`4 pi G = 1`, `rho0 = 1`, pas d'unites physiques.** Les constantes sont choisies pour la
-  lisibilite du test, pas pour modeliser un systeme reel.
-- **Diagnostics = sommes sur cellules**, sans poids de volume `dx^2` (section 11). `mass`, `E_tot`,
-  `p_x/p_y` sont des proxys ; les invariants verifies (relatifs / de signe) ne dependent pas du
-  facteur d'echelle, mais les valeurs absolues ne sont pas des integrales physiques.
-- **Regime quasi-lineaire, horizon court.** `EPS = 0.01`, 20 pas, `dt = 0.004` : la perturbation
-  reste petite ; on observe la tendance energetique (travail de la force), pas une dynamique non
-  lineaire (effondrement, formation de structure).
-- **Domaine periodique homogene.** C'est ce qui garantit l'impulsion nette nulle et la
-  compatibilite du Poisson (second membre de moyenne nulle grace au fond `rho0`). Un domaine a
-  parois ou un second membre non centre changerait ces invariants.
-- **Pas de comparaison a une solution analytique** du taux d'energie : seul le **signe** de `dE`
-  est asserte, pas sa valeur.
-
----
-
-## 17. Tests/CI associes
-
-- **Manifeste** (`cases_manifest.toml`) : `path = "euler_poisson/run.py"`, `category =
-  "validation"`, `ci = true`, `needs = []`,
-  `desc = "Euler couple a Poisson : auto-gravite (attractif) vs plasma (repulsif)."`.
-- **CI GitHub Actions** (`.github/workflows/ci.yml`) : le workflow construit le module `adc`
-  (clone `wolf75222/adc_cpp`, `cmake -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF`, cible `_adc`),
-  installe `adc_cases` en editable (`pip install -e .`), lit le manifeste et lance **chaque cas
-  `ci = true`** par `python3 <path>` avec `PYTHONPATH` pointant le build. Un `assert` qui echoue
-  fait sortir `run.py` en erreur -> **CI rouge**. Ce cas est l'un des cas legers executes a chaque
-  push/PR.
-- **Le test EST le cas** : les `assert` de `main()` (masse, impulsion, contraste de signe) sont la
-  validation. Il n'y a pas de fichier de test separe ; `run.py` se suffit a lui-meme et imprime
-  `OK euler_poisson` en cas de succes.
+| Fichier | Role |
+|---|---|
+| `run.py` | le cas : 2 runs (signe $\pm$), invariants par `assert` (masse, impulsion, contraste de signe) |
+| `make_figures.py` | re-joue la physique + balayage $\epsilon$ ; ecrit les 3 figures + `provenance.json` |
+| `figures/*.png` | `energy_vs_t.png`, `de_vs_eps.png`, `density_map.png` (versionnees, regenerees en place) |
+| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, nombres mesures ($dE$, pentes, derives) |
+| `../adc_cases/models.py` | `euler_poisson(sign,...)` = composition des 4 briques natives (`l.48-55`) |
+| `../adc_cases/common/checks.py` | `relative_drift`, `assert_opposite_sign` (utilises par le cas) |

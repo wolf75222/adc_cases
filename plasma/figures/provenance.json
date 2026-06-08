@@ -1,0 +1,48 @@
+{
+  "script": "plasma/make_figures.py",
+  "command": "PYTHONPATH=.../adc_cpp/build-master/python:.../adc_cases-deeptut python3.12 make_figures.py",
+  "produces": [
+    "densities.png",
+    "ionization.png",
+    "density_map.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "7c7a340348d752c85a03bfc25f93e31f2d536f8a",
+  "backend": "natif serie (adc.System, recette models/recipes.plasma)",
+  "resolution": "48x48",
+  "species": [
+    "electrons",
+    "ions",
+    "neutrals"
+  ],
+  "nsteps": 20,
+  "cfl": 0.3,
+  "ionization_rate": 0.3,
+  "collision_rate": 0.5,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "t_final": 0.09649200309247076,
+  "phimax_initial": 0.0012656092105898214,
+  "mass_electrons": [
+    2304.0,
+    2370.677033292462
+  ],
+  "mass_ions": [
+    2304.0,
+    2370.677033292496
+  ],
+  "mass_neutrals": [
+    2304.0,
+    2237.322966707515
+  ],
+  "n_ion_mean": [
+    1.0,
+    1.028939684588757
+  ],
+  "n_neutral_mean": [
+    1.0,
+    0.9710603154112479
+  ],
+  "drel_ni_plus_ng_final": 2.3684757858670005e-15,
+  "delta_px_ion_plus_neutral_final": -1.734723475976807e-17
+}

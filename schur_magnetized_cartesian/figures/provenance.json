@@ -1,0 +1,71 @@
+{
+  "script": "schur_magnetized_cartesian/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "timing_dt_stable.png",
+    "timing_vs_omega.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "DSL 'aot' (host-marshale ; production non lie sur macOS arm64)",
+  "resolution": "16x16",
+  "cs2": 0.0001,
+  "alpha": 1.0,
+  "charge_q": -1.0,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "platform": "macOS arm64 (Apple Silicon), serie mono-process",
+  "panel1_source_csv": "/private/tmp/adc_cases-deeptut/schur_magnetized_cartesian/out/dt_stable.csv",
+  "panel1_omega_c": 1000.0,
+  "panel1_t_end": 1.0,
+  "dt_stable_ref": {
+    "explicit (Lorentz explicite)": 0.00031622776601683794,
+    "schur theta=0.5 (Crank-Nicolson)": 0.1778279410038923,
+    "schur theta=1.0 (Euler retrograde)": 0.31622776601683794
+  },
+  "dt_times_omega_c_ref": {
+    "explicit (Lorentz explicite)": 0.31622776601683794,
+    "schur theta=0.5 (Crank-Nicolson)": 177.8279410038923,
+    "schur theta=1.0 (Euler retrograde)": 316.22776601683796
+  },
+  "gain_ref": {
+    "explicit (Lorentz explicite)": "1.0",
+    "schur theta=0.5 (Crank-Nicolson)": "562.3413251903492",
+    "schur theta=1.0 (Euler retrograde)": "1000.0"
+  },
+  "panel2_source_json": "/tmp/schur_measure.json",
+  "panel2_t_end": 0.05,
+  "transport_dt": 0.044189755069578944,
+  "measure_vs_omega": {
+    "100.0": {
+      "explicit": 0.05623413251903491,
+      "schur05": 0.31622776601683794,
+      "schur10": 0.31622776601683794,
+      "prod_el": 5.623413251903491,
+      "prod_05": 31.622776601683793,
+      "prod_10": 31.622776601683793,
+      "gain05": 5.62341325190349,
+      "gain10": 5.62341325190349
+    },
+    "1000.0": {
+      "explicit": 0.0005623413251903491,
+      "schur05": 0.31622776601683794,
+      "schur10": 0.31622776601683794,
+      "prod_el": 0.5623413251903491,
+      "prod_05": 316.22776601683796,
+      "prod_10": 316.22776601683796,
+      "gain05": 562.341325190349,
+      "gain10": 562.341325190349
+    },
+    "10000.0": {
+      "explicit": 0.0,
+      "schur05": 0.31622776601683794,
+      "schur10": 0.31622776601683794,
+      "prod_el": 0.0,
+      "prod_05": 3162.2776601683795,
+      "prod_10": 3162.2776601683795,
+      "gain05": Infinity,
+      "gain10": Infinity
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "script": "two_euler/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "density_maps.png",
+    "masses.png",
+    "positivity.png",
+    "multirate.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "7c7a340348d752c85a03bfc25f93e31f2d536f8a",
+  "backend": "natif serie (adc.System, 2 blocs models.euler, HLLC + recon primitive)",
+  "resolution": "64x64",
+  "periodic": true,
+  "nsteps_macro": 20,
+  "cfl": 0.4,
+  "gamma": 1.4,
+  "python": "3.12.2",
+  "matplotlib_backend": "Agg",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "measured": {
+    "mass_drift_rel_electrons_max": 1.5785983631388784e-14,
+    "mass_drift_rel_ions_max": 5.10702591327572e-15,
+    "rho_min_electrons_final": 0.007706546151750296,
+    "rho_min_ions_final": 0.8033461749585176,
+    "p_min_electrons_final": 0.932433938967459,
+    "p_min_ions_final": 1.0000000084005403,
+    "rho_min_electrons_overrun": 0.006988748317017171,
+    "p_min_electrons_overrun": 0.9045706258626026,
+    "wave_speed_electrons_init": 14.47667279139804,
+    "wave_speed_ions_init": 1.447667279139804,
+    "wave_speed_ratio_init": 10.0,
+    "n_electrons_subcycle_first": 10,
+    "n_electrons_subcycle_last": 10,
+    "n_ions_subcycle_const": 1,
+    "macro_dt_first": 0.004317290367793432,
+    "macro_dt_last": 0.004268099576001456,
+    "t_final": 0.08519885367719682
+  }
+}

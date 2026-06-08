@@ -1,354 +1,215 @@
-# two_species_dsl : deux especes ecrites en formules (DSL), equivalentes au natif
+# two_species_dsl : electrons + ions ecrits EN FORMULES, equivalence au natif par espece
 
-Cas de **validation** (`ci = true`, `needs = ["cxx"]`). Deux fluides heterogenes --
-electrons (Euler compressible, 4 variables) et ions (Euler isotherme, 3 variables) --
-sont ecrits **entierement en formules symboliques** via `adc.dsl.Model`, couples par
-**un seul Poisson** dont le second membre agrege les charges des deux especes, puis
-**compares bit-a-bit** a la composition native equivalente (briques nommees de
-`adc_cases.models`). Le cas prouve qu'un modele DSL **a source electrostatique** et a
-**contribution elliptique** reproduit le chemin natif a l'epsilon machine pres.
+Deux especes (electrons en Euler compressible 4 variables, ions en Euler isotherme 3 variables),
+chacune force electrostatique + densite de charge, couplees par UN seul Poisson de systeme,
+ecrites ENTIEREMENT en formules symboliques (`adc.dsl.Model`) au lieu de briques C++ nommees. Le
+cas PROUVE que l'etat de chaque espece reproduit la composition native a la precision attendue : les
+ions sont **bit-identiques** (`np.array_equal == True`), les electrons divergent d'un epsilon
+**en-dessous de la tolerance machine** ($4.93\times10^{-32} < 10^{-24}$), unique signature de la
+reassociation flottante de l'accumulation du second membre de Poisson partage.
 
-Label du manifeste : `category = "validation"`. Ce n'est pas une reproduction d'une
-reference physique externe : c'est un test d'**equivalence DSL <-> natif** interne a la
-bibliotheque.
+La physique des deux especes (continuite + quantite de mouvement forcee par $\mathbf{E}=-\nabla\phi$,
+fermetures $\gamma$ et $c_s^2$, Poisson couple, conservation de masse par espece) est DERIVEE dans le
+cas-parent natif [`../multispecies/`](../multispecies/). Ce README ne la re-derive pas : il se
+concentre sur (a) la table des conventions du coeur reproduites en formules, ancree
+`include/adc/physics/*.hpp`, et (b) comment l'egalite bit est verifiee et ce qu'une divergence
+trahirait.
 
----
+## Contrat
 
-## 1. Objectif du cas
+| Champ | Contenu |
+|---|---|
+| Categorie (manifeste) | `validation` (`ci = true`, `needs = ["cxx"]`, [`cases_manifest.toml:94-99`](../cases_manifest.toml)). PAS une reproduction publiee : on verifie une EQUIVALENCE de chemins, pas une courbe d'article. |
+| Entrees | grille $48^2$, $L=1$, **periodique** ; electrons $n_e=1+0.02\cos(2\pi x)$, ions $n_i=1$ (separation de charge -> Poisson non trivial) ; charges $q_e=-1$, $q_i=+1$ ; $\gamma_e=5/3$, $c_{s,i}^2=1$ ; 15 pas, CFL = 0.4 (`step_cfl(0.4)`), SSPRK2 + minmod + Rusanov pour les DEUX blocs, Poisson `geometric_mg`, RHS `charge_density` |
+| Sorties | etats `get_state("electrons")` $(4,n,n)$ et `get_state("ions")` $(3,n,n)$ des DEUX chemins (natif et DSL) ; `print` des $\max\lvert\text{DSL}-\text{natif}\rvert$ par espece + verdict `np.array_equal` ; 2 figures `figures/equivalence_{electrons,ions}.png` + `figures/provenance.json` |
+| Invariants garantis | les `assert` de `run.py` : (1) electrons $\max\lvert\text{DSL}-\text{natif}\rvert<10^{-24}$ (`run.py:227`) ; (2) ions `np.array_equal` OU $<10^{-24}$ (`run.py:229`) ; (3) masse par espece `relative_drift < 1e-9` (`run.py:242-243`) ; (4) etats finis et densites $>0$ (`run.py:238-241`) |
+| PROUVE | **ions bit-identiques** : $\max\lvert\text{DSL}-\text{natif}\rvert=0.000\times10^{0}$ exactement, sur les 3 composantes (`np.array_equal == True`) ; **electrons sous tolerance machine** : $\max\lvert\text{DSL}-\text{natif}\rvert=4.930\times10^{-32}$, confine a la SEULE composante $\rho v$ ($\rho$, $\rho u$, $E$ a $0.0$ exactement) ; masse conservee par espece (derive relative $1.20\times10^{-14}$ electrons, $1.16\times10^{-14}$ ions) |
+| NE PROUVE PAS | aucun resultat physique : meme CI cosinus jouet que `multispecies`, 15 pas, pas de longueur de Debye ni de frequence plasma, pas de taux. L'egalite electron n'est PAS bit-exacte ($4.93\times10^{-32}\ne0$) : c'est une reassociation FP du RHS de Poisson partage, pas une egalite stricte ; on l'asserte sous $10^{-24}$, pas a `array_equal`. Le $4.93\times10^{-32}$ est plateforme-dependant (BLAS, ordre de reduction MG) ; seuls le confinement a $\rho v$ et l'ordre $\ll10^{-24}$ sont stables. Backend reel = `aot` (la garde d'ABI rejette `production` sur module pre-construit) |
+| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend DSL `aot` (fallback ; `production` rejete par l'ABI), backend natif serie, $48^2$, Apple clang 21.0.0, Python 3.12.2, macOS arm64 ; nombres dans `figures/provenance.json` |
 
-Demontrer, sur un systeme **multi-especes couple par Poisson**, que la voie declarative
-(modeles ecrits en formules avec `adc.dsl.Model`, compiles en `.so`) est **numeriquement
-equivalente** a la voie native (composition de briques C++ nommees). Concretement :
-
-- deux especes DSL de **tailles d'etat differentes** (4 et 3 variables) dans le meme `System` ;
-- un modele DSL **a source** (la force electrostatique lit `grad phi` par le canal `aux`) ;
-- un **Poisson couple** dont le RHS additionne les densites de charge des deux blocs DSL.
-
-Critere de reussite (asserte par le script) : par espece, l'etat final DSL coincide avec
-l'etat natif (electrons a `< 1e-24`, ions bit-identiques), la masse est conservee par
-espece, les densites restent finies et strictement positives.
-
-L'interet va au-dela du diocotron mono-espece deja couvert ailleurs : ici le DSL doit
-gerer **source + couplage elliptique + heterogeneite des especes** simultanement.
-
----
-
-## 2. Equations
-
-Chaque espece `s` est un systeme hyperbolique 2D `dU_s/dt + d_x F_s(U_s) + d_y G_s(U_s) = S_s(U_s, E)`,
-les deux especes etant reliees par un champ electrostatique commun `E = -grad phi`,
-`phi` solution d'**un seul** Poisson.
-
-### Electrons -- Euler compressible (4 variables)
-
-Etat conservatif `U_e = (rho, rho u, rho v, E)` ; pression `p = (gamma - 1)(E - 1/2 rho |v|^2)`,
-`gamma = 5/3`. Flux (convention `include/adc/physics/euler.hpp`) :
-
-```
-F_x = [ rho u,  rho u^2 + p,  rho u v,        (E + p) u ]
-F_y = [ rho v,  rho u v,      rho v^2 + p,    (E + p) v ]
-```
-
-Valeurs propres `(u - c, u, u, u + c)` en x et `(v - c, v, v, v + c)` en y, avec
-`c = sqrt(gamma p / rho)`.
-
-### Ions -- Euler isotherme (3 variables)
-
-Etat conservatif `U_i = (rho, rho u, rho v)` ; fermeture isotherme `p = cs2 rho`, `cs2 = 1`.
-Flux (convention `IsothermalFlux`, `include/adc/physics/hyperbolic.hpp`) :
-
-```
-F_x = [ rho u,  rho u^2 + p,  rho u v ]
-F_y = [ rho v,  rho u v,      rho v^2 + p ]
-```
-
-Valeurs propres `(u - c, u, u + c)` / `(v - c, v, v + c)`, `c = sqrt(cs2)` constant.
-
-### Source electrostatique (force et travail)
-
-Convention `PotentialForce` (`include/adc/physics/source.hpp`), `E = (-grad_x phi, -grad_y phi)` :
-
-```
-S_e = [ 0,  q_e rho E_x,  q_e rho E_y,  q_e (rho u E_x + rho v E_y) ]   (electrons : 4 var, avec travail)
-S_i = [ 0,  q_i rho E_x,  q_i rho E_y ]                                  (ions : 3 var, sans energie)
-```
-
-avec `q_e = -1`, `q_i = +1` (la charge joue le role de `q/m` dans le coeur, champ `qom`).
-
-### Poisson couple
-
-`phi` resout `lap phi = f` avec un **second membre unique** agregeant les densites de
-charge des deux especes (convention `ChargeDensity`, `include/adc/physics/elliptic.hpp`,
-`rhs = q n`, `n = U[0]`) :
-
-```
-f = q_e n_e + q_i n_i
-```
-
-Conditions aux limites periodiques.
+A la fin tu sauras : quelles conventions exactes du coeur les formules DSL reproduisent (table
+ancree headers), pourquoi les ions sortent bit-identiques alors que les electrons non, et ce qu'une
+heatmap non noire (ou une egalite electron au-dela de $10^{-24}$) trahirait.
 
 ---
 
-## 3. Modele physique
+## 1. La physique : voir le cas-parent natif
 
-Plasma a deux fluides electrostatique, non magnetise (pas de `B_z`), avec separation de
-charge initiale. Les electrons sont compressibles adiabatiques (`gamma = 5/3`), les ions
-isothermes (`cs2 = 1`). Le couplage est **electrostatique pur** : chaque espece subit la
-force `q rho E` (et son travail pour les electrons), et chaque espece **alimente** le
-Poisson par sa densite de charge. Aucune collision ni echange thermique inter-especes
-n'est active (pas de `CoupledSource`).
+Les deux especes, leurs equations (continuite, quantite de mouvement forcee par
+$\mathbf{E}=-\nabla\phi$, fermetures $\gamma=5/3$ et $c_s^2=1$), le Poisson de systeme
+$\nabla^2\phi=q_e n_e+q_i n_i$ couple, la separation de charge initiale et la conservation de masse
+PAR ESPECE (telescopage des flux sur le tore) sont DERIVES dans [`../multispecies/README.md`](../multispecies/)
+(sections 1, 2, 4). `two_species_dsl` resout **la meme physique avec les memes parametres** ; la
+seule difference est le CHEMIN de construction du modele : formules DSL au lieu de briques natives
+nommees. On ne re-derive donc rien ici.
 
-Le but n'est pas un regime physique de reference : c'est de **mettre en regard** deux
-ecritures du **meme** modele (formules vs briques) sur un systeme suffisamment riche
-(deux especes heterogenes + source + Poisson partage) pour exercer tout le chemin DSL.
-
----
-
-## 4. Methode numerique
-
-Identique pour la voie native et la voie DSL (c'est la condition de l'equivalence
-bit-a-bit) :
-
-- **Volumes finis** 2D, reconstruction limitee **minmod**, flux de Riemann **rusanov** ;
-- integration temporelle **explicite SSPRK2** (`adc.Explicit()` ; le DSL emis tourne le
-  meme `assemble_rhs<Limiter, Flux>` + SSPRK2 que le natif) ;
-- **pas de sous-cyclage** : les deux blocs avancent au meme `dt` (`step_cfl(0.4)`), sinon
-  la comparaison bit-a-bit avec le natif (qui avance les deux blocs au meme pas) serait
-  rompue ; `add_equation` accepte un `time`/`substeps` par bloc, mais ce cas ne s'en sert
-  volontairement pas ;
-- pas de temps par **CFL global** : `sim.step_cfl(0.4)` (CFL = 0.4) ;
-- **Poisson** : RHS `charge_density`, solveur `geometric_mg` (multigrille geometrique),
-  domaine periodique.
-
-Grille `48 x 48`, domaine `L = 1.0`, `15` pas de temps.
+Une difference de calibrage avec `multispecies` : ici on avance par `step_cfl(0.4)` (pas adaptatif
+CFL) pendant 15 pas, la ou `multispecies` fait `advance(dt=0.001, nsteps=20)` (pas fixe). C'est sans
+incidence sur l'equivalence (natif et DSL prennent EXACTEMENT le meme chemin temporel, donc le meme
+$dt$ a chaque pas) ; ca change seulement les valeurs absolues de l'etat final, pas la comparaison.
 
 ---
 
-## 5. Architecture ADC utilisee
+## 2. Les conventions du coeur, reproduites en formules
 
-Deux voies construites cote a cote dans `run.py`, puis comparees.
+Le coeur des cas DSL : chaque formule symbolique doit reproduire **a l'identique** la convention de
+la brique native correspondante, sinon l'egalite casse. Table des conventions reproduites, ancree
+dans les headers `include/adc/physics/*.hpp` (gauche = brique native, droite = formule DSL `run.py`) :
 
-### Voie native (oracle de reference) -- `run_native`
+### Electrons (`electron_dsl_model`, `run.py:76-108`) reproduit `models.electron_euler`
+
+| Quantite | Brique native (header) | Formule DSL (`run.py`) |
+|---|---|---|
+| Pression / EOS | `Euler::pressure` $p=(\gamma-1)(E-\tfrac12\rho\lvert v\rvert^2)$ ([`euler.hpp:42-47`](../../adc_cpp/include/adc/physics/euler.hpp)) | `p = (g-1)*(E - 0.5*rho*(u*u+v*v))` (`run.py:87`) |
+| Flux convectif $x$ | `Euler::flux` $(\rho u,\ \rho u^2+p,\ \rho u v,\ (E+p)u)$ ([`euler.hpp:94-104`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[rhou, rhou*u+p, rhou*v, (E+p)*u]` (`run.py:91`) |
+| Spectre $x$ | `Euler::eigenvalues` $(u-c,\ u,\ u,\ u+c)$, $c=\sqrt{\gamma p/\rho}$ ([`euler.hpp:108-118`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[u-c, u, u, u+c]`, `c=sqrt(g*p/rho)` (`run.py:88,93`) |
+| Force electrostatique | `PotentialForce::apply` $s[1{:}3]=q\rho\mathbf{E}$, $s[3]=q(\rho_u E_x+\rho_v E_y)$, $\mathbf{E}=-(\text{grad\_x},\text{grad\_y})$ ([`source.hpp:33-44`](../../adc_cpp/include/adc/physics/source.hpp)) | `source([0, Q_E*rho*e_x, Q_E*rho*e_y, Q_E*(rhou*e_x+rhov*e_y)])`, `e_x=-grad_x`, `e_y=-grad_y` (`run.py:101-103`) |
+| Densite de charge | `ChargeDensity::rhs` $f=q\,u[0]=q n$ ([`elliptic.hpp:19-25`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_E * rho)` (`run.py:105`) |
+
+### Ions (`ion_dsl_model`, `run.py:111-137`) reproduit `models.ion_isothermal`
+
+| Quantite | Brique native (header) | Formule DSL (`run.py`) |
+|---|---|---|
+| Pression / fermeture | `IsothermalFlux` $p=c_s^2\rho$ ([`hyperbolic.hpp:132-140`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `p = cs2 * rho` (`run.py:122`) |
+| Flux convectif $x$ | `IsothermalFlux::flux` $(\rho u,\ \rho u^2+p,\ \rho u v)$ ([`hyperbolic.hpp:132-141`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[rhou, rhou*u+p, rhou*v]` (`run.py:125`) |
+| Spectre $x$ | `IsothermalFlux::eigenvalues` $(u-c,\ u,\ u+c)$, $c=\sqrt{c_s^2}$ ([`hyperbolic.hpp:165-174`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[u-c, u, u+c]`, `c=sqrt(cs2)` (`run.py:123,126`) |
+| Force electrostatique | `PotentialForce::apply` (3 var : PAS de terme energie, le `if constexpr (size()==4)` de [`source.hpp:41`](../../adc_cpp/include/adc/physics/source.hpp) est faux) | `source([0, Q_I*rho*e_x, Q_I*rho*e_y])` (3 composantes, `run.py:133`) |
+| Densite de charge | `ChargeDensity::rhs` $f=q n$ ([`elliptic.hpp:19-25`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_I * rho)` (`run.py:134`) |
+
+Deux finesses de convention que les formules doivent honorer pour que l'egalite tienne :
+
+- **Le signe est porte par la charge, pas par l'elliptique.** Cote coeur, `PotentialForce.qom=q` et
+  `ChargeDensity.q=q` portent le signe ($q_e=-1$, $q_i=+1$) ; l'operateur Poisson resout
+  $\varepsilon\nabla^2\phi=f$ avec $\varepsilon=1$ (cf. `../multispecies/` sec. 4.3). Le DSL recopie
+  ce choix : `Q_E*rho*e_x` (force) et `Q_E*rho` (RHS), jamais un signe additionnel sur $\nabla^2$.
+  C'est la famille `PotentialForce`+`ChargeDensity`, distincte de `GravityForce`+`GravityCoupling`
+  (signe porte par l'elliptique) qu'utilise [`../euler_poisson/`](../euler_poisson/) (sec. 2 de ce cas).
+- **La composante energie n'existe QUE pour les electrons.** Le travail $q(\rho_u E_x+\rho_v E_y)$
+  est la 4e composante de la source electron ; les ions, a 3 variables, n'ont pas d'equation
+  d'energie (fermeture isotherme), donc pas de terme travail. Le `if constexpr (State::size()==4)`
+  du coeur ([`source.hpp:41`](../../adc_cpp/include/adc/physics/source.hpp)) est reproduit cote DSL
+  par la **longueur de la liste** passee a `m.source(...)` : 4 termes electrons, 3 termes ions.
+
+Table 3 couches "qui calcule quoi" (la couche du milieu n'est plus une brique nommee mais les
+EXPRESSIONS que `adc.dsl` compile) :
+
+| Ligne `run.py` | Couche | Ce qui se passe |
+|---|---|---|
+| `add_equation("electrons", model=ce, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` (`run.py:187-189`) ; idem ions (`run.py:190-192`) | Python **compose et DIAGNOSTIQUE** | choix du schema (MUSCL minmod + Rusanov, SSPRK2) ; lecture des etats pour comparer au natif |
+| `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` (`run.py:91-105`, `125-134`) que `m.compile(..., backend)` traduit en C++ | EXPRESSIONS DSL **figees** | la convention exacte (flux, spectre, force $q\rho\mathbf{E}$, RHS $q n$) compilee en `.so`, CSE au codegen |
+| `assemble_rhs<minmod, rusanov>` + Poisson de systeme `geometric_mg` (RHS $\sum_b q_b n_b$), inline par le backend `aot`/`production` | noyau **par cellule** (device) | le calcul reel, sans callback Python dans le hot path -- le MEME chemin que le natif, ce qui rend l'egalite bit possible |
+
+Justifie la clause PROUVE : c'est parce que ces expressions reproduisent **exactement** les briques
+et que le backend inline le **meme** chemin numerique que l'egalite est attendue, pas approximative.
+
+---
+
+## 3. Comment l'egalite bit est verifiee (`main`, `run.py:207-245`)
+
+Le cas joue DEUX runs sur la meme grille, meme CI, meme Poisson, meme schema, meme nombre de pas :
+`run_native` (composition native `models.electron_euler`/`ion_isothermal`, `run.py:150-163`) puis
+`run_dsl` (modeles DSL compiles, `run.py:175-204`). La comparaison :
 
 ```python
-sim = adc.System(n=n, L=1.0, periodic=True)
-sim.add_block("electrons", model=models.electron_euler(charge=Q_E, gamma=GAMMA_E),
-              spatial=adc.Spatial(minmod=True), time=adc.Explicit())
-sim.add_block("ions",      model=models.ion_isothermal(charge=Q_I, cs2=CS2_I),
-              spatial=adc.Spatial(minmod=True), time=adc.Explicit())
-sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+de = float(np.max(np.abs(ed - en)))                       # electrons : max|DSL - natif| (run.py:219)
+di = float(np.max(np.abs(idd - inn)))                     # ions      : idem (run.py:220)
+assert de < 1e-24, "..."                                  # electrons sous tolerance machine (run.py:227)
+assert np.array_equal(idd, inn) or di < 1e-24, "..."      # ions bit-identiques (run.py:229)
 ```
 
-`models.electron_euler` / `models.ion_isothermal` (dans `adc_cases/models.py`) sont des
-`adc.Model(state, transport, source, elliptic)` composant les briques natives
-`FluidState` + `CompressibleFlux`/`IsothermalFlux` + `PotentialForce` + `ChargeDensity`.
+- `np.array_equal(a, b)` est `True` **uniquement** si tous les bits coincident : aucune tolerance.
+  C'est l'observable la plus dure pour les ions.
+- La tolerance electron $10^{-24}$ est une **clause justifiee par un ordre de grandeur**, pas une
+  constante posee. Borne basse : la divergence MESUREE est $4.93\times10^{-32}$, soit $\sim10^{8}$
+  fois SOUS la tolerance. Borne haute : la magnitude de l'etat est $O(1)$ (densites $\approx1$,
+  energie $O(1)$) ; une **vraie** divergence de physique (mauvaise convention de signe, terme
+  manquant) serait $O(10^{-2})$ ou plus, comme la dynamique. $10^{-24}$ se place entre le bruit de
+  reassociation FP ($\sim10^{-32}$, $\sim10^{8}\,\varepsilon_{\text{mach}}$ relatif a $O(1)$) et toute
+  divergence de physique : il accepte la reassociation, rejette un ecart de modele.
 
-### Voie DSL (sujet du cas) -- `run_dsl`
+**Pourquoi les electrons divergent et les ions non** (la clause NE PROUVE PAS). A 1 pas, le residu et
+le flux de CHAQUE espece sont bit-identiques au natif (les formules reproduisent les briques a
+l'identique). Sur plusieurs pas COUPLES, la seule difference vient de l'accumulation du **second
+membre de Poisson partage** $f=q_e n_e+q_i n_i$ : deux blocs y contribuent, et l'ordre dans lequel
+le code somme les contributions DSL vs natives n'est pas garanti identique. L'addition flottante
+n'etant pas associative, ce changement d'ordre produit un $\phi$ qui differe au dernier bit, donc un
+$\mathbf{E}=-\nabla\phi$ qui differe au dernier bit, donc une force electron qui differe -- d'ou un
+etat electron a $\sim10^{-32}$ du natif. Les ions, eux, sortent bit-identiques sur cette
+trajectoire : leur densite reste quasi uniforme ($n_i=1$ partout au depart, modulation induite
+$\sim4\times10^{-6}$ comme dans `multispecies`), si bien que la reassociation ne mord pas a la
+precision mesurable sur leur etat. **Ce n'est pas un ecart de physique** ; c'est du bruit d'arrondi
+de l'accumulation partagee, et c'est exactement ce que la tolerance serree distingue d'un bug.
 
-Chaque espece est un `adc.dsl.Model` decrit **en formules** (cf. section 9), compile en
-`.so`, puis branche via `add_equation` (qui aiguille sur le **type** du modele : un
-`CompiledModel` part vers l'adder du backend) :
-
-```python
-ce, be = _compile(electron_dsl_model(), "electron")   # CompiledModel
-ci, bi = _compile(ion_dsl_model(),      "ion")
-sim = adc.System(n=n, L=1.0, periodic=True)
-sim.add_equation("electrons", model=ce,
-                 spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                 time=adc.Explicit())
-sim.add_equation("ions", model=ci,
-                 spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                 time=adc.Explicit())
-sim.set_poisson(rhs="charge_density", solver="geometric_mg")
-```
-
-`adc.Spatial(minmod=True)` (natif) et `adc.FiniteVolume(limiter="minmod", riemann="rusanov")`
-(DSL) decrivent le **meme** schema spatial : c'est ce qui garantit la comparaison a
-schema identique.
-
-### Compilation DSL et choix de backend -- `_compile`
-
-`_compile(model, tag)` (dans `run.py`) tente d'abord le backend `"production"` (loader
-natif zero-copie, `add_native_block`), puis bascule sur `"aot"` (`.so` autosuffisant,
-chemin de production host-marshale, `add_compiled_block`) **si la compilation production
-echoue**. Les deux backends sont numeriquement identiques ; seul l'AOT marshale des
-tableaux au lieu d'installer le modele comme bloc natif.
-
-```python
-def _compile(model, tag, backend):           # backend EXPLICITE (pas de fallback interne)
-    include = adc_include()
-    so_dir = case_output_dir("two_species_dsl")
-    return model.compile(os.path.join(so_dir, "%s_%s.so" % (tag, backend)), include, backend=backend)
-
-def run_dsl(n, ne2d, ni2d, n_steps):
-    for backend in ("production", "aot"):     # fallback au niveau du SYSTEME (compile + branchement)
-        try:
-            ce = _compile(electron_dsl_model(), "electron", backend)
-            ci = _compile(ion_dsl_model(), "ion", backend)
-            sim = adc.System(n=n, L=1.0, periodic=True)
-            sim.add_equation("electrons", model=ce, spatial=..., time=adc.Explicit())
-            sim.add_equation("ions",      model=ci, spatial=..., time=adc.Explicit())
-            sim.set_poisson(...); sim.set_density(...); ...   # puis step_cfl
-            return ..., backend
-        except Exception:                     # echec production -> on reessaie tout en aot
-            print("backend %r indisponible, essai suivant" % backend)
-    raise RuntimeError("aucun backend DSL n'a pu etre branche au System")
-```
-
-**Fallback robuste** : la boucle de backend vit dans `run_dsl` et enrobe la compilation **ET** le
-branchement (`add_equation` -> `add_native_block`). La garde d'ABI se declenche au BRANCHEMENT (pas
-a la compilation) ; comme il est dans le `try`, un echec `production` -- p.ex. un module **pre-construit**
-aux en-tetes divergents -- retombe automatiquement sur `aot`, pour les DEUX especes a la fois (un
-backend coherent par run). Avec un module fraichement construit contre les memes en-tetes : `production`.
+Ce qu'une **divergence au-dela de $10^{-24}$** trahirait : une formule DSL qui ne reproduit PLUS une
+brique du coeur -- mauvais signe dans `source` (force repulsive au lieu d'attractive), terme energie
+oublie ou ajoute a tort, spectre $c=\sqrt{\gamma p/\rho}$ remplace par $\sqrt{c_s^2}$, ou RHS
+$q n$ avec le mauvais $q$. L'assert serait alors $O(10^{-2})$, pas $O(10^{-32})$.
 
 ---
 
-## 6. Carte des fichiers
+## 4. Figures (regenerees par `make_figures.py`, dans `figures/`)
 
-| Fichier | Role |
-| --- | --- |
-| `two_species_dsl/run.py` | Le cas : modeles DSL, oracle natif, run couple, asserts d'equivalence et d'invariants. |
-| `adc_cases/models.py` | Modeles d'espece natifs `electron_euler` / `ion_isothermal` (compositions de briques), oracle de reference. |
-| `adc_cases/common/native.py` | `adc_include()` : localise les en-tetes `adc_cpp` (`$ADC_INCLUDE`, paquet installe, depot voisin). |
-| `adc_cases/common/io.py` | `case_output_dir("two_species_dsl")` : cree/retourne `<out_root>/two_species_dsl` (les `.so` y atterrissent). |
-| `adc_cases/common/checks.py` | `assert_finite`, `assert_positive`, `relative_drift` (invariants physiques). |
-| `adc/dsl.py` (paquet `adc`) | Le mini-DSL : `Model`, arbre d'expressions, codegen C++, backends `prototype`/`aot`/`production`. |
-| `adc/__init__.py` (paquet `adc`) | `System`, `Spatial`, `FiniteVolume`, `Explicit`, `add_block`, `add_equation`, `set_poisson`, `step_cfl`. |
+`make_figures.py` re-joue EXACTEMENT `run.py` (importe ses fonctions `run_native`/`run_dsl`/`initial_conditions`,
+memes parametres, meme backend) et trace, PAR ESPECE et PAR COMPOSANTE conservative, la heatmap de
+$\lvert\text{etat}_{\text{DSL}}-\text{etat}_{\text{natif}}\rvert$. Nombres cites :
+`figures/provenance.json`. Commande exacte en section 5.
 
-Ce cas ne porte **pas** de C++ sur mesure ni de `check_model.py`/`band_instability.py` : tout
-le C++ est **genere** par `adc.dsl` a partir des formules de `run.py`.
+### `equivalence_ions.png` : bit-identiques, identiquement noires
+
+![Trois heatmaps ions (rho, rho_u, rho_v) toutes uniformement noires, max|d|=0](figures/equivalence_ions.png)
+
+- **PROUVE** (asserte `run.py:229`) : les 3 composantes ioniques sont **identiquement noires**,
+  $\max\lvert\text{DSL}-\text{natif}\rvert=0.000\times10^{0}$ sur chacune, `np.array_equal == True`.
+  Un SEUL pixel non noir signalerait que la formule isotherme DSL diverge d'`IsothermalFlux` ou que
+  `PotentialForce`/`ChargeDensity` est mal reproduit. La carte est l'observable visuelle de
+  l'egalite stricte.
+- **NON MONTRE** : la carte ne dit rien de la dynamique ionique elle-meme (modulation
+  $\sim4\times10^{-6}$ induite par le couplage, cf. `../multispecies/` sec. 6) ; elle ne montre que
+  la DIFFERENCE DSL/natif, pas l'etat.
+
+### `equivalence_electrons.png` : divergence confinee a $\rho v$, sous $10^{-24}$
+
+![Quatre heatmaps electrons : rho, rho_u, E noires (max|d|=0) ; rho_v montre des cellules eparses a l'echelle 1e-32](figures/equivalence_electrons.png)
+
+- **PROUVE** (asserte `run.py:227`) : $\rho$, $\rho u$ et $E$ sont **identiquement noires**
+  ($\max\lvert d\rvert=0.000\times10^{0}$ exactement) ; la divergence est **confinee a la seule
+  composante $\rho v$** (y-quantite de mouvement), a $4.930\times10^{-32}$ -- soit $\sim10^{8}$ fois
+  SOUS la tolerance $10^{-24}$. C'est l'observable de la reassociation FP : un epsilon machine, pas
+  un ecart de physique.
+- **SUGGERE (non assere)** : le confinement a $\rho v$ est coherent avec le mecanisme du chemin de
+  couplage. La CI electron est modulee en $x$ ($\cos 2\pi x$) ; le champ $\mathbf{E}=-\nabla\phi$
+  reagit, et c'est sur la y-quantite de mouvement que la reassociation du RHS partage se manifeste a
+  la precision mesurable en premier. Aucun `assert` ne teste ce confinement -- il est lu sur la
+  carte, pas verifie.
+- **NON MONTRE** : la valeur exacte $4.93\times10^{-32}$ et le motif precis des cellules eparses sont
+  plateforme-dependants (ordre de reduction du multigrille, BLAS) ; seuls l'ordre $\ll10^{-24}$ et le
+  fait que $\rho$/$\rho u$/$E$ restent a $0$ exact sont stables. La carte ne couvre pas non plus la
+  stabilite sur $>15$ pas (l'accumulation d'arrondi croit lentement).
 
 ---
 
-## 7. Prerequis
-
-- **Module `adc`** (bindings pybind11 d'`adc_cpp`) accessible par `PYTHONPATH` (le build
-  fournit `build-master/python/adc`).
-- **Paquet `adc_cases`** importable (installe via `pip install -e .`, ou place sur le
-  `PYTHONPATH` ; `run.py` retombe sinon sur le dossier parent du script).
-- **Un compilateur C++** (`needs = ["cxx"]`) : `$CXX`, sinon `c++` / `g++` / `clang++`.
-  Le DSL compile chaque modele en `.so` (`-std=c++23` pour `production`, `-std=c++20` pour
-  `aot`).
-- **Les en-tetes `adc_cpp`** (`include/`), localises par `adc_include()` ; surchargeables
-  par `ADC_INCLUDE=<adc_cpp>/include`.
-- **Contrainte d'ABI pour le backend `production`** : les en-tetes utilises pour compiler
-  le loader natif doivent etre **exactement** ceux contre lesquels le module `_adc` a ete
-  bati (meme signature de headers, compilateur, `std`). Sinon `add_native_block` rejette le
-  loader (cf. sections 14 et 16). Le backend `aot` n'a pas cette contrainte.
-
-NumPy est requis (importe par `run.py`).
-
----
-
-## 8. Commande exacte
+## 5. Reproduire
 
 ```bash
-cd /private/tmp/adc_cases-readmes/two_species_dsl
-PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-readmes \
-  /opt/homebrew/anaconda3/bin/python3.12 run.py
+cd /private/tmp/adc_cases-deeptut/two_species_dsl
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 run.py            # le cas : asserts d'equivalence + invariants
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 heatmaps + provenance.json
 ```
 
-Pour forcer un dossier de sortie hors source : `export ADC_CASES_OUT=/chemin/out`.
-Pour imposer les en-tetes : `export ADC_INCLUDE=/.../adc_cpp/include`.
+Prerequis : Python 3.12 + numpy (matplotlib **seulement** pour `make_figures.py`), module `adc`
+compile et importe avec le MEME interpreteur (suffixe ABI `cpython-312`), et un **compilateur C++20**
+(`needs = ["cxx"]`) : le DSL compile une `.so` a la volee sous `out/two_species_dsl/`. Le premier
+chemin du `PYTHONPATH` fournit le module C++ ; le second rend `adc_cases` importable (le cas a un
+fallback `sys.path`, `run.py:59-64`).
 
----
-
-## 9. Explication du code par etapes
-
-1. **Parametres physiques partages** (`GAMMA_E = 5/3`, `CS2_I = 1`, `Q_E = -1`, `Q_I = +1`).
-   Ils doivent etre identiques entre DSL et natif, sinon l'equivalence ne tient pas.
-
-2. **`electron_dsl_model()`** -- electrons en formules :
-   - `conservative_vars("rho", "rho_u", "rho_v", "E")` ;
-   - `aux("grad_x")`, `aux("grad_y")` : composantes canoniques du canal `aux` (lues comme
-     `a.grad_x` / `a.grad_y` dans le C++ genere) ;
-   - `param("gamma", GAMMA_E)` : constante **nommee**, inlinee au codegen ET enregistree
-     comme metadonnee ABI (`set_gamma`) pour la coherence des couplages cote `System` ;
-   - primitives `u = rho_u/rho`, `v = rho_v/rho`, `p = (g-1)(E - 1/2 rho(u^2+v^2))`, son
-     `c = sqrt(g p / rho)` ;
-   - `flux(x=[...], y=[...])` et `eigenvalues(x=[...], y=[...])` (conventions `euler.hpp`) ;
-   - `primitive_vars(rho, u, v, p)` (forme **positionnelle** : fixe le layout de `Prim`
-     sans redefinir les primitives) puis `conservative_from([...])` (inverse prim -> cons,
-     que le DSL ne sait pas deriver seul) ;
-   - `source([0.0, Q_E rho E_x, Q_E rho E_y, Q_E (rho_u E_x + rho_v E_y)])` avec
-     `E = -grad phi` ;
-   - `elliptic_rhs(Q_E rho)` : contribution au RHS de Poisson ;
-   - `check()` verifie que toute variable referencee est declaree.
-
-3. **`ion_dsl_model()`** -- ions en formules : meme structure, 3 variables, `p = cs2 rho`,
-   `c = sqrt(cs2)` constant, source sans composante energie, `elliptic_rhs(Q_I rho)`.
-
-4. **`initial_conditions(n)`** -- separation de charge (section 10).
-
-5. **`run_native(...)`** -- construit le `System` natif (deux `add_block`), pose le Poisson
-   couple, fixe les densites, avance `n_steps` fois (`step_cfl(0.4)`), retourne les etats
-   et masses par espece. C'est **l'oracle**.
-
-6. **`_compile(model, tag)`** -- compile un modele DSL en `.so` (backend `production`,
-   sinon `aot`) ; retourne `(CompiledModel, backend)`.
-
-7. **`run_dsl(...)`** -- compile les deux modeles DSL, construit le **meme** `System`
-   (deux `add_equation`), pose le **meme** Poisson, fixe les **memes** densites, avance
-   `n_steps` fois, retourne etats + masses + le backend retenu.
-
-8. **`main()`** -- lance les deux voies, calcule `max|DSL - natif|` par espece, **asserte**
-   l'equivalence (electrons `< 1e-24`, ions bit-identiques) puis les invariants physiques
-   (masse, finitude, positivite), et imprime un resume.
-
----
-
-## 10. Conditions initiales
-
-`initial_conditions(n)` impose une **separation de charge** : electrons perturbes par un
-cosinus le long de `x`, ions uniformes.
-
-```python
-x = (np.arange(n) + 0.5) / n          # centres de cellules le long des colonnes
-ne = 1.0 + 0.02 * np.cos(2.0 * np.pi * x)
-ne2d = np.broadcast_to(ne, (n, n)).copy()   # densite electronique 2D
-ni2d = np.ones((n, n))                       # densite ionique uniforme
-```
-
-Les densites different localement, donc le RHS de Poisson `f = q_e n_e + q_i n_i` est non
-nul et le couplage est reellement exerce. Les vitesses initiales sont nulles (seules les
-densites sont posees via `set_density` ; le reste de l'etat est initialise par defaut a
-partir de la densite par le coeur).
-
----
-
-## 11. Invariants et assertions
-
-Tous verifies par `assert` dans `main()` ; un echec sort en erreur (CI rouge). Valeurs
-**reellement mesurees** lors de l'execution capturee (grille 48x48, 15 pas, backend `aot`,
-cf. sections 12 et 14) :
-
-| Invariant | Assertion | Valeur mesuree |
-| --- | --- | --- |
-| Equivalence electrons | `max|DSL - natif| < 1e-24` | `4.930e-32` (PASSE) |
-| Equivalence ions | bit-identique ou `< 1e-24` | `0.000e+00` (bit-identique) |
-| Masse electrons conservee | derive relative `< 1e-9` | `1.204e-14` |
-| Masse ions conservee | derive relative `< 1e-9` | `1.165e-14` |
-| Densites finies | `assert_finite` (pas de NaN/Inf) | PASSE (electrons + ions) |
-| Densites positives | `assert_positive` (min > 0) | PASSE (electrons + ions) |
-
-**Pourquoi l'ecart electrons est non nul mais < 1e-24.** A **un** pas, le residu et le
-flux de chaque espece DSL sont bit-identiques au natif. Sur plusieurs pas **couples**, la
-seule difference est une **reassociation flottante** dans l'accumulation du **second
-membre du Poisson partage** (les deux blocs y contribuent ; l'ordre d'addition differe
-legerement). Ce n'est pas un ecart de physique mais un epsilon machine : d'ou la tolerance
-serree `1e-24` (et non un simple "proche"). Les ions, qui contribuent differemment a cette
-accumulation, restent **exactement** bit-identiques (`0.0`).
-
----
-
-## 12. Sorties attendues
-
-Sortie console reelle (execution capturee, backend **AOT**, cf. section 14 pour la
-nuance production/AOT) :
+Sortie reelle de `run.py` (macOS arm64, Apple clang 21.0.0) :
 
 ```
 === two_species_dsl : electrons + ions ecrits en formules vs briques natives ===
 grille 48 x 48, 15 pas, CFL = 0.4 ; q_e = -1, q_i = 1
+backend 'production' indisponible (RuntimeError: add_native_block : ABI incompatible ...), essai suivant
 backend DSL retenu : 'aot'
 electrons : max|DSL - natif| = 4.930e-32 (bit-identique = False)
 ions      : max|DSL - natif| = 0.000e+00 (bit-identique = True)
@@ -356,120 +217,24 @@ masse electrons : derive relative 1.204e-14 ; ions : 1.165e-14
 OK two_species_dsl (equivalence DSL <-> natif par espece, backend 'aot')
 ```
 
-**Artefacts produits** : les `.so` des modeles DSL, dans
-`<out_root>/two_species_dsl/` (par defaut `<racine_paquet>/out/two_species_dsl/`, ou
-`$ADC_CASES_OUT/two_species_dsl/`). Observe apres execution :
+**Backend reel = `aot`.** Le cas PREFERE `production` (loader natif zero-copie,
+`add_native_block`, parite stricte avec `add_block`), mais la garde d'ABI le rejette ici : le module
+`build-master` pre-construit a une signature d'en-tetes/compilateur differente de celle attendue au
+branchement, donc `run_dsl` retombe sur `aot` (chemin de production host-marshale, numerique
+identique). Avec un module `_adc` rebati contre les memes en-tetes, `production` serait selectionne ;
+dans les deux cas l'egalite par espece tient (meme chemin numerique inline). **Caveat plateforme** :
+le verdict ions bit-identiques, le confinement de l'ecart electron a $\rho v$ et son ordre
+$\ll10^{-24}$ sont stables ; la valeur exacte $4.930\times10^{-32}$ varie avec la BLAS et l'ordre de
+reduction du multigrille (cf. `figures/provenance.json`).
 
-```
-electron_aot.so   ion_aot.so          # backend AOT (chemin emprunte ici)
-electron_production.so  ion_production.so   # backend production (compiles, mais rejetes au branchement, cf. 14/16)
-```
+## Carte des fichiers
 
-Le cas ne produit ni figure ni GIF.
-
----
-
-## 13. Generation figures/GIF
-
-**Aucune.** Ce cas est un test d'equivalence numerique : il n'ecrit aucune image. Sa seule
-sortie disque est constituee des bibliotheques partagees `.so` generees par le DSL (cf.
-section 12). La preuve du cas est la sortie console + le code de retour (0 si tous les
-`assert` passent).
-
----
-
-## 14. Backends reellement supportes
-
-| Backend DSL | Adder `System` | Statut dans CE cas / cet environnement |
-| --- | --- | --- |
-| `production` (loader natif zero-copie) | `add_native_block` | **Tente en premier**. Si l'ABI des en-tetes ne concorde pas (module **pre-construit**, cf. ci-dessous), `run_dsl` **retombe automatiquement sur `aot`**. Avec un module aux en-tetes concordants : **utilise**. |
-| `aot` (`.so` autosuffisant, host-marshale) | `add_compiled_block` | **Fonctionne** ; numerique identique au natif. C'est le backend reellement emprunte ici. |
-| `prototype` (JIT, dispatch virtuel hote) | `add_dynamic_block` | Non utilise par ce cas (`_compile` n'essaie que `production` puis `aot`). |
-
-**Etat reel observe a l'execution.** Avec la commande de la section 8 **sans modification** et un
-module `_adc` **pre-construit** dont les en-tetes ont diverge (ici `build-master` ; le superprojet
-montre `M adc_cpp`), le backend `production` compile les deux `.so` puis `add_native_block` rejette
-au branchement :
-
-```
-RuntimeError: add_native_block : ABI incompatible -- cle du loader
-'...;headers=408168b4...' != cle du module '...;headers=f8273719...'.
-```
-
-Le compilateur (`Apple LLVM 21.0.0`) et le standard (`std=202302L`) **concordent** ; seule la
-**signature des en-tetes** differe (les en-tetes `include/` ont evolue depuis le build du module).
-La boucle de backend de `run_dsl` **enrobe le branchement** : ce rejet est rattrape et le cas
-**retombe automatiquement sur `aot`** (ABI tolerante : `.so` autosuffisant, pas de partage d'ABI
-avec `_adc`), puis **passe integralement** avec les valeurs de la section 11 (sortie : `backend DSL
-retenu : 'aot'`). Avec un module `_adc` **rebati** contre les en-tetes courants, la voie nominale
-`production` (natif, zero-copie) est selectionnee. La divergence build/headers est une condition
-d'environnement, pas un defaut du cas.
-
----
-
-## 15. Cout approximatif
-
-Mesure (temps mur, `/usr/bin/time -p`), machine de developpement (Apple Silicon, macOS,
-Python 3.12) :
-
-- **Execution nominale** (cas complet : compilation des `.so` + run natif + run DSL + asserts) :
-  **`real ~6 s`** (`user ~5.8 s`, `sys ~0.8 s`). Avec un module `_adc` aux en-tetes concordants,
-  seuls les deux `.so` `production` sont compiles.
-- Avec un module **pre-construit** aux en-tetes divergents, le run compile aussi les deux `.so`
-  `production` AVANT de retomber sur `aot` (un jeu de compilation supplementaire, ~+1-2 s).
-
-L'essentiel du cout est la **compilation C++** des modeles DSL (deux invocations du
-compilateur). Sur un re-run, le cache hors source du DSL (`adc_cache_dir`, keye par
-`model_hash + abi_key`) evite la recompilation **uniquement** si `so_path` n'est pas force ;
-or `run.py` passe un `so_path` explicite (`out/.../*_<backend>.so`), donc **chaque run
-recompile** (retro-compatibilite stricte du chemin force). Le calcul numerique proprement
-dit (48x48, 15 pas, deux fois) est negligeable devant la compilation.
-
----
-
-## 16. Limites et differences avec les references
-
-- **Pas une reproduction d'une reference physique externe.** C'est un cas de
-  **validation interne** (equivalence DSL <-> natif). Aucune comparaison a une solution
-  analytique ou a un papier ; l'oracle est la composition native `adc_cases.models`.
-- **Equivalence "a epsilon machine", pas exactement bit-a-bit pour les electrons.** L'ecart
-  electrons (`~4.9e-32`) vient d'une **reassociation flottante** dans l'accumulation du RHS
-  de Poisson **partage** par les deux blocs, asserte sous `1e-24`. Les ions sont
-  bit-identiques. Ne pas presenter ce cas comme "DSL == natif bit-a-bit en toutes
-  circonstances" : c'est vrai **par espece a 1 pas** et pour les ions, **a epsilon machine**
-  pour les electrons sur plusieurs pas couples.
-- **Backend `production` selon l'environnement.** Avec un module `_adc` aux en-tetes concordants,
-  la voie nominale est `production` (natif zero-copie). Avec un module **pre-construit** aux en-tetes
-  divergents (divergence d'ABI de headers, pas un bug du cas), `run_dsl` **retombe automatiquement
-  sur `aot`** : la boucle de backend enrobe la compilation **ET** le branchement `add_native_block`,
-  donc le rejet d'ABI au branchement est rattrape. Le cas passe dans les deux cas.
-- **Pas de sous-cyclage, pas d'IMEX, pas de magnetisme.** Le cas fige explicitement un
-  schema strictement identique (minmod + rusanov + SSPRK2, meme `dt`) pour rendre la
-  comparaison possible ; toute variation (substeps, IMEX, `B_z`) romprait l'equivalence
-  bit-a-bit et n'est pas l'objet du cas.
-- **Petite grille, peu de pas.** `48x48`, `15` pas : taille de **test de validation**, pas
-  une simulation de production.
-
----
-
-## 17. Tests/CI associes
-
-- Manifeste (`cases_manifest.toml`) :
-
-  ```toml
-  path = "two_species_dsl/run.py"
-  category = "validation"
-  ci = true
-  needs = ["cxx"]
-  desc = "Electrons + ions en formules (adc.dsl.Model), Poisson couple ; equivalence au natif par espece."
-  ```
-
-- `ci = true` : le cas est execute en integration continue. Il **est** son propre test : la
-  reussite = tous les `assert` de `main()` passent (equivalence par espece + invariants
-  physiques) et code de retour 0.
-- `needs = ["cxx"]` : la CI doit fournir un compilateur C++ (le DSL compile les modeles en
-  `.so`). En CI, le module `_adc` est construit a partir des memes en-tetes -> la voie nominale
-  `production` (natif) est selectionnee ; si les en-tetes divergeaient, `run_dsl` retombe
-  automatiquement sur `aot` (compilation ET branchement enrobes). Le cas passe dans les deux cas.
-- Aucun test unitaire C++ dedie n'accompagne ce cas (pas de C++ sur mesure : tout est
-  genere par `adc.dsl`).
+| Fichier | Role |
+|---|---|
+| [`run.py`](run.py) | le cas (CI) : 2 modeles DSL (electrons 4 var, ions 3 var), compile, branche, compare au natif par espece, `assert` d'equivalence + invariants |
+| [`make_figures.py`](make_figures.py) | rejoue `run.py`, trace `equivalence_{electrons,ions}.png` (heatmap par composante) + `provenance.json` (hors CI) |
+| `figures/*.png`, `figures/provenance.json` | diagnostics versionnes : SHA adc_cpp/adc_cases, backend, $\max\lvert d\rvert$ par composante, derives de masse |
+| [`../multispecies/`](../multispecies/) | la MEME physique en briques natives : DERIVATION des equations, du couplage Poisson et de la conservation de masse |
+| [`adc_cases/models.py`](../adc_cases/models.py) | `electron_euler()`, `ion_isothermal()` = oracle natif de reference (`l.28-45`) |
+| [`include/adc/physics/`](../../adc_cpp/include/adc/physics/) | `euler.hpp`, `hyperbolic.hpp`, `source.hpp`, `elliptic.hpp` : les briques dont les formules DSL reproduisent les conventions (sec. 2) |
+| [`cases_manifest.toml`](../cases_manifest.toml) | declare le cas : `validation`, `ci = true`, `needs = ["cxx"]` |
