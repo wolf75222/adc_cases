@@ -148,6 +148,20 @@ needs = ["matplotlib"]
 desc = "Vise arXiv:2510.11808 (systeme Euler-Poisson magnetise complet, etage Schur) : reproduction quantitative PAS encore etablie (table PENDING), hors CI. Baseline cartesienne loin du papier, geometrie suspecte (cf. adc_cpp/docs/HOFFART_FIDELITY.md)."
 
 [[case]]
+path = "hoffart_euler_poisson_dsl/run_polar.py"
+category = "reproduction-candidate"
+ci = false
+needs = ["matplotlib"]
+desc = "Vise arXiv:2510.11808 sur GRILLE POLAIRE (anneau resolu) : modele complet Euler-Poisson isotherme magnetise + etage Schur condense polaire (#215), Poisson polaire direct, IsothermalFluxPolar (#209), mono-rang. Leve le verrou des bords d'anneau cartesiens (cf. adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md). Reproduction quantitative PAS encore etablie -> hors CI."
+
+[[case]]
+path = "hoffart_euler_poisson_dsl/test_polar_assembly.py"
+category = "validation"
+ci = true
+needs = []
+desc = "Smoke BUILD-FREE de l'assemblage polaire (run_polar.py) : ordre facade (B_z avant Schur), routage Poisson polaire dirichlet, WENO5+SSPRK3+CondensedSchur, densite top-hat annulaire, etat ExB orthogonal a grad phi, stencil polar_gradient == derive_aux_polar, fenetre de fit verbatim, refus multi-rang. Faux module adc, aucune compilation."
+
+[[case]]
 path = "schur_magnetized_cartesian/run.py"
 category = "experimental"
 ci = false

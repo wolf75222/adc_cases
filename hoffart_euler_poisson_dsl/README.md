@@ -364,10 +364,58 @@ chiffres des $\gamma$ mesures varient avec la BLAS et l'ordre de sommation (cf.
 |---|---|
 | `model.py` | modele symbolique `adc.dsl` (flux, eigen, source Lorentz+E, elliptic_rhs) + `PaperParameters`, IC, drift (`l.70-168`) |
 | `check_model.py` | oracle analytique CI : `assert` flux/source/eigen/rhs sur 2x2 cellules (clause PROUVE) |
-| `run.py` | harnais reproduction-candidate (LONG, hors CI) : `build_uniform`/`build_amr`, fit du taux, sorties |
+| `run.py` | harnais cartesien reproduction-candidate (LONG, hors CI) : `build_uniform`/`build_amr`, fit du taux, sorties |
+| `run_polar.py` | harnais POLAIRE (anneau resolu) reproduction-candidate (LONG, hors CI) : modele complet sur `adc.PolarMesh` + Schur condense polaire + frozen-equilibrium (option c) + flag `--perturbation` |
+| `test_polar_assembly.py` | smoke BUILD-FREE de l'assemblage polaire (faux adc, CI) : ordre facade, routage Poisson polaire, fenetres de fit verbatim, point fixe frozen-eq |
+| `campaign_polar.sbatch` | campagne ROMEO modele complet POLAIRE l=3,4,5 (armgpu GH200, mono-rang) |
 | `results.py` | emetteur d'enregistrements de mesure pur Python ; `PENDING` pour tout non mesure ; self-test CI |
 | `make_figures.py` | 2 figures honnetes (`gap_to_paper.png`, `oracle_residual.png`) + `figures/provenance.json` |
 | `figures/*.png`, `figures/provenance.json` | assets versionnes : l'ecart au papier et le residu de l'oracle |
 | `NORMALIZATION.md`, `diag/diag_polar_omega.py` | etude du facteur $2\pi/\bar\rho$ du modele REDUIT ExB scalaire (AUTRE modele, hors manifeste) |
 | `../diocotron/` | limite de derive ExB reduite (oracle de dispersion + sous-estimation $-22$ a $-27\%$) |
 | `../euler_poisson/` | Euler-Poisson electrostatique NON magnetise (pas de Lorentz) |
+
+## Chemin POLAIRE (`run_polar.py`) : modele complet sur l'anneau resolu
+
+`run_polar.py` porte le **modele COMPLET** (Euler-Poisson isotherme magnetise + etage Schur
+condense) sur une **grille polaire annulaire** au lieu du carre cartesien. La direction radiale
+devient un **axe de grille** : les bords de l'anneau sont resolus, ce qui leve le verrou des bords
+d'anneau cartesiens (le chemin cartesien plafonne a $-82/-95\%$ INDEPENDAMMENT de la resolution,
+cf. `adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md`). Le diagnostic reduit ExB scalaire
+(`diag/diag_polar_omega.py`) recupere deja $l=4$ EXACT sur cette geometrie.
+
+Pile : `adc.System(mesh=adc.PolarMesh(...))` (anneau global), `IsothermalFluxPolar` (#209),
+WENO5-Z + Rusanov + SSPRK3, `adc.CondensedSchur` -> `PolarCondensedSchurSourceStepper` (#215),
+Poisson polaire direct (FFT-theta + Thomas-r, Dirichlet $\phi=0$ aux parois radiales). **MONO-RANG**
+(boite unique couvrant l'anneau). Observable : $\phi$ sur le cercle $r=r_0$ = colonne native
+`phi[:, i_r0]`, FFT-theta, fenetres de fit VERBATIM du papier, pente BRUTE -> `growth_rates.csv`
+(engine `full-polar-schur`, jamais melange aux nombres reduits porteurs du facteur $2\pi$).
+
+**Option (c) frozen-equilibrium** (`--frozen-equilibrium`, defaut ON ; `--perturbation` regle
+$\delta$). On precalcule UNE FOIS le residu d'equilibre GELE $R_{eq}=\mathrm{step}(U_{eq})-U_{eq}$ sur
+l'anneau axisymetrique, puis on avance la carte corrigee $U \leftarrow \mathrm{step}(U)-R_{eq}$ :
+$(\mathrm{step}-R_{eq})(U_{eq})=U_{eq}$ devient un POINT FIXE DISCRET EXACT. Auto-test
+`--check-equilibrium` (sous frozen) : stationarite a la PRECISION MACHINE de $U_{eq}$.
+
+```bash
+# Smoke build-free (CI) : assertions reelles sur le contrat d'assemblage, aucun build.
+python hoffart_euler_poisson_dsl/test_polar_assembly.py
+
+# Run polaire complet (LONG, hors CI) : module adc construit avec le chemin polaire.
+PYTHONPATH=/chemin/vers/adc_cpp/build/python \
+  python hoffart_euler_poisson_dsl/run_polar.py --modes 3 4 5 --nr 256 --ntheta 256 --t-end 2 \
+  --frozen-equilibrium --dt 1e-3
+
+python hoffart_euler_poisson_dsl/run_polar.py --quick   # nr=ntheta=16, t_end=0.004, mode 3
+```
+
+ROMEO : `campaign_polar.sbatch` (armgpu, compte r250127, 1 GPU GH200, mono-rang).
+
+**VERDICT (cf. `adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md`, 4 campagnes GH200).** Le
+well-balancing AXISYMETRIQUE est RESOLU (frozen-eq : $U_{eq}$ point fixe discret exact, $\delta=0$
+-> $4.15\times10^{-20}$). MAIS le chemin PERTURBE diverge a $t\sim0.01$, AVANT toute fenetre de fit.
+Diagnostic (delta/dt/N sweeps) : instabilite de l'OPERATEUR SPATIAL semi-discret a la raideur
+papier (delta-independant ; aggravation $\sim1/N^2$ a nombre d'onde physique fixe), cause racine la
+plus probable = reconstruction NON POSITIVE au bord d'anneau a contraste $10^6$ (et/ou source de
+Lorentz raide). AUCUNE reproduction du modele complet revendiquee ; le redesign spatial (positivite
++ WB/upwinding de source) est le prochain pas. Le reduit ExB reste la voie de reproduction credible.

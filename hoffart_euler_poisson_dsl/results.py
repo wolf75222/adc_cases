@@ -51,6 +51,12 @@ PAPER_FIT_WINDOWS_VERBATIM = {3: (0.40, 0.70), 4: (0.60, 0.75), 5: (1.15, 1.35)}
 ENGINE_LABELS = {
     "system-schur": "full-system-schur",
     "amr-imex": "amr-imex-experimental",
+    # Modele COMPLET (Euler-Poisson isotherme magnetise + etage Schur condense) porte
+    # sur la GRILLE POLAIRE (anneau resolu : la direction radiale est un axe de grille,
+    # ce qui leve le verrou des bords d'anneau cartesiens). Comme le chemin cartesien,
+    # la pente reportee est BRUTE (aucun facteur 2 pi / rhobar : ce facteur n'appartient
+    # qu'au chemin reduit ExB scalaire diag/diag_polar_omega.py, engine='reduced-ExB').
+    "polar-schur": "full-polar-schur",
 }
 
 # Le facteur 2 pi / rhobar n'appartient QU'au chemin reduit. Conserve ici comme
@@ -262,6 +268,7 @@ def _selftest():
     #    le label reduit pour le chemin complet.
     assert engine_label("system-schur") == "full-system-schur"
     assert engine_label("amr-imex") == "amr-imex-experimental"
+    assert engine_label("polar-schur") == "full-polar-schur"  # chemin polaire (run_polar.py)
     assert REDUCED_EXB_LABEL not in ENGINE_LABELS.values()
     try:
         engine_label("reduced-ExB")
