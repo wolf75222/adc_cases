@@ -1,0 +1,59 @@
+{
+  "adc_cases_sha": "abd4791",
+  "adc_cpp_sha": "dec3f18",
+  "case": "hoffart_euler_poisson_dsl",
+  "category": "reproduction-candidate",
+  "figures": {
+    "gap_to_paper.png": {
+      "engine": "full-system-schur (cart-square baseline)",
+      "measured": {
+        "256": {
+          "3": 0.0372,
+          "4": 0.0489,
+          "5": 0.1211
+        },
+        "384": {
+          "3": 0.0385,
+          "4": 0.0613,
+          "5": 0.1257
+        }
+      },
+      "normalization": "raw (no 2pi, no rhobar)",
+      "paper_targets": {
+        "3": 0.772,
+        "4": 0.911,
+        "5": 0.683
+      },
+      "reading": "reproduction NOT shown: measured raw slopes are -82 to -95% off the paper targets; error does not improve from n=256 to n=384 (not a resolution problem)",
+      "relative_error_percent": {
+        "256": {
+          "3": -95.2,
+          "4": -94.6,
+          "5": -82.3
+        },
+        "384": {
+          "3": -95.0,
+          "4": -93.3,
+          "5": -81.6
+        }
+      },
+      "source_of_numbers": "VERBATIM from README validation table / adc_cpp/docs/HOFFART_FIDELITY.md (documented out-of-CI runs); NOT recomputed by this script",
+      "what": "raw full-system-schur growth rate vs paper target, per mode, n=256 and n=384"
+    },
+    "oracle_residual.png": {
+      "engine": "analytic oracle (check_model.py), beta=3 theta=0.25",
+      "machine_eps": 2.220446049250313e-16,
+      "reading": "PROVED: the compiled symbolic model equals the analytic formulas BIT-EXACTLY (all four residuals are exactly 0.0, below machine eps)",
+      "residual_max": {
+        "flux_x": 0.0,
+        "flux_y": 0.0,
+        "poisson_rhs": 0.0,
+        "source": 0.0
+      },
+      "what": "max residual |compiled DSL - analytic formula| on 2x2 cells for flux_x, flux_y, Lorentz/electric source, Poisson rhs"
+    }
+  },
+  "paper": "https://arxiv.org/abs/2510.11808",
+  "python": "3.12 (anaconda3, macOS arm64)",
+  "reproduction_status": "PENDING (quantitative paper reproduction NOT established)"
+}
