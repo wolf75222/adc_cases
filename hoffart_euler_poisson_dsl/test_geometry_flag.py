@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Smoke test for the --geometry {square,staircase} plumbing of the hoffart case.
+"""Smoke test for the --geometry {square,staircase,cutcell} plumbing of the hoffart case.
 
 This test does NOT need the heavy Kokkos/AMReX `adc` extension: it installs a tiny
 fake `adc` module that records every method call on the fake `System`, then drives
-`build_uniform` for both geometries. The assertions are real:
+`build_uniform` for all three geometries. The assertions are real:
 
   - 'square' (default) NEVER calls set_disc_domain    -> bit-identical historical path
-  - 'staircase' calls set_disc_domain(L/2, L/2, R)    -> T2 disc mask (#216) enabled
+  - 'staircase' calls set_disc_domain(L/2, L/2, R, mode='staircase')  -> T2 disc mask
+  - 'cutcell'  calls set_disc_domain(L/2, L/2, R, mode='cutcell')     -> EB cut-cell mask
   - an unknown geometry raises ValueError
   - the argparse layer rejects --geometry staircase with --engine amr-imex
 
@@ -38,8 +39,8 @@ def _install_fake_adc():
         def set_poisson(self, *a, **k):
             self._record("set_poisson", *a, **k)
 
-        def set_disc_domain(self, cx, cy, R):
-            self._record("set_disc_domain", cx, cy, R)
+        def set_disc_domain(self, cx, cy, R, mode="staircase"):
+            self._record("set_disc_domain", cx, cy, R, mode=mode)
 
         def set_magnetic_field(self, *a, **k):
             self._record("set_magnetic_field", *a, **k)
@@ -61,6 +62,7 @@ def _install_fake_adc():
     # Recipe stand-ins: only need to be callable and return a marker.
     adc.FiniteVolume = lambda **k: ("FiniteVolume", k)
     adc.Split = lambda **k: ("Split", k)
+    adc.Strang = lambda **k: ("Strang", k)
     adc.Explicit = lambda **k: ("Explicit", k)
     adc.CondensedSchur = lambda **k: ("CondensedSchur", k)
     # model.py does `from adc import dsl` at import time. We only build a model when
@@ -109,7 +111,7 @@ def test_staircase_calls_set_disc_domain_with_center_and_radius():
     assert len(disc_calls) == 1, "staircase must call set_disc_domain exactly once: %r" % (
         [c[0] for c in sim.calls],
     )
-    _, args, _ = disc_calls[0]
+    _, args, kw = disc_calls[0]
     cx, cy, R = args
     assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (0.5 * params.length, cx)
     assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (0.5 * params.length, cy)
@@ -117,6 +119,25 @@ def test_staircase_calls_set_disc_domain_with_center_and_radius():
     # The disc center must coincide with the circular Poisson wall center and the
     # disc radius with the wall radius, so the FV mask and the elliptic wall agree.
     assert R == params.radius
+    assert kw.get("mode") == "staircase", "mode must be 'staircase', got %r" % kw.get("mode")
+
+
+def test_cutcell_calls_set_disc_domain_with_mode_cutcell():
+    _install_fake_adc()
+    run = _import_run()
+    params = _params()
+    rho = np.full((16, 16), params.rho_min)
+    sim = run.build_uniform(object(), rho, params, geometry="cutcell")
+    disc_calls = [c for c in sim.calls if c[0] == "set_disc_domain"]
+    assert len(disc_calls) == 1, "cutcell must call set_disc_domain exactly once: %r" % (
+        [c[0] for c in sim.calls],
+    )
+    _, args, kw = disc_calls[0]
+    cx, cy, R = args
+    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (0.5 * params.length, cx)
+    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (0.5 * params.length, cy)
+    assert R == params.radius, "R must equal params.radius (%g), got %g" % (params.radius, R)
+    assert kw.get("mode") == "cutcell", "mode must be 'cutcell', got %r" % kw.get("mode")
 
 
 def test_unknown_geometry_raises():

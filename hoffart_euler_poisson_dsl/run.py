@@ -141,18 +141,15 @@ def build_uniform(compiled, rho, params, geometry="square"):
         wall="circle",
         wall_radius=params.radius,
     )
-    # GEOMETRIE DU TRANSPORT FV (chantier disc-discriminator). Par defaut 'square' :
-    # le transport tourne sur le carre cartesien complet (cote L = 2R), comportement
-    # historique BIT-IDENTIQUE (aucun appel a set_disc_domain). 'staircase' appelle
-    # set_disc_domain(L/2, L/2, R) pour materialiser le masque de domaine disque en
-    # escalier (contrat T2 #216, masque 0/1 cellule-centre reutilisant le level set du
-    # mur conducteur). Le centre du disque est le centre du carre (L/2, L/2) et son
-    # rayon est params.radius (= R), pour coincider exactement avec le mur Poisson
-    # circulaire deja pose ci-dessus. ATTENTION (cf. followupNeeded du chantier) :
-    # set_disc_domain construit le masque mais ne le BRANCHE PAS encore dans step() ;
-    # le routage du transport FV via assemble_rhs_masked reste un changement adc_cpp a
-    # cabler cote moteur. Cet appel pose donc le contrat geometrie cote cas ; le
-    # discriminant complet n'est actif qu'une fois ce routage moteur en place.
+    # GEOMETRIE DU TRANSPORT FV.
+    # 'square' (defaut) : transport sur le carre cartesien complet (cote L = 2R),
+    # comportement historique BIT-IDENTIQUE, aucun appel a set_disc_domain.
+    # 'staircase'/'cutcell' : set_disc_domain(L/2, L/2, R, mode=...) materialise le
+    # masque disque (meme level set que le mur Poisson circulaire) ET est branche dans
+    # System::step depuis adc_cpp #224 -- le transport FV est confine au disque.
+    # NB : experience geometrie (verdict adc_cpp "cut-cell sans effet, deficit
+    # structurel") -- cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
+    # le deficit vient du schema temporel, pas de la geometrie.
     if geometry in ("staircase", "cutcell"):
         sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
     elif geometry != "square":
@@ -167,11 +164,12 @@ def build_uniform(compiled, rho, params, geometry="square"):
             riemann="rusanov",
             variables="conservative",
         ),
-        time=adc.Split(
-            # NOTE: ssprk2 (kind='explicit') car le chemin natif add_native_block
-            # n'accepte que 'explicit'|'imex' (pas 'ssprk3'). Suffisant pour le
-            # discriminant geometrie (la geometrie domine ; ssprk2 vs ssprk3 = O(dt)).
-            hyperbolic=adc.Explicit(method="ssprk2"),
+        time=adc.Strang(
+            # Strang donne le splitting symetrique d'ordre 2 du papier :
+            # H(dt/2) ; S(dt) ; H(dt/2). ssprk3 est le schema RK faible
+            # dissipation du papier et tourne sur le chemin production via
+            # adc_cpp feat/ssprk3-aot-gauss-policy.
+            hyperbolic=adc.Explicit(method="ssprk3"),
             source=adc.CondensedSchur(theta=0.5, alpha=params.alpha),
         ),
     )
@@ -452,7 +450,9 @@ def write_summary(results, out, params, args):
     # (full-system-schur vs amr-imex-experimental) pour que la pente BRUTE du
     # modele complet ne soit jamais melangee aux nombres reduits porteurs du 2 pi
     # (ceux-la vivent dans diag/diag_polar_omega.py, engine='reduced-ExB').
-    splitting = "Lie"  # les deux chemins sont en Lie (Godunov), pas Strang ; cf. docs
+    splitting = "Strang" if args.engine == "system-schur" else "Lie"
+    # system-schur : Strang H(dt/2);S(dt);H(dt/2) via adc.Strang + ssprk3.
+    # amr-imex    : Lie/Godunov (CondensedSchur absent sur AmrSystem).
     if args.engine == "system-schur":
         schur_theta = 0.5
         backend = "kokkos-serial" if mpi_size() == 1 else "mpi-%d" % mpi_size()
@@ -487,10 +487,10 @@ def write_summary(results, out, params, args):
         "engine_label": engine_label(args.engine),
         "geometry": args.geometry,
         "geometry_note": (
-            "square: full Cartesian square transport (historical default, "
-            "bit-identical). staircase: set_disc_domain(L/2, L/2, R) builds the T2 "
-            "disc mask (#216); the engine-side routing of FV transport through "
-            "assemble_rhs_masked is a separate adc_cpp change (see followup)."
+            "square: full Cartesian square transport (historical default, bit-identical). "
+            "staircase/cutcell: set_disc_domain(L/2, L/2, R, mode=...) materialises the "
+            "disc mask AND is routed into System::step transport (adc_cpp #224). "
+            "Cut-cell has no measurable effect on the diocotron growth rate (structural deficit)."
         ),
         "normalization": "raw (no 2pi, no rhobar): full-model slope vs paper directly; "
                          "the 2pi/rhobar factor belongs ONLY to the reduced ExB-scalar "
@@ -500,7 +500,7 @@ def write_summary(results, out, params, args):
         "parameters": params.to_dict(),
         "numerics": {
             "finite_volume": "WENO5-Z + Rusanov",
-            "time": "SSPRK3 + CondensedSchur(theta=0.5)" if args.engine == "system-schur"
+            "time": "Strang(SSPRK3 + CondensedSchur(theta=0.5))" if args.engine == "system-schur"
                     else "AMR transport + cell-local backward-Euler source",
             "dt": args.dt,
             "n": args.n,
@@ -514,7 +514,14 @@ def write_summary(results, out, params, args):
             "quantitative_comparison_enabled": args.engine == "system-schur",
             "quantitative_paper_claim": False,
             "known_differences": (
-                ["finite-volume spatial discretisation", "Lie rather than Strang splitting"]
+                [
+                    "finite-volume spatial discretisation",
+                    # Gauss re-imposee (solve_fields) en tete de chaque macro-pas et entre les
+                    # etages Strang, au lieu de l'evolution sans restart de -Delta phi du papier
+                    # (section 5.3). Leve par GaussPolicy.InitialOnly (chantier A5, non encore cable).
+                    "Poisson re-solved each macro-step (Gauss reimposed) rather than the paper "
+                    "restart-free -Delta-phi evolution",
+                ]
                 if args.engine == "system-schur"
                 else [
                     "finite-volume AMR spatial discretisation",
@@ -562,9 +569,10 @@ def parse_args():
         choices=("square", "staircase", "cutcell"),
         default="square",
         help="FV transport sub-domain (system-schur only). 'square' (default) keeps the "
-             "historical full-square Cartesian transport, bit-identical. 'staircase' calls "
-             "set_disc_domain(L/2, L/2, R) to confine the transport to the staircase disc "
-             "mask (T2 contract #216); see followup on the engine-side routing.",
+             "historical full-square Cartesian transport, bit-identical. 'staircase'/'cutcell' "
+             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
+             "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
+             "effect on the growth rate (structural deficit, not geometry).",
     )
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
     parser.add_argument("--n", type=int, default=192)
