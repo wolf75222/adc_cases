@@ -1,0 +1,156 @@
+{
+  "script": "two_fluid_ap/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "ap_vs_explicit.png",
+    "final_state.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "scenario C++ sur mesure (two_fluid_ap.hpp), compile JIT via ctypes, TwoFluidAP2D<GeometricMG>, CPU serie",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "resolution": "64x64",
+  "dt": 0.005,
+  "nsteps": 200,
+  "omega_pi_over_omega_pe": 0.02,
+  "python": "3.12.2",
+  "platform": "macOS-26.5-arm64-arm-64bit",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "stiffness_sweep": [
+    {
+      "s": 0.05,
+      "omega_pe": 10.0,
+      "ap_finite": true,
+      "ap_dev": 0.0005906110722868618,
+      "ap_chg": 0.0005912321890605421,
+      "exp_finite": true,
+      "exp_dev": 0.0005846203830830454,
+      "exp_chg": 0.0005852391647513944
+    },
+    {
+      "s": 0.1,
+      "omega_pe": 20.0,
+      "ap_finite": true,
+      "ap_dev": 0.00015674856084824107,
+      "ap_chg": 0.00015644389194569008,
+      "exp_finite": true,
+      "exp_dev": 0.00012335381831740655,
+      "exp_chg": 0.00012298671574606512
+    },
+    {
+      "s": 0.2,
+      "omega_pe": 40.0,
+      "ap_finite": true,
+      "ap_dev": 3.2923816173369147e-06,
+      "ap_chg": 3.638574003317352e-06,
+      "exp_finite": true,
+      "exp_dev": 1.3158825499459681e-05,
+      "exp_chg": 1.3508552394458917e-05
+    },
+    {
+      "s": 0.5,
+      "omega_pe": 100.0,
+      "ap_finite": true,
+      "ap_dev": 4.806651578981302e-07,
+      "ap_chg": 2.8729041368080743e-10,
+      "exp_finite": true,
+      "exp_dev": 4.819319727733529e-07,
+      "exp_chg": 2.4491542127691446e-10
+    },
+    {
+      "s": 0.8,
+      "omega_pe": 160.0,
+      "ap_finite": true,
+      "ap_dev": 4.858201552160324e-07,
+      "ap_chg": 1.803879268180708e-10,
+      "exp_finite": true,
+      "exp_dev": 4.966730273725517e-07,
+      "exp_chg": 1.1322831561244584e-10
+    },
+    {
+      "s": 1.0,
+      "omega_pe": 200.0,
+      "ap_finite": true,
+      "ap_dev": 4.897500343048478e-07,
+      "ap_chg": 1.466695653817851e-10,
+      "exp_finite": true,
+      "exp_dev": 5.415607404746225e-07,
+      "exp_chg": 6.39690522774572e-11
+    },
+    {
+      "s": 1.2,
+      "omega_pe": 240.0,
+      "ap_finite": true,
+      "ap_dev": 4.938835533874197e-07,
+      "ap_chg": 1.2423617690160427e-10,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 1.5,
+      "omega_pe": 300.0,
+      "ap_finite": true,
+      "ap_dev": 5.000319565073852e-07,
+      "ap_chg": 1.0316814069710745e-10,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 2.0,
+      "omega_pe": 400.0,
+      "ap_finite": true,
+      "ap_dev": 5.090573449439972e-07,
+      "ap_chg": 8.586398259069483e-11,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 5.0,
+      "omega_pe": 1000.0,
+      "ap_finite": true,
+      "ap_dev": 5.325450540549781e-07,
+      "ap_chg": 6.697598031735197e-11,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 10.0,
+      "omega_pe": 2000.0,
+      "ap_finite": true,
+      "ap_dev": 5.389710282521776e-07,
+      "ap_chg": 6.47195630421038e-11,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 25.0,
+      "omega_pe": 5000.0,
+      "ap_finite": true,
+      "ap_dev": 5.410459624766162e-07,
+      "ap_chg": 6.411204900302891e-11,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    },
+    {
+      "s": 50.0,
+      "omega_pe": 10000.0,
+      "ap_finite": true,
+      "ap_dev": 5.413538335385937e-07,
+      "ap_chg": 6.402633978552785e-11,
+      "exp_finite": false,
+      "exp_dev": null,
+      "exp_chg": null
+    }
+  ],
+  "explicit_stability_bound_s": 1.0,
+  "explicit_first_nan_at_s": 1.2,
+  "ap_dev_plateau": 5.413538335385937e-07,
+  "base_run_s5_ap_dev": 5.325450540549781e-07,
+  "base_run_s5_ap_chg": 6.697598031735197e-11
+}

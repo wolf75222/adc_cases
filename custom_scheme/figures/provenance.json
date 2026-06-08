@@ -1,0 +1,26 @@
+{
+  "script": "custom_scheme/make_figures.py",
+  "command": "python custom_scheme/make_figures.py",
+  "produces": [
+    "density_evolution.png",
+    "phi_evolution.png",
+    "diagnostics.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "natif serie (adc.System : un bloc models.diocotron, Poisson geometric_mg)",
+  "role_adc": "oracle de Poisson UNIQUEMENT (set_density + solve_fields + potential)",
+  "resolution": "96x96",
+  "mode_band": 4,
+  "nsteps": 200,
+  "cfl": 0.4,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "mass_drift_final": 2.0396837806667025e-16,
+  "phi_max_initial": 0.006124932342798932,
+  "phi_max_final": 0.006009746388422332,
+  "speed_max_initial": 0.038135975547971886,
+  "speed_max_final": 0.035407130437677216,
+  "dn_max_final": 0.327989892948622,
+  "t_final": 23.02757012409223
+}

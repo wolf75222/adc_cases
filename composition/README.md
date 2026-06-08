@@ -1,324 +1,271 @@
-# composition : composer un systeme multi-blocs heterogene bloc par bloc
+# composition : composer un systeme multi-blocs heterogene, un bloc d'equation a la fois
 
-Cas **tutoriel** (`category = "tutoriel"`, `ci = true`, `needs = []` dans
-[`cases_manifest.toml`](../cases_manifest.toml)). Il **demontre une CAPACITE de l'API**, il
-ne reproduit AUCUN resultat publie et ne porte AUCUN claim physique : les CI sont des
-profils simples (cosinus), les temps d'integration sont courts, et le seul but est de
-montrer que l'on peut assembler un systeme **un bloc d'equation a la fois**, choisir un
-**schema numerique different par bloc**, et meme **ecrire son propre integrateur temporel en
-Python**. Aucune figure, aucun GIF, aucun fichier de sortie : tout est imprime (`print`) et
-verifie par `assert`.
+Tutoriel de l'API de composition de `adc` : depuis Python on assemble un systeme multi-especes
+**un bloc a la fois**, en choisissant pour CHAQUE bloc, independamment, son modele physique, sa
+reconstruction spatiale, son flux de Riemann, son traitement temporel et son nombre de sous-pas. Le
+script demontre quatre capacites : (A) composition heterogene de deux fluides au schema different ;
+(B) determinisme bit a bit de la composition de briques ; (C) rejet des combinaisons invalides ;
+(D) un integrateur temporel SSPRK2 **ecrit en Python** par-dessus les primitives de la lib. Ce cas
+**demontre une capacite d'API, il ne valide aucun resultat physique publie**.
 
-Le script vit dans [`run.py`](run.py). Il s'appuie sur les **modeles d'espece** de
-[`adc_cases/models.py`](../adc_cases/models.py) (compositions de briques) et la grille de
-[`adc_cases/common/grid.py`](../adc_cases/common/grid.py).
+## Contrat
+
+| Champ | Contenu |
+|---|---|
+| Categorie (manifeste) | `tutoriel` (`cases_manifest.toml`, `composition/run.py`, `ci = true`, `needs = []`) |
+| Entrees | A : grille $48^2$, $L=1$, **periodique** ; electrons $\rho=1+0.02\cos(2\pi x/L)$ (Euler $\gamma=1.4$, $q=-1$), ions $\rho=1$ (isotherme $c_s^2=0.5$, $q=+1$) ; $dt=0.001$, 8 pas. B/D : grille $32^2$ periodique, diocotron ($B_0=1$, $\alpha=1$, fond $n_{i0}=\overline{\rho}$) ; B : $dt=0.002$, 12 pas ; D : $dt=0.001$, 20 pas Python |
+| Sorties | diagnostics imprimes (aucun fichier produit par `run.py`) ; les figures sont generees a part par `make_figures.py` dans `figures/` + `figures/provenance.json` |
+| Invariants garantis | les `assert` de `run.py` : A masse electrons/ions $<$ `MASS_TOL=1e-10` ET $\|\phi\|_\infty>10^{-8}$ ET evolution electrons $>10^{-9}$ (`run.py:124-137`) ; B ecart deux compositions $==0$ exactement (`run.py:166`) ; C les 3 combinaisons invalides levent ET `n_species()==0` (`run.py:185-209`) ; D masse $<10^{-9}$ ET etat fini (`run.py:243-244`) |
+| PROUVE | (A) deux fluides au schema **different** coexistent dans un meme `adc.System`, chacun conserve sa masse ($2.7\times10^{-12}$ electrons, $1.8\times10^{-12}$ ions), le Poisson couple est actif ($\|\phi\|_\infty=5.06\times10^{-4}$), les electrons evoluent ($3.5\times10^{-5}$) ; (B) un MEME modele compose deux fois donne un etat **identique au bit** (ecart $=0$, `np.array_equal` vrai) ; (C) HLLC sur transport scalaire, source fluide sur scalaire, et modele incoherent sont **rejetes a la composition/a l'ajout**, sans bloc ajoute ; (D) un integrateur SSPRK2 ecrit en Python conserve la masse ($2.3\times10^{-13}$) et reste fini |
+| NE PROUVE PAS | **demontre une capacite d'API, ne valide aucun resultat physique publie**. Aucun nombre n'est confronte a un article ; les CI sont des cosinus simples, les horizons sont courts (8/12/20 pas), aucune dynamique physique n'est interpretee. Le determinisme bit (B, D) est une propriete d'**implementation** (memes briques C++ figees, memes operations flottantes dans le meme ordre), PAS une garantie cross-plateforme : il peut casser entre BLAS, ordre de sommation ou architecture. La conservation de masse mesuree n'est pas une validation de schema : c'est le minimum attendu d'un volumes-finis conservatif |
+| Provenance | adc_cpp `01873299`, adc_cases (deeptut) `a9541ba4`, backend natif serie, $48^2$ (A) / $32^2$ (B,D), ~1 s 1 coeur CPU ; `figures/provenance.json` |
+
+A la fin tu sauras : comment `adc.System` compose un systeme bloc par bloc, ce que signifie "chaque
+bloc fige son schema a l'ajout" (table 3 couches), pourquoi la composition est deterministe au bit,
+ce que les garde-fous attrapent, et comment ecrire son propre integrateur temporel en Python sans
+sortir le calcul par cellule du C++.
 
 ---
 
-## 1. Objectif du cas
+## 1. Le niveau d'abstraction demontre (justifie PROUVE : composition heterogene)
 
-Montrer le niveau d'abstraction vise par l'API `adc` : **Python compose, le C++ calcule**.
-Le script enchaine quatre demonstrations independantes (`partie_A` a `partie_D`) :
+Le mot d'ordre est **Python compose, le C++ calcule**. La config du systeme ne porte que le
+**maillage** ; toute la physique est portee par les **blocs** :
 
-- **(A) Composition heterogene** : deux especes coexistent dans un meme `adc.System`, chacune
-  avec son modele physique, sa reconstruction spatiale, son flux de Riemann, son traitement
-  temporel et son nombre de sous-pas. Electrons (Euler compressible, VanLeer + HLLC, IMEX,
-  10 sous-pas) et ions (Euler isotherme, Minmod + Rusanov, explicite, 1 sous-pas). On verifie
-  que chaque espece conserve sa masse, que le Poisson couple est actif (potentiel non nul),
-  et que les electrons evoluent.
-- **(B) Determinisme bit a bit** : un MEME modele diocotron, recompose deux fois a partir des
-  memes briques avec la meme CI, donne deux densites **identiques au bit pres** (ecart
-  exactement 0.0). La composition de briques est reproductible.
-- **(C) Garde-fous** : trois combinaisons invalides (flux HLLC sur un transport scalaire ;
-  source fluide sur un transport scalaire ; etat scalaire avec flux compressible) doivent
-  lever une **erreur claire**, et non planter ou s'executer en silence.
-- **(D) Integrateur temporel ecrit en Python** : on avance un bloc diocotron avec un SSPRK2
-  ecrit en Python (`adc.integrate.ssprk2_step`), sans appeler `sim.advance(...)`. Le schema en
-  temps est en Python (par pas), le residu `-div F + S` et le Poisson restent en C++ (par
-  cellule).
-
-Le script imprime `OK composition_api` en cas de succes. Ce label est purement diagnostique.
-
-## 2. Equations
-
-Le cas n'introduit pas de nouvelle physique : il **reutilise** les briques generiques d'`adc`,
-exposees par trois modeles nommes (cf. [`adc_cases/models.py`](../adc_cases/models.py)). Sur
-le domaine periodique `[0, L]^2` :
-
-**Electrons (Euler compressible)** -- `models.electron_euler(charge=-1.0, gamma=1.4)` :
-etat conservatif `U_e = (rho, rho u, rho v, E)`,
-
+```python
+sim = adc.System(n=48, L=1.0, periodic=True)            # config = MAILLAGE seul (run.py:94)
+sim.add_block("electrons", model=models.electron_euler(),
+              spatial=adc.Spatial(vanleer=True, flux="hllc"),
+              time=adc.IMEX(substeps=10))                # run.py:100-102
+sim.add_block("ions", model=models.ion_isothermal(),
+              spatial=adc.Spatial(minmod=True, flux="rusanov"),
+              time=adc.Explicit())                       # run.py:104-106
 ```
-d_t rho       + div(rho v)                 = 0
-d_t (rho v)   + div(rho v⊗v + p I)         = (q/m) rho E
-d_t E         + div((E + p) v)             = (q/m) rho v · E
-p = (gamma - 1) (E - 1/2 rho |v|^2),   q = -1
+- `adc.System(n, L, periodic)` (`run.py:94`) ne porte AUCUN parametre physique ($\gamma$, $c_s^2$,
+  $B_0$, charge) : seulement le maillage. La physique migre dans les blocs.
+- `models.electron_euler()` et `models.ion_isothermal()` (`models.py:28-45`) sont des
+  **compositions de briques** generiques (section 3), pas des chaines magiques. Le mot "electron"
+  vit dans `adc_cases`, jamais cote coeur.
+- chaque `add_block` choisit **independamment** la reconstruction (`adc.Spatial`), le flux
+  (`"hllc"` vs `"rusanov"`) et le traitement temporel (`adc.IMEX(substeps=10)` vs `adc.Explicit()`).
+  Les deux blocs ne partagent QUE le maillage et le Poisson de systeme.
+
+Le choix "un schema par bloc" est physiquement motive ici : les electrons (legers, raides) sont
+sous-cycles 10 fois par macro-pas et leur force electrostatique est traitee en implicite (IMEX) ;
+les ions (lents) avancent en explicite simple. C'est une **capacite** (multirate + IMEX par bloc),
+pas une affirmation de validite physique.
+
+---
+
+## 2. Les modeles = compositions de briques (justifie : la physique est figee en C++)
+
+Chaque modele d'espece est un `adc.Model(state, transport, source, elliptic)`. Les trois modeles
+employes, et la brique exacte de chaque slot :
+
+| Modele (`models.py`) | state | transport | source | elliptic |
+|---|---|---|---|---|
+| `electron_euler()` (l.28) | `FluidState(compressible, gamma=1.4)` | `CompressibleFlux` | `PotentialForce(charge=-1)` | `ChargeDensity(charge=-1)` |
+| `ion_isothermal()` (l.38) | `FluidState(isothermal, cs2=0.5)` | `IsothermalFlux` | `PotentialForce(charge=+1)` | `ChargeDensity(charge=+1)` |
+| `diocotron()` (l.18) | `Scalar` | `ExB(B0=1)` | `NoSource` | `BackgroundDensity(alpha=1, n0=n_i0)` |
+
+Chaque brique est une physique **ponctuelle, device-callable**, definie une fois cote coeur :
+
+- `CompressibleFlux` = `Euler` (`hyperbolic.hpp:118`) : flux Euler 4 variables $(\rho,\rho u,\rho v,E)$.
+- `IsothermalFlux` (`hyperbolic.hpp:127`) : 3 variables, fermeture $p=c_s^2\rho$, onde $\sqrt{c_s^2}$.
+- `ExBVelocity` (`hyperbolic.hpp:27`) : 1 variable, derive $v=(-\partial_y\phi,\partial_x\phi)/B_0$.
+- `PotentialForce` (`source.hpp:33`) : $s[1]=q\rho E_x$, $s[2]=q\rho E_y$, travail $s[3]$ **seulement
+  si** `State::size()==4` (Euler). Sur un transport a 3 variables (isotherme) il n'y a pas de
+  composante energie ; sur un **scalaire** (1 variable) la force est sans objet (rejet, section 5).
+- `ChargeDensity` (`elliptic.hpp:19`) : second membre $f=q\,n$, signe de $q$ inclus.
+- `BackgroundDensity` (`elliptic.hpp:31`) : $f=\alpha(n-n_0)$, fond neutralisant pour Poisson periodique.
+
+Le second membre du Poisson de systeme est $\sum_s f_s = \sum_s q_s n_s$ (somme generique des
+briques elliptiques de chaque bloc). Avec electrons $q=-1$ perturbes et ions $q=+1$ uniformes
+($\overline{q n}\approx 0$), le Poisson periodique est solvable et $\phi\neq 0$.
+
+### La table 3 couches : qui calcule quoi, et OU le schema est fige
+
+| Ligne `run.py` | Couche | Ce qui se passe |
+|---|---|---|
+| `sim.add_block("electrons", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.IMEX(substeps=10))` (`run.py:100-102`) | Python **compose** | choix du modele (briques), du schema spatial (recon + flux), du traitement temporel (IMEX + 10 sous-pas) ; lecture de l'etat via `density`/`potential`/`get_state` |
+| `models.electron_euler()` -> briques `CompressibleFlux` / `PotentialForce` / `ChargeDensity` (`hyperbolic.hpp:118`, `source.hpp:33`, `elliptic.hpp:19`) | brique C++ **fige la physique** | la convention exacte du flux Euler, de la force $q\rho E$, du second membre $q n$ |
+| `System::add_block(... spatial.limiter, spatial.flux, spatial.recon, time.kind, time.substeps, time.stride ...)` (facade `__init__.py:831-833`) puis `assemble_rhs<Limiter,Flux>` + Newton local IMEX + Poisson de systeme | noyau **par cellule** (device) | le calcul reel, sans callback Python dans le hot path |
+
+Le point cle est la troisieme ligne : la facade `add_block` (`__init__.py:819-833`) passe
+`spatial.limiter`, `spatial.flux`, `spatial.recon`, `time.kind`, `time.substeps`, `time.stride` au
+`System::add_block` C++ **a l'instant de l'ajout**. Le schema (VanLeer+HLLC+IMEX+10) est alors
+**fige dans le bloc** sous forme d'une fermeture d'avancee compilee ; il n'est plus reconfigurable
+sans re-ajouter le bloc, et il est type-erased SEULEMENT au niveau de la liste de blocs. C'est ce
+qui rend (B) deterministe : memes briques + meme schema fige -> meme calcul C++.
+
+---
+
+## 3. La prediction falsifiable : determinisme bit a bit (B et D)
+
+Pour un tutoriel, la "prediction" testable n'est pas un nombre physique mais une propriete
+d'implementation **falsifiable** : recomposer le MEME modele avec la MEME CI, ou rejouer le MEME pas
+Python, donne un etat **identique au bit**. `run.py:166` l'affirme par `assert ecart == 0.0` (B) ; la
+figure `determinism.png` (section 6) le confronte sur les deux chemins (B compose C++, D pas Python).
+Une seule cellule non nulle dans l'ecart trahirait du non-determinisme : un etat global cache entre
+deux compositions, un parcours de cellules dependant de l'allocation, ou un ordre de reduction non
+reproductible dans le Poisson. L'egalite stricte ($==0$, pas $<\varepsilon$) est l'observable :
+elle ne tolere AUCUN bruit, contrairement aux tolerances de conservation (section 4).
+
+---
+
+## 4. Les tolerances, justifiees par un ordre de grandeur (justifie 8 de la checklist)
+
+| Tolerance | Valeur | Pourquoi cette valeur |
+|---|---|---|
+| `MASS_TOL` | $10^{-10}$ | Les flux (CompressibleFlux, IsothermalFlux, ExB a divergence nulle) sont **conservatifs** : la masse est un invariant exact, la seule derive est l'arithmetique flottante sur 8/12 pas. Mesure A : $2.7\times10^{-12}$ (electrons) / $1.8\times10^{-12}$ (ions), ~2 ordres sous la tolerance (`run.py:82`, `135-136`) |
+| ecart B | $==0$ **exactement** | PAS une tolerance : une egalite stricte. Deux compositions du meme modele avec les memes briques figees executent les memes operations flottantes dans le meme ordre, donc le resultat est bit-identique. Toute valeur $>0$ serait un bug de determinisme, pas du bruit acceptable (`run.py:166`) |
+| masse D | $10^{-9}$ | L'integrateur SSPRK2 Python combine des etats par $\frac12 U_0+\frac12(U_1+dt\,R)$ : combinaison **affine** d'etats conservatifs, donc conservative aux erreurs flottantes pres sur 20 pas. Mesure : $2.3\times10^{-13}$, ~4 ordres sous la tolerance (`run.py:243`) |
+| $\|\phi\|_\infty>10^{-8}$ (A) | borne BASSE | Garantit que le Poisson couple est **actif** (le bloc contribue vraiment au second membre). Mesure : $5.06\times10^{-4}$, ~4 ordres au-dessus : le couplage est franc, pas un residu numerique (`run.py:124`) |
+| evolution electrons $>10^{-9}$ (A) | borne BASSE | Garantit que le bloc electron **bouge** (la force et le transport agissent). Mesure : $3.5\times10^{-5}$, ~4 ordres au-dessus du seuil : la dynamique est non triviale (`run.py:137`) |
+
+---
+
+## 5. Les garde-fous : combinaisons invalides rejetees (justifie PROUVE : C)
+
+`partie_C` (`run.py:169-209`) verifie que trois compositions invalides levent une erreur claire au
+lieu de produire un calcul faux. `doit_lever(fn, why)` (`run.py:175-181`) execute `fn`, attend une
+exception (pybind traduit `std::runtime_error` en `RuntimeError`), et echoue si rien ne leve.
+
+1. **HLLC sur transport scalaire** (`run.py:185-188`). HLLC exige un transport compressible (4
+   variables + pression) ; le diocotron transporte un scalaire par ExB. Rejet **a l'ajout du bloc**.
+   Message reel : `System : flux 'hllc' exige un transport compressible (4 variables + pr...`.
+
+2. **Source fluide sur transport scalaire** (`run.py:194-200`). Un `adc.Model(Scalar, ExB,
+   PotentialForce, BackgroundDensity)` **se compose** (state Scalar et transport ExB sont coherents),
+   mais `PotentialForce` agit sur une quantite de mouvement fluide ($s[1], s[2]$) absente d'un
+   scalaire (1 variable). Rejet **a l'ajout du bloc**. Message reel : `source 'potential' invalide
+   ici (exige un transport fluide >= 3 variab...`.
+
+3. **Modele incoherent des la composition** (`run.py:204-207`). Un `adc.Model(Scalar,
+   CompressibleFlux, ...)` melange un etat scalaire (1 var) et un flux Euler (4 var) :
+   `adc.Model(...)` **leve directement**, avant tout ajout. Message reel : `Scalar exige
+   transport=ExB(...)`.
+
+L'assert final `sim.n_species() == 0` (`run.py:209`) garantit qu'**aucun bloc invalide n'a ete
+ajoute** : les rejets sont propres (pas d'etat partiellement mute). La difference entre 1/2 (rejet a
+l'ajout) et 3 (rejet a la composition) est le **moment** ou l'incoherence est detectee : un transport
+incompatible avec l'etat est attrape par `adc.Model`, une source/flux incompatible avec le transport
+choisi par `add_block`.
+
+---
+
+## 6. Partie D : un integrateur temporel ecrit en Python (justifie PROUVE : D)
+
+Au lieu d'appeler `sim.advance(...)` (boucle en temps compilee), `partie_D` (`run.py:212-244`) ecrit
+sa propre boucle avec `adc.integrate.ssprk2_step` (`integrate.py:27-44`), un SSPRK2 (Heun fort-stable)
+assemble **en Python** par-dessus quatre primitives exposees par `System` :
+
+```python
+sim.solve_fields()                                    # Poisson + aux = grad(phi)   (C++)
+U0 = {n: sim.get_state(n) for n in names}             # etat par bloc (ncomp,n,n)    (lecture)
+for n in names:                                       # etage 1 : U1 = U0 + dt R(U0)
+    sim.set_state(n, U0[n] + dt * sim.eval_rhs(n))    # eval_rhs = -div F + S         (C++ par cellule)
+sim.solve_fields()                                    # Poisson RE-RESOLU per-stage   (C++)
+for n in names:                                       # etage 2 : 1/2 U0 + 1/2 (U1 + dt R(U1))
+    U1 = sim.get_state(n)
+    sim.set_state(n, 0.5 * U0[n] + 0.5 * (U1 + dt * sim.eval_rhs(n)))
 ```
+- `eval_rhs(n)` calcule le residu $-\nabla\cdot F + S$ du bloc **par cellule en C++** : aucun callback
+  Python dans le hot path. Seul l'**assemblage des etages RK** (les combinaisons affines $U_0+dt\,R$
+  et $\frac12 U_0+\frac12(\dots)$) est en Python, par PAS.
+- `solve_fields()` re-resout Poisson **entre les deux etages** : couplage hyperbolique/elliptique
+  per-stage, plus precis que le couplage fige par pas de `advance`.
+- la boucle (`run.py:234-235`) appelle `ssprk2_step(sim, 0.001)` 20 fois. Mesure :
+  derive masse $2.3\times10^{-13}$, etat fini : l'integrateur Python conserve et reste stable.
 
-**Ions (Euler isotherme)** -- `models.ion_isothermal(charge=1.0, cs2=0.5)` :
-etat `U_i = (rho, rho u, rho v)`,
+C'est la capacite la plus forte du tutoriel : **le schema en temps lui-meme peut etre ecrit en
+Python** (par pas), le calcul du residu et le Poisson restant en C++ (par cellule). Et il reste
+**bit-deterministe** : deux executions de cette meme boucle Python donnent un etat identique au bit
+(section 6, figure D), car les primitives C++ et les combinaisons numpy sont elles-memes
+deterministes a operations et ordre constants.
 
-```
-d_t rho       + div(rho v)                 = 0
-d_t (rho v)   + div(rho v⊗v + cs2 rho I)   = (q/m) rho E,   q = +1
-```
+---
 
-**Diocotron (transport scalaire ExB)** -- `models.diocotron(B0, alpha, n_i0)` :
-etat scalaire `n`,
+## 7. Figures (generees par `make_figures.py`, dans `figures/`)
 
-```
-d_t n + div(v_E n) = 0,   v_E = (E × B) / B0^2 = (-d_y phi, d_x phi) / B0
-```
+Generees par `python make_figures.py` (memes parametres que `run.py`), versionnees avec
+`figures/provenance.json`. Commande exacte en section 9. `run.py` lui-meme ne produit AUCUN fichier
+(diagnostics imprimes) ; les figures sont un diagnostic d'API a part.
 
-**Couplage elliptique (Poisson)** -- le champ `E = -grad phi` est self-consistant. Le second
-membre est la SOMME des briques elliptiques portees par les blocs :
+### `density_maps.png` : les champs composes du systeme heterogene (Partie A)
 
-- electrons/ions portent `ChargeDensity(charge=q)` -> contribuent `q n` ;
-- diocotron porte `BackgroundDensity(alpha, n0=n_i0)` -> contribue `alpha (n - n_i0)` (fond
-  neutralisant qui rend le Poisson periodique solvable, charge nette nulle).
+![Cartes : densite electron CI et finale, densite ion finale, potentiel |phi| couple](figures/density_maps.png)
 
-```
-lap phi = f,   f = somme_blocs (contribution elliptique du bloc),   E = -grad phi
-```
+- **PROUVE** (asserte `run.py:124-137`) : le Poisson couple est actif ($\|\phi\|_\infty=5.06\times
+  10^{-4}$, panneau 4) et les electrons evoluent (la densite finale, $[0.980, 1.020]$, differe de la
+  CI ; ecart max $3.5\times10^{-5}$). Les deux blocs au schema **different** coexistent : le panneau
+  electron porte la perturbation Euler/HLLC/IMEX, le panneau ion porte la reponse isotherme.
+- **SUGGERE (non assere)** : la densite ion finale s'ecarte de l'uniforme par $\sim6\times10^{-7}$
+  (echelle `1e-6+1`) : le couplage Poisson pousse les ions, mais l'effet est minuscule sur 8 pas et
+  aucun assert ne le quantifie (l'assert ne teste que la conservation de masse ionique). La structure
+  reste 1D selon $x$ (la CI ne depend pas de $y$).
+- **NON MONTRE** : aucun resultat physique. Les profils sont des cosinus a horizon court (8 pas) ;
+  rien ici ne reproduit ni ne valide un regime publie. C'est un tutoriel : les cartes montrent que
+  la composition **produit des champs reels couples**, pas qu'ils sont physiquement significatifs.
 
-> Honnetete : ce sont des modeles JOUETS pour le tutoriel. La partie (A) n'est PAS un plasma
-> physique calibre ; la partie (B)/(D) n'est PAS une reproduction du benchmark diocotron
-> (arXiv:2510.11808) -- ce dernier vit dans [`../diocotron/`](../diocotron/) (categorie
-> `reproduction`) avec un anneau de charge et des figures. Ici, on ne mesure aucun taux de
-> croissance.
+### `determinism.png` : egalite bit, composition (B) ET pas Python (D)
 
-## 3. Modele physique
+![Deux heatmaps |a-b| identiquement noires (B compose, D pas Python) + histogramme du residu a zero](figures/determinism.png)
 
-Un modele d'espece est une **composition de quatre briques generiques** assemblees par
-`adc.Model(state, transport, source, elliptic)` (defini dans le module `adc` fourni par
-`adc_cpp`, fichier `python/adc/__init__.py`, fonction `Model`, qui valide la coherence
-etat <-> transport et renvoie une `ModelSpec`) :
+- **PROUVE** (asserte `run.py:166` pour B ; mesure pour D) : les deux heatmaps $|a-b|$ sont
+  **identiquement noires** (echelle $[0,10^{-15}]$). Panneau B : deux compositions independantes du
+  meme diocotron, ecart max $0.0$, `np.array_equal` vrai. Panneau D : deux executions de
+  l'integrateur SSPRK2 **ecrit en Python**, ecart max $0.0$, `np.array_equal` vrai. L'histogramme
+  concentre toutes les cellules ($32^2$ par chemin) **exactement** a $0$.
+- **SUGGERE** : que l'egalite reste vraie pour d'autres schemas/CI est plausible (memes briques
+  figees, memes operations), mais le cas ne teste que ces deux configurations.
+- **NON MONTRE** : ce determinisme est une propriete de l'implementation **sur cette plateforme**, pas
+  une garantie cross-plateforme. Il peut casser entre BLAS differentes, ordres de sommation ou
+  architectures (cf. caveat plateforme, section 9). Une seule cellule non noire signalerait un etat
+  global cache entre compositions, un parcours dependant de l'allocation, ou une reduction Poisson
+  non reproductible.
 
-| Modele (`models.py`)         | state                                  | transport          | source                     | elliptic                            |
-|------------------------------|----------------------------------------|--------------------|----------------------------|-------------------------------------|
-| `electron_euler()`           | `FluidState(kind="compressible", gamma=1.4)` | `CompressibleFlux()` | `PotentialForce(charge=-1.0)` | `ChargeDensity(charge=-1.0)`        |
-| `ion_isothermal()`           | `FluidState(kind="isothermal", cs2=0.5)`     | `IsothermalFlux()`   | `PotentialForce(charge=1.0)`  | `ChargeDensity(charge=1.0)`         |
-| `diocotron(B0, alpha, n_i0)` | `Scalar()`                             | `ExB(B0)`          | `NoSource()`               | `BackgroundDensity(alpha, n0=n_i0)` |
+---
 
-La parametrisation physique (gamma, cs2, B0, charge, fond n_i0) vit **dans les briques**, pas
-dans la config du systeme. `adc.System(n, L, periodic)` ne porte que le **maillage**.
+## 8. Ce que le tutoriel ne capture pas (analyse honnete des limites)
 
-## 4. Methode numerique
+- **Aucun resultat physique valide.** Categorie `tutoriel` : on demontre une **capacite d'API**
+  (composition bloc-par-bloc, multirate, IMEX par bloc, garde-fous, integrateur Python), pas une
+  courbe d'article ni un invariant physique non trivial. La conservation de masse ($10^{-12}$) est le
+  minimum attendu d'un volumes-finis conservatif, pas une validation.
+- **Le determinisme bit est de l'implementation, pas de la physique.** Il prouve que le chemin compose
+  (B) et le pas Python (D) sont reproductibles a operations et ordre constants. Il n'est PAS garanti
+  entre plateformes (BLAS, sommation, architecture).
+- **Horizons courts, CI triviales.** A : 8 pas, cosinus 1D. B : 12 pas. D : 20 pas. Rien n'est
+  integre assez longtemps pour qu'une dynamique non lineaire emerge ; ce n'est pas le but.
+- **Le couplage ion est minuscule** ($\sim6\times10^{-7}$ sur 8 pas) : visible sur la carte mais non
+  asserte. Le seul invariant teste sur les ions est la conservation de masse.
+- **Le diocotron ici n'est pas l'etude physique** : c'est l'etude de reference
+  [`../diocotron/`](../diocotron/) (taux de croissance, figures, gif) qui porte la physique ; ici le
+  diocotron sert juste de modele scalaire simple pour les tests de determinisme (B, D).
 
-Le choix numerique est fait **par bloc**, independamment du modele physique :
+---
 
-- **Reconstruction spatiale** (`adc.Spatial(limiter=...)`) : `none` / `minmod` / `vanleer`
-  (et `weno5`, non utilise ici). Limiteur MUSCL applique sur les variables `conservative` ou
-  `primitive`.
-- **Flux numerique de Riemann** (`adc.Spatial(flux=...)`) : `rusanov` (robuste, tout
-  transport) ou `hllc` (onde de contact, **exige** un transport compressible 4 variables +
-  pression). `roe` existe aussi.
-- **Traitement temporel** :
-  - `adc.Explicit(substeps=1, method="ssprk2")` : SSPRK2 (Shu-Osher 2 etages, ordre 2) sur tout
-    le bloc ;
-  - `adc.IMEX(substeps=1)` : transport explicite (SSPRK) + **source raide implicite**
-    (backward-Euler, Newton local a la cellule). Ce n'est PAS un solveur implicite global PDE :
-    seule la source est implicite (cf. docstring `IMEX` dans la facade).
-- **Sous-pas** (`substeps=N`) : le bloc avance N fois par macro-pas, chaque sous-pas de
-  longueur `dt/N` (electrons rapides -> `substeps=10`).
-- **Poisson** : operateur `div(eps grad)` a `eps = 1` (Poisson), second membre `charge_density`
-  (somme des briques elliptiques), solveur `geometric_mg` (multigrille geometrique), BC `auto`
-  (periodique ici).
-
-En **partie (D)**, le schema en temps est **ecrit en Python** : `adc.integrate.ssprk2_step`
-(module `adc`, fichier `python/adc/integrate.py`) assemble les
-etages RK en Python en s'appuyant sur les primitives `solve_fields` / `eval_rhs` /
-`get_state` / `set_state`. Le residu et le Poisson restent calcules en C++. L'integrateur
-re-resout Poisson **a chaque etage RK** (couplage per-stage, plus precis que le couplage fige
-par pas du `advance` compile).
-
-## 5. Architecture ADC utilisee
-
-```
-Python (run.py)                         C++ compile (module adc / adc_cpp)
-----------------------------------      -------------------------------------------
-adc.System(n, L, periodic)          ->  contexte maillage (carre periodique)
-sim.add_block(name, model, spatial, ->  fige une fermeture d'avancee compilee par bloc
-              time)                      (assemble_rhs<Limiter, Flux>, Newton source IMEX)
-sim.set_poisson(rhs, solver, bc)    ->  EllipticPhysicalModel (Poisson) de systeme
-sim.set_density(name, array)        ->  ecrit l'etat du bloc
-sim.solve_fields()                  ->  Poisson + E = -grad phi
-sim.advance(dt, n)                  ->  boucle en temps COMPILEE (partie A, B)
-adc.integrate.ssprk2_step(sim, dt)  ->  primitives eval_rhs / get_state / set_state
-                                        (boucle en temps en PYTHON, partie D)
-```
-
-Point cle : **aucun callback Python dans le hot path**. Chaque bloc embarque une fermeture
-d'avancee compilee, type-erased seulement au niveau de la liste de blocs. Le residu
-(`-div F + S`), le Newton de la source implicite et le Poisson de systeme (`somme_s`
-contribution elliptique) restent 100 % en C++, par cellule. Seul l'assemblage des etages RK
-de la partie (D) est en Python, par pas.
-
-Pour les details d'API (module `adc` d'`adc_cpp`) : `Model`, `Spatial`, `Explicit`, `IMEX`,
-`System.add_block`, `System.set_poisson` dans `python/adc/__init__.py` ; `ssprk2_step` dans
-`python/adc/integrate.py`.
-
-## 6. Carte des fichiers
-
-| Fichier                                                             | Role |
-|--------------------------------------------------------------------|------|
-| [`composition/run.py`](run.py)                                     | le cas : 4 parties (A/B/C/D), `print` + `assert`, pas d'assets. |
-| [`adc_cases/models.py`](../adc_cases/models.py)                    | `electron_euler()`, `ion_isothermal()`, `diocotron()` (compositions de briques). |
-| [`adc_cases/common/grid.py`](../adc_cases/common/grid.py)          | `meshgrid_xy(n, L)` : grille a centres de cellules, convention `field[j, i]`. |
-| [`adc_cases/__init__.py`](../adc_cases/__init__.py)                | `ensure_importable()` (le script utilise un fallback `sys.path` direct equivalent). |
-| [`cases_manifest.toml`](../cases_manifest.toml)                    | declare le cas : `tutoriel`, `ci = true`, `needs = []`. |
-| Module `adc` (hors depot)                                          | bindings pybind11 d'`adc_cpp` ; fourni par `PYTHONPATH` (voir Prerequis). |
-| `adc.integrate` (dans le module `adc`)                             | `euler_step`, `ssprk2_step` ecrits en Python (partie D). |
-
-Le cas n'utilise PAS `recipes.py`, ni `initial_conditions.py`, ni `checks.py`, ni `io.py`,
-ni `native.py` : il pose ses CI a la main (cosinus) et fait ses asserts en ligne.
-
-## 7. Prerequis
-
-- **Python 3.12** avec **numpy**.
-- Le **module `adc`** (bindings d'`adc_cpp`) construit et disponible sur le `PYTHONPATH`. Sur
-  cette machine, le build est dans
-  `/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python`.
-- Le **paquet `adc_cases`** importable. Soit installe (`pip install -e .` a la racine du
-  depot, voie nominale CI), soit la racine du depot ajoutee au `PYTHONPATH` (le script tente
-  `import adc_cases` et, a defaut, insere `os.path.dirname(os.path.dirname(__file__))` dans
-  `sys.path`).
-- **Aucun compilateur C++** requis (`needs = []`) : ce cas ne compile rien a la volee,
-  contrairement aux cas `needs = ["cxx"]` (DSL / two_fluid_ap).
-- Lancer avec le **meme interpreteur** que celui ayant compile le module (suffixe ABI
-  `cpython-312`).
-
-Construction du module (si absent), depuis `adc_cpp` :
+## 9. Reproduire (justifie 14 de la checklist : commande + cout mesure)
 
 ```bash
-cmake -B build-py -DADC_BUILD_PYTHON=ON
-cmake --build build-py --target _adc -j
-export PYTHONPATH=$PWD/build-py/python
+cd /private/tmp/adc_cases-deeptut/composition
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 run.py            # le cas : asserts, ~1 s
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json
 ```
 
-## 8. Commande exacte
+Prerequis : `numpy` (et `matplotlib` pour les figures, hors `needs` du cas lui-meme), module `adc`
+compile et importe **avec le meme interpreteur** que celui qui l'a compile (suffixe ABI
+`cpython-312`). Le premier chemin du `PYTHONPATH` fournit le module C++ ; le second rend `adc_cases`
+importable sans installation (le cas a aussi un fallback `sys.path`, `run.py:72-77`).
 
-Commande reellement executee pour ce README (worktree + build local) :
-
-```bash
-cd /private/tmp/adc_cases-readmes/composition && \
-PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-readmes \
-/opt/homebrew/anaconda3/bin/python3.12 run.py
-```
-
-Forme generique (paquet `adc_cases` installe en editable, module `adc` sur le `PYTHONPATH`) :
-
-```bash
-export PYTHONPATH=<adc_cpp>/build-py/python
-python3 composition/run.py
-```
-
-## 9. Explication du code par etapes
-
-**En-tete** (`run.py` lignes 68-86) : import de `numpy` et `adc` ; import de
-`adc_cases.models` (fallback `sys.path` si le paquet n'est pas installe) ; `MASS_TOL = 1e-10` ;
-`_meshgrid_centres(n, L)` delegue a `meshgrid_xy`.
-
-**`partie_A()` (composition heterogene, lignes 89-137)** :
-1. `sim = adc.System(n=48, L=1.0, periodic=True)` -- config = maillage seul.
-2. `sim.add_block("electrons", model=electron_euler(), spatial=Spatial(vanleer=True,
-   flux="hllc"), time=IMEX(substeps=10))` -- bloc Euler, VanLeer + HLLC, IMEX, 10 sous-pas.
-3. `sim.add_block("ions", model=ion_isothermal(), spatial=Spatial(minmod=True,
-   flux="rusanov"), time=Explicit())` -- bloc isotherme, Minmod + Rusanov, explicite, 1 sous-pas.
-4. `assert sim.n_species() == 2` ; impression des noms de blocs.
-5. `sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="auto")`.
-6. CI : electrons perturbes `1 + 0.02 cos(2 pi X / L)`, ions uniformes `1.0`.
-7. `sim.solve_fields()` puis `assert |phi|_max > 1e-8` (Poisson couple actif).
-8. `sim.advance(0.001, 8)` (8 macro-pas), puis verifie : derive de masse electrons/ions
-   `< MASS_TOL = 1e-10` (absolue) et evolution electrons `> 1e-9` (dynamique non triviale).
-
-**`partie_B()` (determinisme, lignes 140-166)** : grille `n=32` ; CI cosinus
-`1 + 0.1 cos(2 pi X / L)` ; fond `n_i0 = rho0.mean()`. La fonction `construire_et_avancer()`
-recompose un `System` + un bloc `diocotron(B0=1.0, alpha=1.0, n_i0)` (Minmod + Rusanov,
-explicite), `set_poisson()`, `set_density`, `advance(0.002, 12)`, et renvoie la densite. Deux
-appels strictement identiques -> `assert max|da - db| == 0.0` (egalite EXACTE, bit a bit).
-
-**`partie_C()` (garde-fous, lignes 169-209)** : helper `doit_lever(fn, why)` qui exige qu'une
-exception soit levee. Trois cas invalides :
-1. `Spatial(flux="hllc")` sur `diocotron()` (transport scalaire) -> rejet a `add_block`.
-2. Modele cree avec `Scalar()` + `ExB()` + `PotentialForce()` (source fluide sur transport
-   scalaire) -> rejet a `add_block`.
-3. `adc.Model(state=Scalar(), transport=CompressibleFlux(), ...)` -> rejet **a la composition**
-   (`adc.Model` valide etat <-> transport, leve `ValueError` immediatement).
-   Enfin `assert sim.n_species() == 0` : aucun bloc invalide n'a ete ajoute.
-
-**`partie_D()` (integrateur Python, lignes 212-244)** : grille `n=32` ; CI
-`1 + 0.1 cos(2 pi X / L) sin(2 pi Y / L)` ; fond `n_i0 = rho0.mean()`. Un seul bloc
-`diocotron` (Minmod, explicite), `set_poisson()`, `set_density`. **On n'appelle PAS
-`sim.advance(...)`** : on boucle 20 fois sur `adc.integrate.ssprk2_step(sim, dt=0.001)`
-(SSPRK2 ecrit en Python, Poisson re-resolu per-stage). Verifie : derive de masse `< 1e-9` et
-etat fini (`np.isfinite(rho).all()`).
-
-**`main()` (lignes 247-256)** : enchaine A, B, C, D, imprime un resume et `OK composition_api`.
-
-## 10. Conditions initiales
-
-Toutes les CI sont posees a la main en numpy (le cas n'utilise pas
-`common.initial_conditions`). Convention de grille `field[j, i]` avec
-`X, Y = meshgrid_xy(n, L)` (centres de cellules).
-
-| Partie | Champ initial |
-|--------|---------------|
-| (A) electrons | `1.0 + 0.02 cos(2 pi X / L)` (perturbation cosinus) |
-| (A) ions      | `np.ones((n, n))` (uniforme) |
-| (B) diocotron | `1.0 + 0.1 cos(2 pi X / L)`, fond `n_i0 = rho0.mean()` |
-| (D) diocotron | `1.0 + 0.1 cos(2 pi X / L) sin(2 pi Y / L)`, fond `n_i0 = rho0.mean()` |
-
-Le fond neutralisant `n_i0 = rho0.mean()` (parties B/D) annule la charge nette : le Poisson
-periodique est alors solvable (condition de compatibilite `integrale du second membre = 0`).
-En partie (A), les electrons perturbes + les ions uniformes donnent une charge nette ~ 0
-(electrons charge `-1`, ions charge `+1`, densites moyennes proches de 1).
-
-## 11. Invariants et assertions
-
-Toutes les verifications sont des `assert` en ligne dans `run.py`. Valeurs reelles capturees
-lors de l'execution (voir section 12 et section 15) :
-
-| Assert | Condition | Valeur mesuree |
-|--------|-----------|----------------|
-| (A) Poisson actif | `|phi|_max > 1e-8` | `5.062437e-04` |
-| (A) masse electrons | `|m_e - m_e0| < 1e-10` | `2.728e-12` |
-| (A) masse ions | `|m_i - m_i0| < 1e-10` | `1.819e-12` |
-| (A) evolution electrons | `max|rho_e - rho_e0| > 1e-9` | `3.506e-05` |
-| (B) determinisme | `max|da - db| == 0.0` (EXACT) | `0.000e+00` |
-| (C) HLLC sur scalaire | `add_block` leve | `RuntimeError` (voir ci-dessous) |
-| (C) source fluide sur scalaire | `add_block` leve | `RuntimeError` |
-| (C) modele incoherent | `adc.Model` leve | `ValueError` |
-| (C) aucun bloc invalide | `sim.n_species() == 0` | `0` |
-| (D) masse (SSPRK2 Python) | `|m - m0| < 1e-9` | `2.274e-13` |
-| (D) etat fini | `np.isfinite(rho).all()` | `True` |
-
-Messages d'erreur EXACTS de la partie (C), capturees a l'execution (le `print` du script les
-tronque a 70 caracteres ; voici la version complete) :
-
-```
-hllc/diocotron       -> RuntimeError : System : flux 'hllc' exige un transport compressible
-                        (4 variables + pression) ; ce transport -> 'rusanov'
-potential/scalar     -> RuntimeError : source 'potential' invalide ici (exige un transport
-                        fluide >= 3 variables, ou 'none')
-Scalar+CompressibleFlux -> ValueError : Scalar exige transport=ExB(...)
-```
-
-Les deux premieres erreurs (`RuntimeError`) viennent du C++ (`System::add_block`) ; la
-troisieme (`ValueError`) vient de la facade Python `adc.Model` qui valide la composition avant
-toute frontiere C++.
-
-## 12. Sorties attendues
-
-Aucun fichier produit : tout est imprime. Sortie complete reelle (execution du
-2026-06-07 sur cette machine) :
+Sortie attendue de `run.py` (capturee, machine de dev macOS arm64) :
 
 ```
 == Partie (A) : un schema (modele/spatial/temps/sous-pas) par bloc ==
   n_species              = 2
-  blocs                  = ['electrons', 'ions']
-  electrons : electron_euler() | Spatial(vanleer, hllc) | IMEX(substeps=10)
-  ions      : ion_isothermal() | Spatial(minmod, rusanov) | Explicit()
   |phi|_max (initial)    = 5.062437e-04
   derive masse electrons = 2.728e-12  (Euler/HLLC/IMEX, 10 sous-pas)
   derive masse ions      = 1.819e-12  (isotherme/Rusanov/explicite)
@@ -326,98 +273,32 @@ Aucun fichier produit : tout est imprime. Sortie complete reelle (execution du
 == Partie (B) : determinisme de la composition de briques (bit pour bit) ==
   ecart max (deux compositions independantes) = 0.000e+00
 == Partie (C) : garde-fous des combinaisons invalides ==
-  rejete (hllc sur diocotron (transport scalaire)) : System : flux 'hllc' exige un transport compressible (4 variables + pr
-  rejete (source PotentialForce sur transport scalaire) : source 'potential' invalide ici (exige un transport fluide >= 3 variab
+  rejete (hllc sur diocotron (transport scalaire)) : System : flux 'hllc' exige un transport compressible ...
+  rejete (source PotentialForce sur transport scalaire) : source 'potential' invalide ici (exige un transport fluide >= 3 ...
   rejete (modele incoherent (Scalar + CompressibleFlux)) : Scalar exige transport=ExB(...)
 == Partie (D) : integrateur temporel custom en Python (SSPRK2) ==
   pas Python (SSPRK2)    = 20  (Poisson re-resolu per-stage)
   derive masse           = 2.274e-13  (integrateur ecrit en Python)
   etat fini              = True
-Systeme compose bloc par bloc depuis Python (modeles = compositions de briques) ;
-calcul 100 % C++ compile. Le schema en temps lui-meme peut etre ecrit en Python
-(partie D), le calcul par cellule restant en C++.
 OK composition_api
 ```
 
-Les valeurs en virgule flottante (`5.062437e-04`, `2.728e-12`, etc.) peuvent varier au dernier
-chiffre selon la plateforme et l'ordre de reduction, mais restent tres en dessous des seuils
-d'assert. La partie (B) (`0.000e+00`) doit, elle, etre **exactement** zero sur une plateforme
-donnee : c'est la garantie de determinisme du cas.
+Cout : ~1 s temps mur (import numpy inclus), 4 parties (A 8 pas $48^2$ + Poisson par etage ;
+B 2$\times$12 pas $32^2$ ; C 3 rejets ; D 20 pas Python $32^2$). **Caveat plateforme** : les
+verdicts (masse conservee, ecart $=0$, rejets, `OK`) et les ordres de grandeur sont stables ; les
+derniers chiffres des derives ($2.7\times10^{-12}$, etc.) varient avec la BLAS et l'ordre de
+sommation, et l'egalite bit (B, D) elle-meme n'est garantie que **sur la meme plateforme/le meme
+build** (cf. `figures/provenance.json`).
 
-## 13. Generation figures/GIF
+## Carte des fichiers
 
-**Aucune.** Ce cas ne produit ni figure ni GIF ni fichier de sortie. Il n'importe pas
-`matplotlib` (`needs = []`), n'utilise pas `adc_cases.common.io` et n'ecrit rien dans `out/`.
-Toute la verification passe par `print` (diagnostics lisibles) et `assert` (invariants). Si
-l'on cherche des figures de l'instabilite diocotron, voir le cas
-[`../diocotron/`](../diocotron/) (categorie `reproduction`, `needs = ["matplotlib"]`).
-
-## 14. Backends reellement supportes
-
-- **CPU mono-rang uniquement** (chemin `System.add_block` natif). C'est le chemin de
-  composition de briques natives (`ModelSpec`), sans `.so` compile a la volee, sans MPI, sans
-  AMR, sans GPU dans ce cas.
-- Le **solveur Poisson** utilise est `geometric_mg` (multigrille geometrique), valable en
-  periodique et en paroi. L'alternative `fft` (periodique, `n = 2^k`) n'est pas demandee ici.
-- **Limiteurs** disponibles sur ce chemin : `none` / `minmod` / `vanleer` / `weno5` (seuls
-  `vanleer` et `minmod` sont exerces). **Flux** : `rusanov` / `hllc` / `roe` (`hllc` et
-  `rusanov` exerces). **Temporel** : `Explicit` (SSPRK2) et `IMEX` (source implicite) exerces.
-- La machine de test est **macOS arm64 (Darwin)**, module compile avec
-  `_adc.cpython-312-darwin.so`. La CI tourne sur **ubuntu-latest** (build Release du module,
-  `ADC_USE_EIGEN=OFF`). Le cas n'a aucune dependance materielle : il s'execute partout ou le
-  module `adc` se construit.
-
-## 15. Cout approximatif
-
-Mesure reelle (temps mur) sur cette machine (macOS arm64, build `build-master`, Python 3.12 d'anaconda) :
-
-```
-PYTHONPATH=... python3.12 run.py
-1.82s user 0.40s system 342% cpu 0.649 total
-```
-
-- **Temps mur total : ~0.65 s** (dont ~1.8 s CPU cumule, le multigrille exploitant plusieurs
-  threads -> 342 % CPU). Negligeable, conforme a un cas `ci = true`.
-- **Memoire** : quelques Mo (grilles `48x48` en partie A, `32x32` en B/D ; 4 a 1 composantes
-  par bloc). Aucune allocation notable.
-- **Pas de compilation** a la volee (`needs = []`), donc pas de surcout `c++` au premier
-  lancement, contrairement aux cas DSL/`two_fluid_ap`.
-
-## 16. Limites et differences avec les references
-
-- **Cas tutoriel, AUCUN claim physique.** Les CI sont des cosinus jouets ; les temps
-  d'integration sont volontairement courts (8 a 20 pas). Le cas ne mesure aucun taux de
-  croissance, aucune quantite physique calibree. Il **demontre l'API**, pas un resultat.
-- **Ce n'est PAS la reproduction du diocotron.** Le diocotron ici est un transport scalaire
-  ExB avec un fond neutralisant `BackgroundDensity`, sur grille periodique carree, sans
-  anneau de charge ni etude de mode. La reproduction du benchmark arXiv:2510.11808 (anneau,
-  modes azimutaux, figures, GIF) vit dans [`../diocotron/`](../diocotron/) (categorie
-  `reproduction`, hors CI) -- ne pas confondre.
-- **IMEX = source-only.** Le `adc.IMEX(substeps=10)` de la partie (A) traite la SOURCE de
-  maniere implicite (backward-Euler, Newton local), pas le transport ni le Poisson. Ce n'est
-  PAS un solveur implicite global PDE (Newton-Krylov / Schur), qui est un chantier distinct.
-- **Determinisme bit a bit (B)** : garanti pour une **plateforme et un build donnes** (meme
-  ordre de reduction, meme compilateur). L'egalite exacte `== 0.0` est attendue a chaque
-  re-execution sur la meme machine, mais les valeurs de la partie (A) peuvent varier au
-  dernier ULP entre plateformes (sans franchir les seuils d'assert).
-- **Couplage per-stage (D) different de `advance` (A/B).** L'integrateur Python re-resout
-  Poisson a chaque etage RK (couplage hyperbolique/elliptique per-stage), alors que le
-  `sim.advance(...)` compile peut figer le couplage par pas. Les deux chemins sont corrects
-  mais ne sont pas censes etre bit-identiques entre eux.
-- **Mono-rang, pas de GPU/MPI/AMR** sur ce cas (cf. section 14).
-
-## 17. Tests/CI associes
-
-- **Manifeste** : [`cases_manifest.toml`](../cases_manifest.toml) declare ce cas
-  `path = "composition/run.py"`, `category = "tutoriel"`, `ci = true`, `needs = []`.
-- **CI** : [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) clone `adc_cpp`, construit
-  le module `_adc` (CMake, Release, `ADC_BUILD_PYTHON=ON`, `ADC_USE_EIGEN=OFF`), installe
-  `adc_cases` en editable, puis lit le manifeste et lance **uniquement** les cas `ci = true`
-  avec `python3 <path>`. Ce cas en fait partie : `python3 composition/run.py` doit sortir 0 et
-  imprimer `OK composition_api`.
-- **Mecanisme de test** : il n'y a pas de framework de test externe (pas de pytest). Le cas
-  EST son propre test : chaque invariant est un `assert`, et un `assert` qui echoue provoque
-  une `AssertionError` -> code de sortie non nul -> CI rouge. Les garde-fous de la partie (C)
-  testent par construction que les combinaisons invalides levent bien.
-- Pour relancer en local exactement comme la CI : installer le paquet (`pip install -e .` a la
-  racine), exporter `PYTHONPATH=<adc_cpp>/build-py/python`, puis `python3 composition/run.py`.
+| Fichier | Role |
+|---|---|
+| `run.py` | le cas : 4 parties (A composition heterogene, B determinisme compose, C garde-fous, D integrateur Python) |
+| `make_figures.py` | re-joue A/B/D ; ecrit `density_maps.png`, `determinism.png` + `provenance.json` |
+| `figures/density_maps.png` | champs composes du systeme heterogene (electrons, ions, $\|\phi\|$) |
+| `figures/determinism.png` | egalite bit (B compose C++, D pas Python) + histogramme du residu a 0 |
+| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, schemas par bloc, nombres mesures |
+| `../adc_cases/models.py` | `electron_euler`, `ion_isothermal`, `diocotron` = compositions de briques (l.18-45) |
+| `../adc_cases/common/grid.py` | `meshgrid_xy` (grille a centres de cellules, convention de la facade) |
+| `<adc>/integrate.py` | `ssprk2_step` = SSPRK2 ecrit en Python sur les primitives `solve_fields`/`eval_rhs`/`get_state`/`set_state` |

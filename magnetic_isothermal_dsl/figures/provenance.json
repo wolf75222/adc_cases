@@ -1,0 +1,45 @@
+{
+  "script": "magnetic_isothermal_dsl/make_figures.py",
+  "command": "python make_figures.py",
+  "produces": [
+    "lorentz_oracle.png",
+    "cyclotron_trajectory.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "DSL 'aot' (production non lie : ABI en-tetes du module pre-construit)",
+  "backends_linked": [
+    "aot"
+  ],
+  "resolution": "32x32",
+  "nsteps": 40,
+  "cfl": 0.4,
+  "cs2": 1.0,
+  "charge_q": -1.0,
+  "B_z": 2.0,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "platform": "macOS arm64 (Apple Silicon), serie mono-process",
+  "wall_seconds": 19.128,
+  "lorentz_oracle": {
+    "err_x_max": 0.0,
+    "err_y_max": 0.0,
+    "err_rho_max": 0.0,
+    "max_abs_dR": 0.6298555418001659,
+    "lor_y_min": -0.6298555418001659,
+    "lor_y_max": -0.5701444581998341
+  },
+  "cyclotron_trajectory": {
+    "omega_c": -2.0,
+    "t_final": 0.38293874222709084,
+    "mx_mean_init": 0.30000000000000004,
+    "my_mean_init": 0.0,
+    "mx_mean_final": 0.21622251404461001,
+    "my_mean_final": -0.20796105487645936,
+    "angle_final_deg": -43.88424035895403,
+    "angle_predicted_deg": -43.88154748332093,
+    "mag_init": 0.30000000000000004,
+    "mag_final": 0.29999995987516614,
+    "mag_rel_drift": -1.3374944633307942e-07
+  }
+}

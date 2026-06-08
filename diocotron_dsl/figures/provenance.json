@@ -1,0 +1,31 @@
+{
+  "script": "diocotron_dsl/make_figures.py",
+  "command": "python diocotron_dsl/make_figures.py",
+  "produces": [
+    "equivalence_heatmap.png",
+    "final_density.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "a9541ba402d14f558380498cbbc24bddf0a0e5bd",
+  "backend": "aot",
+  "backend_preference": [
+    "production",
+    "aot"
+  ],
+  "resolution": "96x96",
+  "n_steps": 60,
+  "cfl": 0.4,
+  "n_i0": 1.0886226925452758,
+  "python": "3.12.2",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "max_abs_diff": 0.0,
+  "bit_identical": true,
+  "t_native": 6.2138689249049746,
+  "t_dsl": 6.2138689249049746,
+  "mass_native": 10032.746734497263,
+  "mass_dsl": 10032.746734497263,
+  "mass_drift_rel_dsl": 1.813052249481513e-16,
+  "amp_initial": 0.06777565666453515,
+  "amp_final_dsl": 0.10310245116699662,
+  "amp_growth_factor": 1.5212313128490405
+}

@@ -1,270 +1,219 @@
-# diocotron_dsl : le modele diocotron ecrit ENTIEREMENT en formules, prouve bit-identique au natif
+# diocotron_dsl : le diocotron ecrit en formules, prouve bit-identique au natif
 
-Ce cas reecrit la physique du diocotron (derive E x B d'une densite scalaire couplee a un
-Poisson de fond neutralisant) NON pas en assemblant des briques C++ nommees du coeur, mais en
-DECLARANT des formules symboliques avec `adc.dsl.Model`. Le DSL genere le C++, le compile en
-bibliotheque partagee (`.so`), et l'installe comme bloc du `System`. Le cas PROUVE ensuite que
-l'etat produit est **bit-identique** (`np.array_equal`) a la composition native de briques. C'est
-un test de validation (`category = "validation"`, `ci = true`) ; il a besoin d'un compilateur
-C++20 (`needs = ["cxx"]`).
+Le modele diocotron (derive E x B d'une densite scalaire, fond neutralisant) ecrit
+ENTIEREMENT en formules symboliques (`adc.dsl.Model`) au lieu de briques C++ nommees, puis
+prouve **bit-identique** a la composition native `adc_cases.models.diocotron` sur la meme grille,
+la meme condition initiale et le meme nombre de pas. La physique n'est PAS re-derivee ici :
+elle l'est dans [`../diocotron/`](../diocotron/) (mecanisme de l'instabilite, taux de croissance,
+relation de dispersion). Ce cas verifie une seule chose : que les formules DSL reproduisent
+EXACTEMENT les conventions des briques du coeur, au point que les deux chemins produisent le meme
+etat **au bit pres** (`np.array_equal`, aucune tolerance).
 
----
+## Contrat
 
-## 1. Objectif du cas
-
-Demontrer que le mini-DSL declaratif `adc.dsl` n'introduit AUCUN ecart numerique : un modele
-ecrit en formules (variable conservative, champs auxiliaires, flux d'advection E x B, valeurs
-propres, second membre elliptique) reproduit EXACTEMENT les conventions des briques natives du
-coeur. Le critere de reussite (coeur du cas) est l'egalite bit-pour-bit, sans tolerance :
-
-```
-max|DSL - natif| == 0   et   np.array_equal(etat_DSL, etat_natif) == True
-```
-
-Le cas sert donc de garde-fou de NON-REGRESSION du codegen DSL : si une formule diverge d'une
-brique du coeur (`ExBVelocity`, `BackgroundDensity`), l'assertion d'equivalence echoue.
-
-LIMITE DE PORTEE (honnetete) : ce cas N'EST PAS une reproduction d'un resultat publie. C'est une
-variante minimale et periodique du diocotron (condition initiale en BANDE, pas l'anneau de
-charge du benchmark arXiv:2510.11808). Le cas `diocotron/run.py` (category `reproduction`, hors
-CI) vise la reproduction des figures ; ici on ne valide QUE l'equivalence DSL <-> natif et trois
-invariants physiques legers. Ne pas presenter ce cas comme une reproduction du diocotron complet.
-
----
-
-## 2. Equations
-
-Densite de charge scalaire `n(x, y, t)` transportee par la derive E x B d'un potentiel `phi`,
-en domaine periodique `[0, L]^2`.
-
-Transport (conservatif, divergence nulle) :
-
-```
-d_t n + div( n v ) = 0,        v = ( -d_y phi / B0 ,  d_x phi / B0 )
-```
-
-Champ auto-consistant (Poisson de systeme, fond ionique neutralisant `n_i0`) :
-
-```
-- laplacien(phi) = rho_charge,   rho_charge = alpha ( n - n_i0 )
-```
-
-Le champ `v` est a divergence nulle (`div v = (-d_xy + d_yx) phi / B0 = 0`), donc le transport
-conserve la masse `integrale(n)` sur le domaine periodique. Aucune source : `S(U) = 0`.
-
-Parametres du cas : `B0 = 1.0`, `alpha = 1.0`, `n_i0 = moyenne(n_initial)` (assure la solubilite
-du Poisson periodique : second membre `alpha(n - n_i0)` a moyenne nulle).
-
----
-
-## 3. Modele physique
-
-Une seule espece, une seule variable conservative `n` (role canonique `Density`). Le primitif
-est trivial (`Prim = [n]`, primitif == conservatif : transport scalaire, pas d'inversion).
-
-Conventions REPRODUITES a l'identique depuis le coeur (ancrees dans les briques natives) :
-
-- Transport E x B (`include/adc/physics/hyperbolic.hpp`, `struct ExBVelocity`) :
-  - `v = (-grad_y / B0, grad_x / B0)` (a divergence nulle) ;
-  - flux physique `f = n * v(dir)` (une composante) ;
-  - valeur propre (1 onde) `lambda = v(dir)`.
-- Second membre elliptique (`include/adc/physics/elliptic.hpp`, `struct BackgroundDensity`) :
-  - `rhs = alpha * (n - n_i0)`.
-- Source : aucune (`adc.NoSource` cote natif ; pas de `m.source(...)` cote DSL).
-
-Les champs auxiliaires `phi`, `grad_x`, `grad_y` sont les composantes fixes du canal `adc::Aux`
-(indices canoniques 0/1/2). Le flux DSL lit `grad_x` / `grad_y` ; `phi` est declare pour
-completer le contrat de base (3 composantes), il n'apparait dans aucune formule.
-
----
-
-## 4. Methode numerique
-
-Volumes finis, ordre 2 en espace, explicite en temps. IDENTIQUE entre les deux modeles :
-
-- reconstruction MUSCL avec limiteur **minmod** (`FiniteVolume(limiter="minmod")`,
-  equivalent natif `Spatial(minmod=True)`) ;
-- flux numerique de Riemann **Rusanov** (Lax-Friedrichs local, `riemann="rusanov"`) ;
-- variables reconstruites : conservatives (defaut) ;
-- integration temporelle explicite **SSPRK2** (Runge-Kutta SSP a 2 etages ; c'est ce qu'avancent
-  `adc.Explicit()` et `step_cfl` sur les chemins natif et aot, cf.
-  `include/adc/runtime/compiled_block_abi.hpp` et `include/adc/numerics/time/ssprk.hpp`) ;
-- pas de temps choisi par `step_cfl(0.4)` (CFL = 0.4), 60 macro-pas.
-
-Le Poisson de systeme est resolu par multigrille geometrique (`solver="geometric_mg"`), second
-membre `rhs="charge_density"` (somme des contributions `elliptic_rhs` des blocs).
-
-Le DSL ne change PAS la numerique : les backends "aot" et "production" inlinent le MEME chemin de
-production (`assemble_rhs<Limiter, Flux>`, SSPRK2) sur le modele genere que la composition native.
-C'est ce qui rend l'egalite bit-pour-bit possible.
-
----
-
-## 5. Architecture ADC utilisee
-
-Le cas confronte DEUX chemins de construction du MEME bloc "ne", sur la meme grille / IC / Poisson :
-
-1. Chemin NATIF (oracle de reference) :
-   `adc_cases.models.diocotron(B0, alpha, n_i0)` =
-   `adc.Model(state=adc.Scalar(), transport=adc.ExB(B0), source=adc.NoSource(),
-   elliptic=adc.BackgroundDensity(alpha, n0))`, branche par `sim.add_block(...)`.
-
-2. Chemin DSL : `adc.dsl.Model("diocotron_dsl")` declare les memes formules ; `m.compile(...,
-   backend=...)` genere et compile une `.so` ; `sim.add_equation("ne", model=compiled, ...)`
-   aiguille sur l'adder du backend (`add_native_block` pour "production",
-   `add_compiled_block` pour "aot").
-
-Surface DSL employee (facade `adc.dsl.Model`, cf. `python/adc/dsl.py`) :
-`conservative_vars`, `aux`, `flux`, `eigenvalues`, `primitive_vars`, `conservative_from`,
-`elliptic_rhs`, `check`, `compile`. Le DSL emet un
-`adc::CompositeModel<HyperboliqueGen, NoSource, ElliptiqueGen>` (transport + elliptique generes,
-source nulle), avec elimination des sous-expressions communes (CSE) au codegen.
-
-Backend (voir aussi section 14) : le cas PREFERE `backend="production"` (loader natif
-zero-copie, `add_native_block`, parite stricte avec `add_block`) ; si la compilation native
-echoue, il retombe sur `backend="aot"` (chemin de production host-marshale, numerique identique).
-Les deux donnent un etat bit-identique au natif.
-
----
-
-## 6. Carte des fichiers
-
-| Fichier | Role |
+| Champ | Contenu |
 |---|---|
-| `diocotron_dsl/run.py` | Le cas : construit les deux modeles, compile le DSL, asserte l'equivalence et les invariants. SEUL fichier propre au cas. |
-| `adc_cases/models.py` | `diocotron(...)` = composition native de briques (oracle de reference). |
-| `adc_cases/common/initial_conditions.py` | `band_density(...)` = bande gaussienne de charge perturbee (CI partagee). |
-| `adc_cases/common/grid.py` | `meshgrid_xy` (convention de grille `field[j, i]`, centres de cellules). |
-| `adc_cases/common/checks.py` | `relative_drift` (derive de masse relative). |
-| `adc_cases/common/io.py` | `case_output_dir("diocotron_dsl")` -> `out/diocotron_dsl/` (sortie des `.so`). |
-| `adc_cases/common/native.py` | `adc_include()` = localisation des en-tetes adc_cpp (pour la compilation DSL). |
-| `python/adc/dsl.py` (coeur adc_cpp) | Le mini-DSL : `Model`, codegen C++, backends `prototype`/`aot`/`production`. |
-| `cases_manifest.toml` | Source de verite du scope : `diocotron_dsl` = `validation`, `ci=true`, `needs=["cxx"]`. |
+| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `diocotron_dsl/run.py`, `ci = true`, `needs = ["cxx"]`) |
+| Entrees | grille $96^2$, $L=1$, **periodique** ; CI bande mode 2 `band_density(amp=1, width=0.05, mode=2, disp=0.02)` ; $B_0=1$, $\alpha=1$ ; fond ionique $n_{i0}=\overline{n_e}=1.088623$ (moyenne de la CI, solubilite du Poisson periodique) ; 60 pas, CFL 0.4 ; minmod + Rusanov, SSPRK2, Poisson `geometric_mg` |
+| Sorties | densite finale $n$ des DEUX chemins (natif, DSL) ; backend retenu ; 2 figures dans `figures/` + `figures/provenance.json` |
+| Invariants garantis | les `assert` de `run.py:194-209` : `np.array_equal(d_dsl, d_natif)` (bit) ; `t_dsl == t_natif` (bit) ; `m_dsl == m_natif` (bit) ; `mass_drift < 1e-6` ; `amp_final > amp_initial` |
+| PROUVE | **egalite bit du chemin complet** : $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ apres 60 pas, `np.array_equal` True ; temps et masse identiques au bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, les deux). L'identite tient parce que les formules DSL emettent les MEMES expressions ponctuelles que `ExBVelocity` et `BackgroundDensity` (table section 3), compilees dans le MEME assembleur par cellule |
+| NE PROUVE PAS | **ce n'est PAS une reproduction publiee**, ni une validation du taux de croissance (cela vit dans [`../diocotron/`](../diocotron/), categorie `reproduction`). Aucun nombre n'est confronte a un article. L'egalite bit prouve que le chemin DSL ne devie pas du chemin natif ; elle ne dit RIEN de la justesse physique des deux (un bug commun aux deux briques resterait invisible). Le backend natif `production` (`add_native_block`) **echoue** sur cette plateforme (ABI : `_adc` bati contre des en-tetes != `include/`) : le run nominal passe par `aot` (host-marshale, numerique identique au natif, verifie). L'egalite bit du chemin `production` n'est donc PAS exercee ici |
+| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend `aot` (apres echec `production`), $96^2$, ~6 s 1 coeur CPU ; `figures/provenance.json` |
 
-Le code DSL ne reside PAS dans le cas : `run.py` importe `adc.dsl` du module compile.
-
----
-
-## 7. Prerequis
-
-- Module `adc` compile et importable (ici `adc_cpp/build-master/python`).
-- Paquet `adc_cases` importable (installe, ou son depot ajoute au `PYTHONPATH`).
-- `numpy`.
-- **Compilateur C++20** (`needs = ["cxx"]`) : `c++` / `g++` / `clang++` (ou `$CXX`). Le DSL
-  compile une `.so` a la volee. Sans compilateur, `m.compile(...)` echoue.
-- En-tetes du coeur adc_cpp accessibles (`adc/mesh/multifab.hpp` doit exister sous le dossier
-  `include/` ; surchargeable via `$ADC_INCLUDE`).
-
-POINT CRITIQUE (backend "production") : le loader natif partage l'ABI C++ du module `_adc` deja
-charge. La cle d'ABI inclut une **signature des en-tetes adc** (`adc_header_signature`). Si les
-en-tetes du dossier `include/` ont DIVERGE de ceux contre lesquels `_adc` a ete construit
-(p.ex. arbre source modifie depuis le dernier build du module), `add_native_block` REJETTE le
-loader avec une erreur explicite (cf. sections 12 et 16). Le backend "aot" n'a pas cette
-contrainte (pas de cle d'ABI verifiee) et reste fonctionnel.
+A la fin tu sauras : quelles conventions du coeur le DSL doit reproduire pour que l'egalite bit
+tienne, comment cette egalite est verifiee (`np.array_equal`, pas de tolerance) et ce qu'une carte
+d'ecart non noire trahirait.
 
 ---
 
-## 8. Commande exacte
+## 1. Physique : liee, pas recopiee
+
+Le mecanisme (anneau/bande de charge, rotation differentielle, instabilite de Kelvin-Helmholtz
+d'un anneau de vorticite, taux $\gamma_l$, relation de dispersion) est derive dans
+[`../diocotron/`](../diocotron/README.md), sections 1, 4 et 5. Ici la CI est une **bande**
+horizontale (`band_density`, mode azimutal 2), la variante periodique minimale du meme cas (cf.
+[`../diocotron/band_instability.py`](../diocotron/band_instability.py)) : pas de paroi conductrice,
+domaine periodique, ce qui rend le Poisson de systeme soluble sans geometrie cartesienne en marches
+d'escalier. Le seul role de la physique ici est de fournir une dynamique non triviale (l'amplitude
+croit, `run.py:209`) sur laquelle l'egalite bit a un sens : deux chemins qui resteraient identiquement
+nuls seraient une egalite vide.
+
+---
+
+## 2. Les deux chemins, et qui compile quoi
+
+Le cas construit le **meme** `adc.System(n=96, L=1, periodic=True)` (`run.py:115`, `make_system`)
+deux fois, avec le meme Poisson (`set_poisson(rhs="charge_density", solver="geometric_mg")`),
+la meme densite initiale et 60 pas `step_cfl(0.4)`. Seul le **bloc** differe :
+
+| Chemin | Construction du bloc | Ligne `run.py` |
+|---|---|---|
+| natif (oracle) | `add_block("ne", model=models.diocotron(B0, alpha, n_i0), spatial=Spatial(minmod=True), time=Explicit())` | `run.py:122-123` (`run_native`) |
+| DSL | `add_equation("ne", model=compiled, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` | `run.py:155-157` (`run_dsl`) |
+
+`models.diocotron` (`adc_cases/models.py:18-25`) est `adc.Model(state=Scalar, transport=ExB(B0),
+source=NoSource, elliptic=BackgroundDensity(alpha, n0=n_i0))` : quatre briques C++ nommees.
+`compiled` est le **meme modele ecrit en expressions** (`diocotron_dsl_model`, `run.py:68-101`),
+emis en C++ par `adc.dsl`, compile en `.so` et charge comme bloc. Pour que `add_equation` et
+`add_block` empruntent le meme assembleur par cellule, il suffit que les expressions DSL emettent
+les memes fonctions ponctuelles que les briques (`flux`, `eigenvalues`, `rhs` elliptique).
+
+### Table 3 couches (qui calcule quoi, chemin DSL)
+
+| Ligne `run.py` | Couche | Ce qui se passe |
+|---|---|---|
+| `sim.add_equation("ne", model=compiled, spatial=FiniteVolume(...), time=Explicit())` (`run.py:155-157`) | Python **compose** | choix du schema (MUSCL minmod + Rusanov) et de l'integrateur (SSPRK2), strictement les memes que le natif (`Spatial(minmod=True)`, `run.py:123`) |
+| `m.flux(...)` / `m.eigenvalues(...)` / `m.elliptic_rhs(...)` (`run.py:88,90,98`) compiles par `model.compile(..., backend=cand)` (`run.py:151`) | les EXPRESSIONS DSL **figent** la physique | le DSL emet en C++ les memes expressions ponctuelles que `ExBVelocity` / `BackgroundDensity` (table section 3) ; ces expressions remplacent la brique nommee |
+| `assemble_rhs<minmod, Rusanov>` + Poisson de systeme (`GeometricMG`) | noyau **par cellule** (device) | le MEME assembleur que `add_block` : `add_equation` aiguille sur `add_native_block` (production) ou `add_compiled_block` (aot), sans callback Python dans le hot path |
+
+C'est le point de tout le cas : la couche du milieu change de FORME (expressions vs brique nommee)
+sans changer le RESULTAT, parce que la couche du bas est identique.
+
+---
+
+## 3. Les conventions du coeur, reproduites en formules (justifie PROUVE)
+
+L'egalite bit ne tient QUE si chaque expression DSL est le sosie exact de la fonction ponctuelle de
+la brique. Voici la correspondance, ancree dans les en-tetes du coeur et dans `run.py`.
+
+### Transport E x B (`include/adc/physics/hyperbolic.hpp`, struct `ExBVelocity`)
+
+La brique native (`hyperbolic.hpp:27-59`) definit la vitesse de derive, le flux et le spectre :
+
+```cpp
+ADC_HD Real velocity(const Aux& a, int dir) const {            // hyperbolic.hpp:31-33
+  return (dir == 0) ? (-a.grad_y / B0) : (a.grad_x / B0);
+}
+f[0] = u[0] * velocity(a, dir);                                // flux : hyperbolic.hpp:36
+e[0] = velocity(a, dir);                                       // eigenvalue : hyperbolic.hpp:46
+```
+
+Les formules DSL (`diocotron_dsl_model`, `run.py:83-94`) reproduisent CHAQUE ligne :
+
+| Convention du coeur | Brique (`hyperbolic.hpp`) | Formule DSL (`run.py`) |
+|---|---|---|
+| vitesse $v=(-\partial_y\phi/B_0,\ \partial_x\phi/B_0)$ | `velocity` l.31-33 : `(-grad_y/B0, grad_x/B0)` | `vx = (-grad_y)/B0`, `vy = grad_x/B0` (`run.py:84-85`) |
+| flux $f = n\,v(\mathrm{dir})$ | `flux` l.34-38 : `u[0]*velocity` | `m.flux(x=[n*vx], y=[n*vy])` (`run.py:88`) |
+| valeur propre (1 onde) $= v(\mathrm{dir})$ | `eigenvalues` l.44-48 : `velocity` | `m.eigenvalues(x=[vx], y=[vy])` (`run.py:90`) |
+| variable conservative unique $n$ (role Density), prim = cons | `conservative_vars`/`to_primitive` l.49-58 : identite | `m.conservative_vars("n")`, `m.primitive_vars(n=n)`, `m.conservative_from([n])` (`run.py:75,93-94`) |
+
+Les champs auxiliaires `phi`/`grad_x`/`grad_y` lus par le flux sont declares cote DSL par
+`m.aux("phi")`, `m.aux("grad_x")`, `m.aux("grad_y")` (`run.py:79-81`) : ils nomment les emplacements
+du canal `adc::Aux` que le coeur remplit avec le potentiel et son gradient, les memes membres
+`a.grad_x`/`a.grad_y` que lit `velocity` (`hyperbolic.hpp:32`). `phi` est declare pour completer le
+contrat mais le flux ne lit que le gradient (`velocity` n'utilise que `grad_x`/`grad_y`), exactement
+comme la brique.
+
+### Second membre elliptique (`include/adc/physics/elliptic.hpp`, struct `BackgroundDensity`)
+
+```cpp
+ADC_HD Real rhs(const State& u) const { return alpha * (u[0] - n0); }   // elliptic.hpp:34-36
+```
+
+Formule DSL (`run.py:98`) : `m.elliptic_rhs(ALPHA * (n - n_i0))`. Meme expression
+$\alpha\,(n - n_{i0})$, meme role (fond neutralisant, RHS a moyenne nulle sur domaine periodique
+grace au choix $n_{i0}=\overline{n_e}$, `run.py:173`). Le bloc se couple au Poisson de systeme via
+`set_poisson(rhs="charge_density")` (`run.py:158`), l'alias generique de la somme des seconds
+membres elliptiques de chaque bloc (ici l'unique `elliptic_rhs`).
+
+### Source
+
+`models.diocotron` utilise `adc.NoSource` ; cote DSL, `diocotron_dsl_model` n'appelle aucun
+`m.source(...)`, ce que `m.check()` (`run.py:100`) accepte (source optionnelle). Pas de terme
+source des deux cotes. `m.check()` verifie que toute variable referencee par
+`flux`/`eigenvalues`/`elliptic_rhs` est declaree (conservative ou aux) : c'est le garde-fou qui
+empeche d'emettre un C++ referencant un symbole fantome.
+
+---
+
+## 4. Comment l'egalite bit est verifiee, et ce qu'une divergence trahirait
+
+`run.py:183-196` lance les deux chemins sur la MEME configuration et compare l'etat final :
+
+```python
+dn, tn, mn = run_native(ne0, n_i0, n_steps)                    # oracle natif (run.py:183)
+dd, td, md, backend = run_dsl(ne0, n_i0, n_steps)              # chemin DSL (run.py:184)
+max_abs = float(np.max(np.abs(dd - dn)))                       # run.py:191
+identical = bool(np.array_equal(dd, dn))                       # run.py:192
+assert identical, "...une formule DSL diverge d'une brique du coeur..."   # run.py:194-196
+```
+
+- `np.array_equal(dd, dn)` exige l'**egalite element par element au bit** : aucune tolerance, aucun
+  `isclose`. C'est l'observable juste pour ce cas : les deux chemins executent le MEME assembleur
+  flottant dans le MEME ordre d'operations, donc tout ecart non nul signalerait que les expressions
+  emises different (une convention de signe, un facteur $1/B_0$ manquant, un $n_{i0}$ oublie), pas
+  un simple bruit d'arrondi.
+- `assert td == tn` (`run.py:206`) et `assert md == mn` (`run.py:207`) verrouillent aussi le temps
+  et la masse au bit : le DSL ne doit pas seulement finir au meme etat, mais y arriver par la meme
+  sequence de pas (meme `step_cfl`, meme `dt` a chaque pas).
+- **Ce qu'une divergence trahirait** : si un seul element de `dd - dn` etait non nul, la cause
+  serait une formule DSL deviant d'une brique du coeur. Exemples cibles : `vx = grad_y/B0` (signe
+  inverse de `velocity`), `vy = grad_x` (facteur $1/B_0$ omis), ou `elliptic_rhs(ALPHA*n)` (fond
+  $n_{i0}$ oublie, qui casserait la moyenne nulle du RHS periodique). Chacune deplacerait l'etat et
+  ferait apparaitre une tache sur la carte de la section 5.
+
+La masse est ensuite controlee dans l'absolu pour le seul chemin DSL : `mass_drift = relative_drift(
+md, mass0)` puis `assert mass_drift < 1e-6` (`run.py:208`). La tolerance $10^{-6}$ est lache : la
+derive mesuree vaut $1.813\times10^{-16}$ (provenance), au niveau machine, car le flux E x B est a
+divergence nulle (conservation exacte au flottant pres). Elle borne la masse loin du signal sans
+exiger l'egalite bit (deja couverte par `md == mn`).
+
+---
+
+## 5. Figures (generees par `make_figures.py`, dans `figures/`)
+
+Generees par `python make_figures.py` (meme configuration que `run.py`), versionnees avec
+`figures/provenance.json`. Commande exacte en section 6.
+
+### `equivalence_heatmap.png` : la carte d'ecart, identiquement noire
+
+![Carte de |n_DSL - n_natif| sur la grille 96x96 : entierement noire, max 0](figures/equivalence_heatmap.png)
+
+- **PROUVE** (asserte `run.py:194`) : la carte de $\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$
+  est **identiquement noire**, $\max=0.0\times10^{0}$, `np.array_equal` True. L'echelle est fixee a
+  $[0,\,10^{-15}]$ (le niveau machine), donc **un seul** pixel different ressortirait ; il n'y en a
+  aucun. Le residu n'est pas "petit", il est **exactement nul** : les deux chemins ont produit le
+  meme tableau bit pour bit.
+- **NON MONTRE** : la carte ne dit RIEN de la justesse physique des deux chemins. Un bug present
+  dans `ExBVelocity` ET reproduit fidelement par la formule DSL donnerait aussi une carte noire.
+  L'egalite bit prouve la non-deviation DSL/natif, pas la correction du modele (validee ailleurs,
+  [`../diocotron/`](../diocotron/)).
+
+### `final_density.png` : controle visuel des deux etats
+
+![Trois panneaux : densite finale natif, densite finale DSL, ecart noir](figures/final_density.png)
+
+- **PROUVE / visible** : les panneaux natif et DSL sont la MEME bande ondulee (mode 2, deux creux),
+  amplitude max $\approx 2$ ; le troisieme panneau (ecart, meme echelle $10^{-15}$) est noir. Les
+  deux chemins suivent la meme dynamique diocotron jusqu'a l'etat final.
+- **SUGGERE (non assere)** : l'ondulation de la bande (le mode azimutal 2 entraine differemment par
+  le cisaillement) est visible et l'amplitude a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
+  10^{-2}\to amp_{final}=1.031\times10^{-1}$, `run.py:202-203`) ; seul $amp_{final}>amp_{0}$ est
+  asserte (`run.py:209`). La phase non lineaire d'enroulement n'est pas atteinte sur 60 pas.
+
+---
+
+## 6. Reproduire (justifie 14 de la checklist : commande + cout mesure)
 
 ```bash
-cd /private/tmp/adc_cases-readmes/diocotron_dsl
-PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-readmes \
-  /opt/homebrew/anaconda3/bin/python3.12 run.py
+cd /private/tmp/adc_cases-deeptut/diocotron_dsl
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 run.py            # le cas : asserts, ~6 s (compile la .so au 1er run)
+PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
+  /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json
 ```
 
-Le `PYTHONPATH` rend importables le module `adc` (premier chemin) et le paquet `adc_cases`
-(second chemin). Aucune option en ligne de commande.
+Prerequis : `numpy`, un compilateur C++20 (`needs = ["cxx"]` : le DSL emet et compile une `.so`),
+et le module `adc` importe **avec le meme interpreteur** que celui qui l'a compile (suffixe ABI
+`cpython-312`). Le `.so` DSL est ecrit sous `out/diocotron_dsl/` via `case_output_dir`
+(`run.py:136`), repertoire git-ignore : aucun artefact jetable dans l'arbre source.
 
----
-
-## 9. Explication du code par etapes
-
-1. **Imports et parametres** : `numpy`, `adc`, `adc.dsl` ; constantes partagees `B0 = 1.0`,
-   `ALPHA = 1.0`. Import de `adc_cases.models` (oracle natif) et des helpers communs.
-
-2. **`diocotron_dsl_model(n_i0)`** : construit le `adc.dsl.Model` :
-   - `m.conservative_vars("n")` : une variable conservative `n` (role `Density`) ;
-   - `m.aux("phi")`, `m.aux("grad_x")`, `m.aux("grad_y")` : champs du canal `adc::Aux` ;
-   - `vx = -grad_y / B0`, `vy = grad_x / B0` : vitesse de derive E x B (convention `ExBVelocity`) ;
-   - `m.flux(x=[n*vx], y=[n*vy])` : flux physique d'advection ;
-   - `m.eigenvalues(x=[vx], y=[vy])` : spectre (une onde, vitesse de derive) ;
-   - `m.primitive_vars(n=n)` + `m.conservative_from([n])` : layout `Prim = [n]`, inversion triviale ;
-   - `m.elliptic_rhs(ALPHA * (n - n_i0))` : second membre elliptique (convention `BackgroundDensity`) ;
-   - `m.check()` : verifie que toute variable referencee est declaree.
-
-3. **`make_system(ne0)`** : `adc.System(n, L=1.0, periodic=True)`, vide (le bloc est ajoute par
-   l'appelant). Garantit que grille / Poisson / densite sont identiques entre les deux runs.
-
-4. **`run_native(ne0, n_i0, n_steps)`** (reference) : `sim.add_block("ne",
-   model=models.diocotron(B0, ALPHA, n_i0), spatial=adc.Spatial(minmod=True),
-   time=adc.Explicit())` ; `sim.set_poisson("charge_density", "geometric_mg")` ;
-   `sim.set_density("ne", ne0)` ; 60 fois `sim.step_cfl(0.4)`. Renvoie `(densite, temps, masse)`.
-
-5. **`run_dsl(ne0, n_i0, n_steps)`** : compile le modele DSL puis branche le bloc compile :
-   - boucle de backend : essaie `"production"` puis `"aot"` ; `model.compile(out/.../diocotron_dsl_<cand>.so,
-     include, backend=cand)`. La 1re compilation reussie est retenue (`break`). **Le try/except
-     n'entoure QUE `model.compile()`** (voir section 16) ;
-   - `sim.add_equation("ne", model=compiled, spatial=adc.FiniteVolume(limiter="minmod",
-     riemann="rusanov"), time=adc.Explicit())` ;
-   - meme Poisson, meme densite, memes 60 `step_cfl(0.4)`. Renvoie `(densite, temps, masse, backend)`.
-
-6. **`main()`** : pose la CI en bande (mode 2), `n_i0 = moyenne(ne0)`, lance les deux runs,
-   imprime le backend retenu, compare les etats, puis verifie les assertions (section 11).
-
----
-
-## 10. Conditions initiales
-
-`band_density(n=96, L=1.0, amp=1.0, width=0.05, mode=2, disp=0.02)` (depuis
-`adc_cases/common/initial_conditions.py`) : bande horizontale de charge perturbee
-sinusoidalement le long de x.
+Sortie attendue de `run.py` (capturee, machine de dev macOS arm64) :
 
 ```
-ne(x, y) = floor + amp * exp( -(y - y0)^2 / width^2 ),
-y0       = 0.5 L + disp * cos( 2 pi * mode * x / L ),   floor = 1.0
-```
-
-Grille 96 x 96, convention `ne[j, i]` (centres de cellules). C'est la MEME grille et IC que la
-variante CI native `diocotron/band_instability.py` (mode 2). Le fond ionique neutralisant
-`n_i0 = moyenne(ne0)` (mesure : `1.088623e+00` pour cette CI) rend le Poisson periodique soluble.
-
----
-
-## 11. Invariants et assertions
-
-Toutes verifiees par `assert` (un echec sort en erreur, CI rouge). Valeurs MESUREES lors du run
-de reference (backend "aot", voir sections 12 et 14) :
-
-| Invariant | Assertion | Valeur mesuree |
-|---|---|---|
-| **Equivalence (coeur du cas)** | `np.array_equal(etat_DSL, etat_natif)` | `True`, `max|DSL - natif| = 0.000e+00` |
-| Temps avance identique | `td == tn` | `t = 6.213869` (les deux) |
-| Masse identique DSL/natif | `md == mn` | `1.0032746734e+04` (les deux) |
-| Conservation de la masse (DSL) | `relative_drift(md, masse0) < 1e-6` | `1.813e-16` |
-| Croissance de l'instabilite | `amp_finale > amp_initiale` | `6.777566e-02 -> 1.031025e-01` (facteur `1.5212`) |
-
-L'amplitude de perturbation est la deviation L2 par rapport a la moyenne en x
-(`perturbation_amplitude`, `axis=1`), comme dans le cas diocotron : la bande non perturbee est
-uniforme le long de x, ce qui reste porte l'instabilite.
-
----
-
-## 12. Sorties attendues
-
-Le run essaie d'abord le backend `production` (chemin natif zero-copie), puis **retombe
-automatiquement sur `aot`** si le chemin natif echoue. Le fallback enrobe la compilation ET le
-branchement `add_native_block` (la garde d'ABI se declenche au BRANCHEMENT, pas a la compilation).
-Le chemin natif echoue quand les en-tetes du module `_adc` deja charge ne concordent pas avec le
-dossier `include/` -- typiquement un module **pre-construit** comme `build-master` dont la cle d'ABI
-de headers differe (`headers=408168b4...` != `headers=f8273719...`). Avec un module fraichement
-construit contre les memes en-tetes, le run selectionne `production`. Dans les deux cas l'etat est
-bit-identique au natif. Sortie reelle (ici via le fallback `aot`) :
-
-```
-=== diocotron_dsl : modele ecrit en formules (adc.dsl.Model) vs briques natives ===
-grille n = 96 x 96, 60 pas, CFL = 0.4
-fond ionique n_i0 = 1.088623e+00 (moyenne de ne)
-backend DSL retenu : 'aot'        # 'production' si l'ABI du module est coherente
+backend 'production' indisponible (RuntimeError), essai suivant
+backend DSL retenu : 'aot'
 natif : t = 6.213869, masse = 1.0032746734e+04
 DSL   : t = 6.213869, masse = 1.0032746734e+04
 max|DSL - natif| = 0.000e+00   bit-identique = True
@@ -273,104 +222,27 @@ derive de masse relative (DSL) = 1.813e-16
 OK diocotron_dsl (equivalence DSL <-> natif bit-identique, backend 'aot')
 ```
 
-Ces chiffres (`t = 6.213869`, masse `1.0032746734e+04`, derive `1.813e-16`, facteur `1.5212`,
-`max|DSL - natif| = 0`) sont les valeurs REELLES capturees en executant le cas sur le chemin aot.
+Le backend natif `production` echoue ici par une cle d'ABI : `_adc` a ete bati contre des en-tetes
+differents de `include/` (`run.py:140-147`), donc `model.compile(backend="production")` puis
+`add_native_block` levent un `RuntimeError` explicite (jamais d'UB silencieux). Le `try`/`except` du
+`for cand in ("production", "aot")` (`run.py:149-164`) rejoue alors tout en `aot`
+(`add_compiled_block`, host-marshale, numerique identique au natif) : c'est ce chemin que le run
+nominal exerce. **Caveat plateforme** : le verdict `OK`, l'egalite bit ($\max=0$) et l'ordre de
+grandeur (temps $\approx 6.2$, masse $\approx 10^{4}$) sont stables ; le backend retenu depend de la
+compatibilite ABI du module `_adc` charge (`production` quand `_adc` est bati contre `include/`,
+`aot` sinon), et les derniers chiffres de $t$/masse varient avec la BLAS et l'ordre de sommation
+(cf. `figures/provenance.json`). Sur un module `production`-compatible, le run prendrait le chemin
+natif et l'egalite bit `add_native_block` serait alors exercee.
 
----
+## Carte des fichiers
 
-## 13. Generation figures/GIF
-
-AUCUNE. Ce cas ne produit ni figure ni GIF (il n'importe pas matplotlib ; `needs` ne contient pas
-`"matplotlib"`). Son unique artefact est la (ou les) bibliotheque(s) partagee(s) generee(s) par le
-DSL, ecrites sous `out/diocotron_dsl/` (chemin `case_output_dir`) :
-
-```
-out/diocotron_dsl/diocotron_dsl_production.so   # produite par la tentative "production"
-out/diocotron_dsl/diocotron_dsl_aot.so          # produite si on atteint le backend "aot"
-```
-
-Fichiers reellement observes apres execution (la `.so` "production" existe meme quand le
-branchement echoue, puisque la compilation, elle, a reussi). Les figures du diocotron complet
-sont l'affaire du cas `diocotron/run.py` (`reproduction`, hors CI).
-
----
-
-## 14. Backends reellement supportes
-
-Trois backends DSL existent (`python/adc/dsl.py`) ; ce cas en essaie deux, dans cet ordre :
-
-| Backend | Adder System | Chemin | Statut dans ce cas |
-|---|---|---|---|
-| `production` | `add_native_block` | loader natif zero-copie, inline `add_compiled_model<ProdModel>`, parite stricte `add_block`, MPI/AMR-ready | PREFERE. Si l'ABI des en-tetes ne concorde pas (module **pre-construit**, cle `408168b4...` != module `f8273719...`), `run_dsl` **retombe sur `aot`**. Avec un module concordant : **utilise**. |
-| `aot` | `add_compiled_block` | chemin de production host-marshale, numerique inlinee, **identique** au natif | FALLBACK. VERIFIE fonctionnel : etat bit-identique au natif (`max|d| = 0`). |
-| `prototype` | `add_dynamic_block` | JIT IModel, dispatch virtuel, Rusanov ordre 1 (hote) | NON utilise par ce cas. |
-
-Capacites declarees (`_BACKEND_CAPS`) : `production` cpu/mpi/amr=True, gpu=False (validation
-device end-to-end depuis Python = PR dediee) ; `aot` cpu seul. La boucle de backend de `run_dsl`
-enrobe compilation ET branchement : avec un module aux en-tetes concordants -> **production** ;
-avec un module pre-construit divergent -> **aot** (fallback automatique). Sur la machine de
-redaction (module `build-master` stale) c'est donc **aot** qui est emprunte (cf. sections 7, 12, 16).
-
----
-
-## 15. Cout approximatif
-
-Cas LEGER. Temps mur mesure (Apple Silicon, Python 3.12, clang Apple 21) :
-
-- run nominal jusqu'a l'echec ABI (compilation "production" + 60 pas natifs) : **~3.3 s** ;
-- run sur le chemin aot (compilation "aot" + run natif + run DSL, 60 pas chacun) : **~2.7 s**.
-
-Inclut la compilation de la `.so` DSL (clang `-O2 -std=c++23`/`c++20`). Pic memoire ~190 Mo
-(maximum resident set). Grille 96 x 96, 60 macro-pas, 2 runs (natif + DSL). Sans GPU, sans MPI,
-mono-process. Le cache de `.so` (`adc_cache_dir`, indexe par `model_hash + abi_key`) accelere les
-relances quand `so_path` est omis ; ici `so_path` est explicite (`out/...`), donc la `.so` est
-recompilee a chaque run.
-
----
-
-## 16. Limites et differences avec les references
-
-- **Pas une reproduction publiee.** Variante minimale periodique (CI en bande, mode 2), pas
-  l'anneau de charge du benchmark arXiv:2510.11808. Le cas valide l'EQUIVALENCE DSL <-> natif et
-  3 invariants legers ; il ne reproduit aucune figure ni taux de croissance publie. La
-  reproduction est l'objet de `diocotron/run.py` (`reproduction`, hors CI).
-
-- **Fallback de backend robuste.** La boucle de backend de `run_dsl` enrobe la compilation **ET**
-  le branchement (`sim.add_equation` -> `add_native_block`). La garde d'ABI se declenche au
-  branchement ; comme il est dans le `try`, un echec "production" -- p.ex. un module **pre-construit**
-  dont les en-tetes ont diverge de `include/` -- **retombe automatiquement sur "aot"** (numerique
-  identique, etat bit-identique au natif). Avec un module `_adc` rebati contre les memes en-tetes que
-  `include/`, "production" (natif zero-copie) est selectionne.
-
-- **Egalite bit-pour-bit conditionnee a la coherence des conventions.** L'assertion
-  `np.array_equal` est SANS tolerance : elle ne tient que parce que les formules DSL reproduisent
-  EXACTEMENT `ExBVelocity` et `BackgroundDensity`, et parce que aot/production inlinent le meme
-  chemin numerique (meme limiteur minmod, meme flux Rusanov, meme SSPRK2, meme Poisson MG). Toute
-  divergence d'une formule, ou un backend a numerique differente (p.ex. "prototype", Rusanov
-  ordre 1), casserait l'egalite.
-
-- **GPU non couvert.** Capacite gpu=False pour les deux backends utilises ; ce cas est CPU
-  mono-process. La validation device du chemin natif depuis Python est hors scope ici.
-
----
-
-## 17. Tests/CI associes
-
-- Manifeste `cases_manifest.toml` : `diocotron_dsl/run.py` est classe `category = "validation"`,
-  `ci = true`, `needs = ["cxx"]`. Il fait donc partie des cas LEGERS lances par la CI
-  (`.github/workflows/ci.yml`), a condition qu'un compilateur C++20 soit disponible sur le
-  runner.
-
-- Le cas EST son propre test : `main()` leve `AssertionError` si l'equivalence bit-pour-bit,
-  l'egalite de temps/masse, la conservation de la masse ou la croissance de l'instabilite
-  echouent. Aucun fichier de test separe.
-
-- Cas frere DSL en CI (memes `needs = ["cxx"]`, meme esprit d'equivalence au natif) :
-  `two_species_dsl/run.py` (electrons + ions en formules) et `magnetic_isothermal_dsl/run.py`
-  (fluide isotherme magnetise en formules). Le pendant natif non-DSL valide ailleurs :
-  `diocotron/band_instability.py` (CI) et `diocotron_amr/run.py` (CI).
-
-- IMPORTANT pour la CI reelle : si le runner fournit un module `_adc` dont la signature d'en-tetes
-  diverge du dossier `include/` du depot, le branchement "production" echouera comme decrit en
-  section 16 (le `try/except` actuel ne retombe pas sur "aot"). Pour une CI robuste, le module
-  doit etre construit contre les en-tetes du depot, OU le fallback doit etre elargi au branchement.
+| Fichier | Role |
+|---|---|
+| `run.py` | les deux chemins (natif vs DSL), egalite bit par `assert` (`np.array_equal`, temps, masse) |
+| `make_figures.py` | rejoue la config, ecrit `equivalence_heatmap.png` + `final_density.png` + `provenance.json` |
+| `figures/equivalence_heatmap.png` | carte $\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, identiquement noire (max 0) |
+| `figures/final_density.png` | natif / DSL / ecart cote a cote (controle visuel) |
+| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, $\max\lvert d\rvert$, temps, masses, amplitude |
+| [`../diocotron/`](../diocotron/) | physique du parent : mecanisme, taux $\gamma_l$, relation de dispersion (NON recopiee ici) |
+| `adc_cpp/include/adc/physics/hyperbolic.hpp` | brique `ExBVelocity` reproduite par les formules DSL |
+| `adc_cpp/include/adc/physics/elliptic.hpp` | brique `BackgroundDensity` reproduite par `elliptic_rhs` |

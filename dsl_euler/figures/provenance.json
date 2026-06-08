@@ -1,0 +1,37 @@
+{
+  "script": "dsl_euler/make_figures.py",
+  "command": "python make_figures.py",
+  "category": "experimental",
+  "note": "prototype DSL interprete numpy (PythonFlux), hors CI ; figures de diagnostic, PAS un asset de reproduction versionne",
+  "produces": [
+    "final_state.png",
+    "bubble_decay.png"
+  ],
+  "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
+  "adc_cases_sha": "1affec1d209e26d5ee422cac255d2cc3f149247a",
+  "backend": "interprete CPU numpy (adc.dsl.HyperbolicModel.flux + adc.PythonFlux Rusanov ordre 1)",
+  "resolution": "64x64",
+  "scheme": "Rusanov ordre 1 + Euler avant, CFL 0.4, periodique",
+  "nsteps": 120,
+  "python": "3.12.2",
+  "numpy": "1.26.4",
+  "platform": "Darwin arm64 (Apple Silicon)",
+  "adc_module": "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python/adc/__init__.py",
+  "measured": {
+    "mass0": 4096.0,
+    "drel": 0.0,
+    "rho_min": 0.9221509875481284,
+    "rho_max": 1.045175106688488,
+    "drho_max": 0.1230241191403596,
+    "p_min_final": 0.975217721964483,
+    "p_max_final": 1.0638494830345921,
+    "p_mean_final": 1.0125090782755886,
+    "p_center_t0": 1.3951468689256001,
+    "p_center_final": 1.0012422011103173,
+    "vmax_final": 0.027003757405550027,
+    "moved_final": 0.3939046678152829,
+    "amp_peak": 0.4571179075303823,
+    "t_amp_peak": 0.148128176987663,
+    "t_final": 0.5885391389848126
+  }
+}
