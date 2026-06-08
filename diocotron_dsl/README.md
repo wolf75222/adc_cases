@@ -15,7 +15,7 @@ etat **au bit pres** (`np.array_equal`, aucune tolerance).
 |---|---|
 | Categorie (manifeste) | `validation` (`cases_manifest.toml`, `diocotron_dsl/run.py`, `ci = true`, `needs = ["cxx"]`) |
 | Entrees | grille $96^2$, $L=1$, **periodique** ; CI bande mode 2 `band_density(amp=1, width=0.05, mode=2, disp=0.02)` ; $B_0=1$, $\alpha=1$ ; fond ionique $n_{i0}=\overline{n_e}=1.088623$ (moyenne de la CI, solubilite du Poisson periodique) ; 60 pas, CFL 0.4 ; minmod + Rusanov, SSPRK2, Poisson `geometric_mg` |
-| Sorties | densite finale $n$ des DEUX chemins (natif, DSL) ; backend retenu ; 2 figures dans `figures/` + `figures/provenance.json` |
+| Sorties | densite finale $n$ des DEUX chemins (natif, DSL) ; backend retenu ; 1 figure (3 panneaux) dans `figures/` + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py:194-209` : `np.array_equal(d_dsl, d_natif)` (bit) ; `t_dsl == t_natif` (bit) ; `m_dsl == m_natif` (bit) ; `mass_drift < 1e-6` ; `amp_final > amp_initial` |
 | PROUVE | **egalite bit du chemin complet** : $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ apres 60 pas, `np.array_equal` True ; temps et masse identiques au bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, les deux). L'identite tient parce que les formules DSL emettent les MEMES expressions ponctuelles que `ExBVelocity` et `BackgroundDensity` (table section 3), compilees dans le MEME assembleur par cellule |
 | NE PROUVE PAS | **ce n'est PAS une reproduction publiee**, ni une validation du taux de croissance (cela vit dans [`../diocotron/`](../diocotron/), categorie `reproduction`). Aucun nombre n'est confronte a un article. L'egalite bit prouve que le chemin DSL ne devie pas du chemin natif ; elle ne dit RIEN de la justesse physique des deux (un bug commun aux deux briques resterait invisible). Le backend natif `production` (`add_native_block`) **echoue** sur cette plateforme (ABI : `_adc` bati contre des en-tetes != `include/`) : le run nominal passe par `aot` (host-marshale, numerique identique au natif, verifie). L'egalite bit du chemin `production` n'est donc PAS exercee ici |
@@ -166,31 +166,27 @@ exiger l'egalite bit (deja couverte par `md == mn`).
 Generees par `python make_figures.py` (meme configuration que `run.py`), versionnees avec
 `figures/provenance.json`. Commande exacte en section 6.
 
-### `equivalence_heatmap.png` : la carte d'ecart, identiquement noire
+### `equivalence_heatmap.png` : trois panneaux (natif, DSL, ecart)
 
-![Carte de |n_DSL - n_natif| sur la grille 96x96 : entierement noire, max 0](figures/equivalence_heatmap.png)
+![Trois panneaux cote a cote : densite finale natif, densite finale DSL (memes bandes ondulees), et la carte d'ecart entierement noire (max 0)](figures/equivalence_heatmap.png)
 
-- **PROUVE** (asserte `run.py:194`) : la carte de $\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$
-  est **identiquement noire**, $\max=0.0\times10^{0}$, `np.array_equal` True. L'echelle est fixee a
-  $[0,\,10^{-15}]$ (le niveau machine), donc **un seul** pixel different ressortirait ; il n'y en a
-  aucun. Le residu n'est pas "petit", il est **exactement nul** : les deux chemins ont produit le
-  meme tableau bit pour bit.
-- **NON MONTRE** : la carte ne dit RIEN de la justesse physique des deux chemins. Un bug present
-  dans `ExBVelocity` ET reproduit fidelement par la formule DSL donnerait aussi une carte noire.
-  L'egalite bit prouve la non-deviation DSL/natif, pas la correction du modele (validee ailleurs,
-  [`../diocotron/`](../diocotron/)).
+On montre les **deux champs reels** (panneaux 1 et 2) PUIS leur ecart (panneau 3), plutot qu'un
+carre noir seul qui aurait l'air vide ou casse.
 
-### `final_density.png` : controle visuel des deux etats
-
-![Trois panneaux : densite finale natif, densite finale DSL, ecart noir](figures/final_density.png)
-
-- **PROUVE / visible** : les panneaux natif et DSL sont la MEME bande ondulee (mode 2, deux creux),
-  amplitude max $\approx 2$ ; le troisieme panneau (ecart, meme echelle $10^{-15}$) est noir. Les
-  deux chemins suivent la meme dynamique diocotron jusqu'a l'etat final.
-- **SUGGERE (non assere)** : l'ondulation de la bande (le mode azimutal 2 entraine differemment par
-  le cisaillement) est visible et l'amplitude a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
+- **PROUVE / visible** : les panneaux natif et DSL sont la **MEME** bande ondulee (mode azimutal 2,
+  deux creux), densite de $1.0$ a $\approx 1.98$ ($\sigma\approx 0.23$, donc un champ **structure**,
+  pas uniforme). Le troisieme panneau ($\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, echelle
+  fixee $[0,\,10^{-15}]$) est **identiquement noir** : $\max=0.0\times10^{0}$, `np.array_equal` True
+  (asserte `run.py:194`). L'echelle au niveau machine garantit qu'un **seul** pixel different
+  ressortirait ; il n'y en a aucun. Le residu n'est pas "petit", il est **exactement nul** : meme
+  tableau bit pour bit.
+- **SUGGERE (non assere)** : l'amplitude du mode a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
   10^{-2}\to amp_{final}=1.031\times10^{-1}$, `run.py:202-203`) ; seul $amp_{final}>amp_{0}$ est
   asserte (`run.py:209`). La phase non lineaire d'enroulement n'est pas atteinte sur 60 pas.
+- **NON MONTRE** : l'egalite bit ne dit RIEN de la justesse physique. Un bug present dans
+  `ExBVelocity` ET reproduit fidelement par la formule DSL donnerait aussi une carte noire. Elle
+  prouve la non-deviation DSL/natif, pas la correction du modele (validee ailleurs,
+  [`../diocotron/`](../diocotron/)).
 
 ---
 
@@ -239,9 +235,8 @@ natif et l'egalite bit `add_native_block` serait alors exercee.
 | Fichier | Role |
 |---|---|
 | `run.py` | les deux chemins (natif vs DSL), egalite bit par `assert` (`np.array_equal`, temps, masse) |
-| `make_figures.py` | rejoue la config, ecrit `equivalence_heatmap.png` + `final_density.png` + `provenance.json` |
-| `figures/equivalence_heatmap.png` | carte $\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, identiquement noire (max 0) |
-| `figures/final_density.png` | natif / DSL / ecart cote a cote (controle visuel) |
+| `make_figures.py` | rejoue la config, ecrit `equivalence_heatmap.png` (3 panneaux) + `provenance.json` |
+| `figures/equivalence_heatmap.png` | 3 panneaux : densite natif, densite DSL, ecart (noir, max 0) |
 | `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, $\max\lvert d\rvert$, temps, masses, amplitude |
 | [`../diocotron/`](../diocotron/) | physique du parent : mecanisme, taux $\gamma_l$, relation de dispersion (NON recopiee ici) |
 | `adc_cpp/include/adc/physics/hyperbolic.hpp` | brique `ExBVelocity` reproduite par les formules DSL |

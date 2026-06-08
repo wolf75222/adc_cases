@@ -264,6 +264,28 @@ Tous les nombres ci-dessous sont ceux du run (cf. `figures/provenance.json`).
 - **NON MONTRE** : on ne montre PAS le scenario **sans** reflux (qui sortirait du graphe par une derive
   en marches a chaque regrid). La figure prouve que le reflux *present* conserve, pas le contrefactuel.
 
+### `diocotron_amr_hero.gif` : la figure hero du README adc_cpp, en version locale
+
+Le README d'adc_cpp affiche en tete une animation, `docs/anim_romeo_diocotron_amr3.gif`
+(instabilite diocotron sur AMR). `make_hero_gif.py` en produit une version **reproductible
+localement** : l'evolution de la densite (mode $l=4$) sur grille uniforme et sur AMR, cote a cote.
+
+![Uniforme vs AMR, etat final du diocotron mode l=4 (image de couverture du GIF)](figures/diocotron_amr_hero_cover.png)
+
+![Animation diocotron sur AMR : evolution uniforme vs AMR](figures/diocotron_amr_hero.gif)
+
+- **PROUVE / visible** : l'AMR developpe la MEME instabilite a 4 lobes que la grille uniforme, mais
+  ses structures sont **plus nettes** (la resolution est concentree la ou la densite varie). Le
+  nombre de patchs fins est annote sur chaque trame (`n_patches()`).
+- **PORTEE HONNETE (NON MONTRE)** : la facade Python `adc.AmrSystem` raffine sur **UN niveau fin
+  multi-patch** (Berger-Rigoutsos), PAS sur 3 niveaux. La figure hero du README a ete produite par le
+  **moteur C++ multi-niveaux** (`advance_amr`) sur **ROMEO** (GH200), non expose dans la facade
+  Python. Ce GIF reproduit donc le **visuel** (diocotron suivi par un AMR adaptatif), pas les 3
+  niveaux exacts du run ROMEO. Le binding n'expose pas la geometrie des patchs (`patch_boxes`),
+  seulement leur nombre : on annote `n_patches()`, on ne dessine pas les rectangles.
+- Genere par `python make_hero_gif.py` ; provenance dans `figures/provenance.json` (champ
+  `difference_avec_hero`).
+
 ---
 
 ## 7. Ce que l'invariant ne capture pas

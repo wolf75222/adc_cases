@@ -57,6 +57,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      # Garde-fous (rapide, pur Python, AVANT de lancer les cas) : chaque dossier avec run.py a un
+      # README, chaque path du manifeste existe, aucun em-dash dans les README, images existantes.
+      - name: Check cases (README + manifeste + em-dash)
+        run: python check_cases.py
+
       - name: Run light cases (manifest ci = true)
         # On lit le manifeste et on lance les cas legers UNIQUEMENT. Le module `adc` (binding
         # C++) est fourni par le PYTHONPATH du build adc_cpp.

@@ -21,7 +21,7 @@ trahirait.
 |---|---|
 | Categorie (manifeste) | `validation` (`ci = true`, `needs = ["cxx"]`, [`cases_manifest.toml:94-99`](../cases_manifest.toml)). PAS une reproduction publiee : on verifie une EQUIVALENCE de chemins, pas une courbe d'article. |
 | Entrees | grille $48^2$, $L=1$, **periodique** ; electrons $n_e=1+0.02\cos(2\pi x)$, ions $n_i=1$ (separation de charge -> Poisson non trivial) ; charges $q_e=-1$, $q_i=+1$ ; $\gamma_e=5/3$, $c_{s,i}^2=1$ ; 15 pas, CFL = 0.4 (`step_cfl(0.4)`), SSPRK2 + minmod + Rusanov pour les DEUX blocs, Poisson `geometric_mg`, RHS `charge_density` |
-| Sorties | etats `get_state("electrons")` $(4,n,n)$ et `get_state("ions")` $(3,n,n)$ des DEUX chemins (natif et DSL) ; `print` des $\max\lvert\text{DSL}-\text{natif}\rvert$ par espece + verdict `np.array_equal` ; 2 figures `figures/equivalence_{electrons,ions}.png` + `figures/provenance.json` |
+| Sorties | etats `get_state("electrons")` $(4,n,n)$ et `get_state("ions")` $(3,n,n)$ des DEUX chemins (natif et DSL) ; `print` des $\max\lvert\text{DSL}-\text{natif}\rvert$ par espece + verdict `np.array_equal` ; 2 figures `figures/equivalence_{electrons,ions}.png` (3 panneaux par espece : $\rho$ natif, $\rho$ DSL, ecart) + `figures/provenance.json` |
 | Invariants garantis | les `assert` de `run.py` : (1) electrons $\max\lvert\text{DSL}-\text{natif}\rvert<10^{-24}$ (`run.py:227`) ; (2) ions `np.array_equal` OU $<10^{-24}$ (`run.py:229`) ; (3) masse par espece `relative_drift < 1e-9` (`run.py:242-243`) ; (4) etats finis et densites $>0$ (`run.py:238-241`) |
 | PROUVE | **ions bit-identiques** : $\max\lvert\text{DSL}-\text{natif}\rvert=0.000\times10^{0}$ exactement, sur les 3 composantes (`np.array_equal == True`) ; **electrons sous tolerance machine** : $\max\lvert\text{DSL}-\text{natif}\rvert=4.930\times10^{-32}$, confine a la SEULE composante $\rho v$ ($\rho$, $\rho u$, $E$ a $0.0$ exactement) ; masse conservee par espece (derive relative $1.20\times10^{-14}$ electrons, $1.16\times10^{-14}$ ions) |
 | NE PROUVE PAS | aucun resultat physique : meme CI cosinus jouet que `multispecies`, 15 pas, pas de longueur de Debye ni de frequence plasma, pas de taux. L'egalite electron n'est PAS bit-exacte ($4.93\times10^{-32}\ne0$) : c'est une reassociation FP du RHS de Poisson partage, pas une egalite stricte ; on l'asserte sous $10^{-24}$, pas a `array_equal`. Le $4.93\times10^{-32}$ est plateforme-dependant (BLAS, ordre de reduction MG) ; seuls le confinement a $\rho v$ et l'ordre $\ll10^{-24}$ sont stables. Backend reel = `aot` (la garde d'ABI rejette `production` sur module pre-construit) |
@@ -150,41 +150,61 @@ $q n$ avec le mauvais $q$. L'assert serait alors $O(10^{-2})$, pas $O(10^{-32})$
 ## 4. Figures (regenerees par `make_figures.py`, dans `figures/`)
 
 `make_figures.py` re-joue EXACTEMENT `run.py` (importe ses fonctions `run_native`/`run_dsl`/`initial_conditions`,
-memes parametres, meme backend) et trace, PAR ESPECE et PAR COMPOSANTE conservative, la heatmap de
-$\lvert\text{etat}_{\text{DSL}}-\text{etat}_{\text{natif}}\rvert$. Nombres cites :
-`figures/provenance.json`. Commande exacte en section 5.
+memes parametres, meme backend) et trace, PAR ESPECE, **une figure a 3 panneaux** sur la composante
+DENSITE $\rho$ (index 0 de l'etat conservatif des deux modeles) :
 
-### `equivalence_ions.png` : bit-identiques, identiquement noires
+$$[\,\rho\ \text{natif}\,]\ \mid\ [\,\rho\ \text{DSL}\,]\ \mid\ [\,\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert\,]$$
 
-![Trois heatmaps ions (rho, rho_u, rho_v) toutes uniformement noires, max|d|=0](figures/equivalence_ions.png)
+Les **deux premiers panneaux** (viridis, MEME echelle de couleur) montrent le champ de densite REEL
+et structure produit par chaque chemin : on y VOIT le cosinus module advecte, et on constate a l'oeil
+que natif et DSL sont **le meme champ** (pas un carre noir vide). Le **troisieme panneau** (inferno,
+echelle fixe) montre l'ecart $\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert$ : noir = match. On
+prouve l'egalite en montrant d'abord deux champs identiques, PUIS la carte d'ecart noire (max annote),
+au lieu d'un seul diff noir qui aurait l'air casse. Nombres cites : `figures/provenance.json`.
+Commande exacte en section 5.
 
-- **PROUVE** (asserte `run.py:229`) : les 3 composantes ioniques sont **identiquement noires**,
-  $\max\lvert\text{DSL}-\text{natif}\rvert=0.000\times10^{0}$ sur chacune, `np.array_equal == True`.
-  Un SEUL pixel non noir signalerait que la formule isotherme DSL diverge d'`IsothermalFlux` ou que
-  `PotentialForce`/`ChargeDensity` est mal reproduit. La carte est l'observable visuelle de
-  l'egalite stricte.
-- **NON MONTRE** : la carte ne dit rien de la dynamique ionique elle-meme (modulation
-  $\sim4\times10^{-6}$ induite par le couplage, cf. `../multispecies/` sec. 6) ; elle ne montre que
-  la DIFFERENCE DSL/natif, pas l'etat.
+> **Note sur l'observable.** La figure se concentre sur $\rho$, ou les **deux** especes sont
+> **bit-identiques** ($\max\lvert d\rvert_\rho = 0$ exactement). L'epsilon machine de l'etat electron
+> ($4.93\times10^{-32}$) ne vit PAS dans $\rho$ mais dans la composante $\rho v$ (cf. sec. 3 et
+> `provenance.json`, `max_abs_diff_per_var_electrons`). Le panneau d'ecart electron annote donc DEUX
+> nombres : `max|d|` sur $\rho$ (= 0) et `etat complet` (= $4.93\times10^{-32}$, max sur les 4
+> composantes), pour que la signature FP reste documentee meme si la densite, elle, est exacte.
 
-### `equivalence_electrons.png` : divergence confinee a $\rho v$, sous $10^{-24}$
+### `equivalence_ions.png` : densite reelle visible, ecart noir (bit-identique)
 
-![Quatre heatmaps electrons : rho, rho_u, E noires (max|d|=0) ; rho_v montre des cellules eparses a l'echelle 1e-32](figures/equivalence_electrons.png)
+![Trois panneaux ions : rho natif et rho DSL (champ structure, modulation ~1e-4 visible en viridis), puis |rho_DSL - rho_natif| noir, max=0](figures/equivalence_ions.png)
 
-- **PROUVE** (asserte `run.py:227`) : $\rho$, $\rho u$ et $E$ sont **identiquement noires**
-  ($\max\lvert d\rvert=0.000\times10^{0}$ exactement) ; la divergence est **confinee a la seule
-  composante $\rho v$** (y-quantite de mouvement), a $4.930\times10^{-32}$ -- soit $\sim10^{8}$ fois
-  SOUS la tolerance $10^{-24}$. C'est l'observable de la reassociation FP : un epsilon machine, pas
-  un ecart de physique.
-- **SUGGERE (non assere)** : le confinement a $\rho v$ est coherent avec le mecanisme du chemin de
-  couplage. La CI electron est modulee en $x$ ($\cos 2\pi x$) ; le champ $\mathbf{E}=-\nabla\phi$
-  reagit, et c'est sur la y-quantite de mouvement que la reassociation du RHS partage se manifeste a
-  la precision mesurable en premier. Aucun `assert` ne teste ce confinement -- il est lu sur la
-  carte, pas verifie.
-- **NON MONTRE** : la valeur exacte $4.93\times10^{-32}$ et le motif precis des cellules eparses sont
-  plateforme-dependants (ordre de reduction du multigrille, BLAS) ; seuls l'ordre $\ll10^{-24}$ et le
-  fait que $\rho$/$\rho u$/$E$ restent a $0$ exact sont stables. La carte ne couvre pas non plus la
-  stabilite sur $>15$ pas (l'accumulation d'arrondi croit lentement).
+- **PROUVE** (asserte `run.py:229`) : panneaux 1 et 2 = la densite ionique reelle (modulation induite
+  $\sim10^{-4}$ autour de $n_i=1$, advectee), **identique a l'oeil** entre natif et DSL ; panneau 3 =
+  ecart **uniformement noir**, $\max\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert=0.000\times10^{0}$,
+  et tout l'etat ionique est `np.array_equal == True`. Un SEUL pixel non noir dans le panneau d'ecart
+  signalerait que la formule isotherme DSL diverge d'`IsothermalFlux` ou que
+  `PotentialForce`/`ChargeDensity` est mal reproduit.
+- **NON MONTRE** : la figure montre la DENSITE et son ecart, pas les composantes de quantite de
+  mouvement ($\rho u$, $\rho v$) ni la dynamique fine (modulation $\sim4\times10^{-6}$ du couplage,
+  cf. `../multispecies/` sec. 6). Les ecarts par composante restent dans `provenance.json`
+  (`max_abs_diff_per_var_ions`), tous a $0$.
+
+### `equivalence_electrons.png` : densite reelle visible, ecart $\rho$ noir, epsilon FP en $\rho v$
+
+![Trois panneaux electrons : rho natif et rho DSL (cosinus +/-1.6 % structure en viridis), puis |rho_DSL - rho_natif| noir, max rho=0, etat complet 4.93e-32 annote](figures/equivalence_electrons.png)
+
+- **PROUVE** (asserte `run.py:227`) : panneaux 1 et 2 = la densite electronique reelle (cosinus
+  $1\pm1.6\,\%$ en $x$, $\approx0.984$ a $1.016$, advectee), **identique a l'oeil** entre natif et DSL ;
+  panneau 3 = ecart sur $\rho$ **uniformement noir**, $\max\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert=0.000\times10^{0}$
+  exactement. La densite electronique est donc **bit-identique** entre les deux chemins.
+- **SUGGERE (non assere)** : l'epsilon machine de l'etat electron ($4.930\times10^{-32}$, annote
+  `etat complet` sur le panneau d'ecart) est **confine a la composante $\rho v$** (y-quantite de
+  mouvement) ; $\rho$, $\rho u$ et $E$ sont a $0$ exact. Ce confinement est coherent avec le mecanisme
+  du couplage (reassociation FP du RHS de Poisson partage, cf. sec. 3) : la CI electron est modulee en
+  $x$, le champ $\mathbf{E}=-\nabla\phi$ reagit, et c'est sur $\rho v$ que la reassociation se
+  manifeste a la precision mesurable en premier. Aucun `assert` ne teste ce confinement -- il est lu
+  sur `provenance.json` (`max_abs_diff_per_var_electrons`), pas verifie.
+- **NON MONTRE** : la figure ne trace pas $\rho v$ (ou vit l'epsilon) ; pour le voir, lire
+  `provenance.json`. La valeur exacte $4.93\times10^{-32}$ et le motif des cellules concernees sont
+  plateforme-dependants (ordre de reduction du multigrille, BLAS) ; seuls l'ordre $\ll10^{-24}$, la
+  densite bit-exacte, et le fait que $\rho$/$\rho u$/$E$ restent a $0$ exact sont stables. La carte ne
+  couvre pas la stabilite sur $>15$ pas (l'accumulation d'arrondi croit lentement).
 
 ---
 
@@ -232,7 +252,7 @@ reduction du multigrille (cf. `figures/provenance.json`).
 | Fichier | Role |
 |---|---|
 | [`run.py`](run.py) | le cas (CI) : 2 modeles DSL (electrons 4 var, ions 3 var), compile, branche, compare au natif par espece, `assert` d'equivalence + invariants |
-| [`make_figures.py`](make_figures.py) | rejoue `run.py`, trace `equivalence_{electrons,ions}.png` (heatmap par composante) + `provenance.json` (hors CI) |
+| [`make_figures.py`](make_figures.py) | rejoue `run.py`, trace `equivalence_{electrons,ions}.png` (3 panneaux par espece : $\rho$ natif, $\rho$ DSL, ecart) + `provenance.json` (hors CI) |
 | `figures/*.png`, `figures/provenance.json` | diagnostics versionnes : SHA adc_cpp/adc_cases, backend, $\max\lvert d\rvert$ par composante, derives de masse |
 | [`../multispecies/`](../multispecies/) | la MEME physique en briques natives : DERIVATION des equations, du couplage Poisson et de la conservation de masse |
 | [`adc_cases/models.py`](../adc_cases/models.py) | `electron_euler()`, `ion_isothermal()` = oracle natif de reference (`l.28-45`) |
