@@ -9,11 +9,23 @@
       "superseded_note": "Les fenetres papier (temps T_d) etaient fittees sur le temps de SIMULATION brut (transitoire) et gamma reporte sans 2pi/rhobar. Apres correction (fenetres mappees t_sim=2pi/rhobar*t_paper + gamma_paper=gamma_raw*2pi/rhobar), le full system-schur reproduit le papier a l=3 -9.1%, l=4 -1.9%, l=5 +0.04% (voir growth_rate.png et RESULTS_SYSTEM_SCHUR.md section 9). Figure conservee pour l'historique.",
       "engine": "full-system-schur (cart-square baseline, mesure pre-T3 dans la mauvaise horloge)",
       "measured": {
-        "256": {"3": 0.0372, "4": 0.0489, "5": 0.1211},
-        "384": {"3": 0.0385, "4": 0.0613, "5": 0.1257}
+        "256": {
+          "3": 0.0372,
+          "4": 0.0489,
+          "5": 0.1211
+        },
+        "384": {
+          "3": 0.0385,
+          "4": 0.0613,
+          "5": 0.1257
+        }
       },
       "normalization": "raw (no 2pi, no rhobar) -- PREMISSE INCORRECTE, corrigee en T3",
-      "paper_targets": {"3": 0.772, "4": 0.911, "5": 0.683},
+      "paper_targets": {
+        "3": 0.772,
+        "4": 0.911,
+        "5": 0.683
+      },
       "reading": "OBSOLETE : lisait 'reproduction NOT shown, -82 a -95%'. Le deficit etait la fenetre+horloge, pas le solveur.",
       "source_of_numbers": "VERBATIM from pre-T3 README table / adc_cpp HOFFART_FIDELITY.md",
       "what": "raw full-system-schur growth rate vs paper target (mesure pre-T3, superseded)"
@@ -23,44 +35,107 @@
       "engine": "derive ExB normalisee (Scalar+ExB(B0=1)+ChargeDensity(charge=1)), n=128, t_f=10*T_d",
       "reading": "anneau -> triangle (3-fold) -> rollup 3 bras -> filamentation ; reproduit qualitativement Fig 5.1",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues (style papier)",
-      "source": "diag/make_paper_figures.py 3"
+      "source": "diag/make_paper_figures.py 3",
+      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
     },
     "snapshots_l4.png": {
       "what": "grille 3x3 schlieren de la densite, mode l=4 (style Hoffart et al. Fig 5.2)",
       "engine": "derive ExB normalisee, n=128, t_f=10*T_d",
       "reading": "anneau -> carre -> etoile 4 -> 4 vortex + filaments ; reproduit qualitativement Fig 5.2",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues",
-      "source": "diag/make_paper_figures.py 4"
+      "source": "diag/make_paper_figures.py 4",
+      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
     },
     "snapshots_l5.png": {
       "what": "grille 3x3 schlieren de la densite, mode l=5 (style Hoffart et al. Fig 5.3)",
       "engine": "derive ExB normalisee, n=128, t_f=10*T_d",
       "reading": "anneau -> pentagone -> etoile 5 -> 5 vortex en couronne ; reproduit qualitativement Fig 5.3",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues",
+      "source": "diag/make_paper_figures.py 5",
+      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
+    },
+    "diocotron_l3.gif": {
+      "what": "animation du rollup diocotron l=3 (memes couleurs que Fig 5.1)",
+      "source": "diag/make_paper_figures.py 3"
+    },
+    "diocotron_l4.gif": {
+      "what": "animation du rollup diocotron l=4 (memes couleurs que Fig 5.2)",
+      "source": "diag/make_paper_figures.py 4"
+    },
+    "diocotron_l5.gif": {
+      "what": "animation du rollup diocotron l=5 (memes couleurs que Fig 5.3)",
       "source": "diag/make_paper_figures.py 5"
     },
-    "diocotron_l3.gif": {"what": "animation du rollup diocotron l=3 (memes couleurs que Fig 5.1)", "source": "diag/make_paper_figures.py 3"},
-    "diocotron_l4.gif": {"what": "animation du rollup diocotron l=4 (memes couleurs que Fig 5.2)", "source": "diag/make_paper_figures.py 4"},
-    "diocotron_l5.gif": {"what": "animation du rollup diocotron l=5 (memes couleurs que Fig 5.3)", "source": "diag/make_paper_figures.py 5"},
     "growth_rate.png": {
       "what": "taux de croissance, style Hoffart et al. Fig 5.4 : (a,b,c) |c_l(t)|/|c_l(0)| semilog + fenetre MAPPEE + pente papier ; (d) gamma vs cible",
       "normalization": "gamma_paper = gamma_raw_sim * 2pi/rhobar (rhobar=rho_max=1) ; fenetres papier MAPPEES en temps sim",
-      "full_system_schur_T3": {"3": 0.702, "4": 0.894, "5": 0.683},
-      "exb_drift_n128_x2pi": {"3": 0.743, "4": 0.868, "5": 0.687},
-      "paper_targets": {"3": 0.772, "4": 0.911, "5": 0.683},
-      "relative_error_full_T3_percent": {"3": -9.1, "4": -1.9, "5": 0.04},
+      "full_system_schur_T3": {
+        "3": 0.702,
+        "4": 0.894,
+        "5": 0.683
+      },
+      "exb_drift_n128_x2pi": {
+        "3": 0.743,
+        "4": 0.868,
+        "5": 0.687
+      },
+      "paper_targets": {
+        "3": 0.772,
+        "4": 0.911,
+        "5": 0.683
+      },
+      "relative_error_full_T3_percent": {
+        "3": -9.1,
+        "4": -1.9,
+        "5": 0.04
+      },
       "reading": "REPRODUCTION : full system-schur a -9.1/-1.9/+0.04% du papier (l=3/4/5) apres mesure paper-faithful. Metrologie PARTIELLE : residu ~0-9% = bord cart + resolution + roll-off de fenetre ; l=5 sensible a la fenetre (son +0.04% partiellement fortuit).",
-      "source": "diag/make_paper_figures.py (full data) + RESULTS_SYSTEM_SCHUR.md section 9 pour le full T3"
+      "source": "diag/make_paper_figures.py (full data) + RESULTS_SYSTEM_SCHUR.md section 9 pour le full T3",
+      "resolution": "n=256"
     },
     "oracle_residual.png": {
       "engine": "analytic oracle (check_model.py), beta=3 theta=0.25",
       "machine_eps": 2.220446049250313e-16,
       "reading": "PROVED: the compiled symbolic model equals the analytic formulas BIT-EXACTLY (all four residuals are exactly 0.0)",
-      "residual_max": {"flux_x": 0.0, "flux_y": 0.0, "poisson_rhs": 0.0, "source": 0.0},
+      "residual_max": {
+        "flux_x": 0.0,
+        "flux_y": 0.0,
+        "poisson_rhs": 0.0,
+        "source": 0.0
+      },
       "what": "max residual |compiled DSL - analytic formula| on 2x2 cells"
+    },
+    "perf_local.png": {
+      "what": "cout local + convergence du run system-schur (1 coeur arm64, Kokkos OFF)",
+      "data": {
+        "96": "120s",
+        "128": "246s",
+        "192": "490s"
+      },
+      "source": "timing local"
+    },
+    "romeo_scaling.png": {
+      "what": "scaling threads ROMEO (x64cpu AMD EPYC 9654) du diocotron AMR 3 niveaux, res 512, 60 pas",
+      "reading": "speedup sature ~1.6x a 24 threads (pas a petit noyau : Poisson MG + flux, peu scalable)",
+      "data": {
+        "1": "10.9s",
+        "12": "7.0s",
+        "24": "6.6s",
+        "96": "7.4s"
+      },
+      "source": "ROMEO job 648140"
+    },
+    "amr3_frame.png": {
+      "what": "frame de l'AMR 3 niveaux (exemple C++ diocotron_amr3, config PLANAIRE, distincte de l'anneau)",
+      "reading": "niveau 1 (cyan) et 2 (vert) suivent la couche de cisaillement ; demo machinerie AMR",
+      "source": "ROMEO job 648139"
+    },
+    "diocotron_amr3_romeo.gif": {
+      "what": "animation AMR 3 niveaux (diocotron planaire), ROMEO 96 coeurs x64cpu, drift ~1e-14",
+      "source": "ROMEO job 648139 (res 256, 600 pas, 14.4s)"
     }
   },
   "paper": "https://arxiv.org/abs/2510.11808",
   "python": "3.12 (anaconda3, macOS arm64)",
-  "reproduction_status": "REPRODUCTION FV cartesienne ETABLIE a <10% (T3, juin 2026) : full system-schur l=3 -9.1%, l=4 -1.9%, l=5 +0.04% apres mesure paper-faithful (fenetres mappees + 2pi/rhobar). Metrologie PARTIELLE (residu grille/resolution/fenetre). Le 'PENDING -95%' precedent etait un artefact de metrologie."
+  "reproduction_status": "REPRODUCTION FV cartesienne ETABLIE a <10% (T3, juin 2026) : full system-schur l=3 -9.1%, l=4 -1.9%, l=5 +0.04% apres mesure paper-faithful (fenetres mappees + 2pi/rhobar). Metrologie PARTIELLE (residu grille/resolution/fenetre). Le 'PENDING -95%' precedent etait un artefact de metrologie. | PERF : local 1 coeur (n=96 120s ... n=192 490s) ; ROMEO scaling threads ~1.6x a 24 (diocotron AMR petit noyau) ; ROMEO AMR 3 niveaux (config planaire) demo ; ROMEO anneau haute-res hero +8% (metrologie C++ differente du T3 Python -2%)."
 }

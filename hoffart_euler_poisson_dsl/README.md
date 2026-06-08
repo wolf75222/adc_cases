@@ -27,7 +27,8 @@ figure 5.2 du papier. Ce README explique tout, de la compilation à cette animat
 7. [La mesure et la leçon du facteur 2π](#7-la-mesure-et-la-leçon-du-facteur-2π)
 8. [Les figures obtenues](#8-les-figures-obtenues)
 9. [Convergence](#9-convergence)
-10. [Carte des fichiers](#10-carte-des-fichiers)
+10. [Performance et passage à l'échelle (local + ROMEO)](#10-performance-et-passage-à-léchelle-local--romeo)
+11. [Carte des fichiers](#11-carte-des-fichiers)
 
 ## 1. Le résultat
 
@@ -308,7 +309,74 @@ L'erreur relative au papier tend vers zéro quand la grille se raffine. Le rési
 
 À n=256 les trois modes reproduisent le papier à moins de 1 %.
 
-## 10. Carte des fichiers
+## 10. Performance et passage à l'échelle (local + ROMEO)
+
+### Coût local (1 cœur)
+
+Le build local de référence est sériel (Kokkos OFF), donc un seul thread même sur une machine
+8 cœurs. Pour le modèle complet `system-schur` avec le solve Krylov de Schur, dt=2e-3, t_end=10
+(5000 pas), par mode, sur Apple Silicon arm64 :
+
+| n | wall (1 cœur) | gamma_paper (l=3) | erreur |
+|---|---|---|---|
+| 96 | 120 s | 0.702 | −9.1 % |
+| 128 | 246 s | 0.729 | −5.6 % |
+| 192 | 490 s | 0.746 | −3.4 % |
+
+![Coût et convergence local](figures/perf_local.png)
+
+### ROMEO : passage à l'échelle en threads
+
+Sur ROMEO (URCA, partition x64cpu, AMD EPYC 9654, OpenMP, compte r250127), un AMR 3 niveaux du
+diocotron (build g++ direct `-fopenmp`, header-only) mesuré à résolution 512, 60 pas, de 1 à 96
+threads sur un nœud :
+
+| threads | 1 | 6 | 12 | 24 | 48 | 96 |
+|---|---|---|---|---|---|---|
+| wall (s) | 10.9 | 7.4 | 7.0 | 6.6 | 6.8 | 7.4 |
+| speedup | 1.0 | 1.5 | 1.6 | 1.6 | 1.6 | 1.5 |
+
+![Scaling threads ROMEO](figures/romeo_scaling.png)
+
+Le speedup sature vers 1.6× à 24 threads puis se dégrade. Ce n'est pas un défaut de mise en
+œuvre : le pas diocotron est dominé par des noyaux à petit grain (Poisson multigrille + flux sur
+des patchs AMR petits), peu parallélisable à ces tailles. Le même constat est dans le journal
+ROMEO (`HERO_RESULTS.md`) : à ces tailles, le pas tourne mieux en CPU multi-cœur modéré qu'en
+saturant beaucoup de cœurs ou un GPU. Pour scaler fort, il faut des problèmes bien plus gros.
+
+### ROMEO : AMR 3 niveaux (démonstration)
+
+L'exemple C++ `diocotron_amr3` produit un AMR à 3 niveaux dont les patchs raffinés suivent
+dynamiquement l'instabilité. La configuration de cet exemple est planaire (couche de
+cisaillement diocotron), distincte de l'anneau du papier : c'est une démonstration de la machinerie
+AMR + HPC, pas la reproduction annulaire. Les niveaux 1 (cyan) et 2 (vert) se déplacent avec la
+couche ; déterminisme OpenMP == série (drift ~1e-14).
+
+![AMR 3 niveaux, frame](figures/amr3_frame.png)
+
+![AMR 3 niveaux, animation](figures/diocotron_amr3_romeo.gif)
+
+Run qualité : res 256, 600 pas, 96 threads, 14.4 s (31 frames).
+
+### ROMEO : anneau haute résolution (le modèle papier)
+
+Le modèle papier (anneau, `system-schur` uniforme) tourne aussi sur ROMEO à haute résolution
+effective (WENO5-Z + SSPRK3, OMP 96, ~1 h), résolutions effectives 256 / 512 / 1024
+(`HERO_RESULTS.md`, job 613961) :
+
+| mode l | papier | eff 256 | eff 512 | eff 1024 |
+|---|---|---|---|---|
+| 3 | 0.772 | 0.838 | 0.850 | 0.853 |
+| 4 | 0.911 | 0.985 | 0.988 | 0.987 |
+| 5 | 0.683 | 0.730 | 0.731 | 0.729 |
+
+Ce chemin C++ sur-tire de ~+8 % (uniforme, plat en résolution), attribué dans le journal au bord
+cartésien en escalier. C'est une métrologie différente de celle du chemin Python T3 de ce dépôt
+(fenêtres mappées + `2pi/rhobar`), qui donne −2 % et converge vers le papier (section 9). Les deux
+mesurent le même anneau ; l'écart entre +8 % et −2 % est une différence de métrologie entre les
+deux drivers, pas de physique. La reproduction quantitative la plus serrée reste le chemin T3.
+
+## 11. Carte des fichiers
 
 - `model.py` : le modèle Euler-Poisson magnétisé en DSL (commenté étape par étape), les paramètres, la
   densité et la dérive initiales.
