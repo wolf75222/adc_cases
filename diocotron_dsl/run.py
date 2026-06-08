@@ -137,31 +137,32 @@ def run_dsl(ne0, n_i0, n_steps):
     model = diocotron_dsl_model(n_i0)
 
     # Backend : on PREFERE "production" (chemin natif zero-copie, cible du plan) ; si la compilation
-    # native echoue sur cette plateforme, on retombe sur "aot" (numerique identique, host-marshale).
-    # Les deux donnent un etat bit-identique au natif ; le choix n'affecte pas le resultat verifie.
+    # native echoue OU si add_equation refuse le bloc natif sur cette plateforme, on retombe sur
+    # "aot" (numerique identique, host-marshale). Le chemin natif (add_native_block) verifie une cle
+    # ABI incluant la signature des en-tetes : quand le module compile (_adc) a ete bati contre des
+    # en-tetes differents de include/, la compilation REUSSIT mais add_native_block leve un
+    # RuntimeError "ABI incompatible". On enveloppe donc TOUTE la construction (compile + aiguillage
+    # add_equation + run) dans le try : un echec sur "production" rejoue le tout en "aot" (qui passe
+    # par add_compiled_block, sans cle ABI). Les deux donnent un etat bit-identique au natif ; le
+    # choix n'affecte pas le resultat verifie.
     import os
-    compiled, backend = None, None
     for cand in ("production", "aot"):
         try:
             compiled = model.compile(os.path.join(so_dir, "diocotron_dsl_%s.so" % cand),
                                      include, backend=cand)
-            backend = cand
-            break
+            sim = make_system(ne0)
+            # add_equation aiguille sur le backend du CompiledModel (add_native_block / add_compiled_block).
+            sim.add_equation("ne", model=compiled,
+                             spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
+                             time=adc.Explicit())
+            sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+            sim.set_density("ne", ne0)
+            for _ in range(n_steps):
+                sim.step_cfl(0.4)
+            return np.asarray(sim.density("ne")), sim.time(), sim.mass("ne"), cand
         except Exception as exc:  # noqa: BLE001 (diagnostic : on essaie le backend suivant)
             print("backend %r indisponible (%s), essai suivant" % (cand, type(exc).__name__))
-    if compiled is None:
-        raise RuntimeError("aucun backend DSL n'a compile le modele diocotron")
-
-    sim = make_system(ne0)
-    # add_equation aiguille sur le backend du CompiledModel (add_native_block / add_compiled_block).
-    sim.add_equation("ne", model=compiled,
-                     spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                     time=adc.Explicit())
-    sim.set_poisson(rhs="charge_density", solver="geometric_mg")
-    sim.set_density("ne", ne0)
-    for _ in range(n_steps):
-        sim.step_cfl(0.4)
-    return np.asarray(sim.density("ne")), sim.time(), sim.mass("ne"), backend
+    raise RuntimeError("aucun backend DSL n'a compile ni execute le modele diocotron")
 
 
 def main():
