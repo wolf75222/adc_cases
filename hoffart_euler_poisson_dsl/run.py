@@ -3,13 +3,13 @@
 
 Two execution paths are intentionally separated:
 
-`system-schur`
+``system-schur``
     Uniform finite volumes, WENO5-Z + SSPRK3 and the global condensed Schur
     electrostatic/Lorentz source stage.  This is the closest current ADC path to
     the paper and includes the paper initial drift velocity.
 
-`amr-imex`
-    Finite volumes on `adc.AmrSystem` with dynamic AMR, Kokkos and MPI.  It
+``amr-imex``
+    Finite volumes on ``adc.AmrSystem`` with dynamic AMR, Kokkos and MPI.  It
     advances the exact same PDE formulas, but uses the cell-local backward-Euler
     source step because CondensedSchur is not yet implemented on AMR.  The current
     AMR facade also initializes only density, so momentum starts at zero and
@@ -50,6 +50,8 @@ from results import (  # noqa: E402
     adc_cpp_sha,
     build_record,
     engine_label,
+    gamma_to_paper_units,
+    paper_to_sim_time_window,
     verify_paper_windows,
     write_records,
 )
@@ -123,8 +125,16 @@ def mode_amplitude(phi, mode, params):
     return 2.0 * abs(coeffs[mode])
 
 
-def fit_growth(times, amplitudes, mode):
-    lo, hi = PAPER_FIT_WINDOWS[mode]
+def fit_growth(times, amplitudes, mode, rhobar=1.0):
+    """Pente BRUTE de log|c_l| dans la fenetre papier MAPPEE en temps de SIMULATION.
+
+    T3 : la fenetre papier (model.PAPER_FIT_WINDOWS, en temps T_d) est convertie en temps
+    sim par ``t_sim = (2pi/rhobar) t_paper`` (le solveur tourne en horloge ExB-naturelle,
+    le papier en horloge omega_d cyclique). Fitter la fenetre papier BRUTE sur ``times``
+    (sim) tomberait dans le transitoire -- c'etait l'artefact -95 %. Renvoie gamma_raw_sim ;
+    la conversion en unites papier (x2pi/rhobar) est faite a l'enregistrement.
+    """
+    lo, hi = paper_to_sim_time_window(PAPER_FIT_WINDOWS[mode], rhobar)
     mask = (times >= lo) & (times <= hi) & (amplitudes > 0.0)
     if np.count_nonzero(mask) < 4:
         return float("nan")
@@ -141,14 +151,14 @@ def build_uniform(compiled, rho, params, geometry="square"):
         wall="circle",
         wall_radius=params.radius,
     )
-    # geometrie du transport FV.
+    # GEOMETRIE DU TRANSPORT FV.
     # 'square' (defaut) : transport sur le carre cartesien complet (cote L = 2R),
-    # comportement historique bit-identique, aucun appel a set_disc_domain.
+    # comportement historique BIT-IDENTIQUE, aucun appel a set_disc_domain.
     # 'staircase'/'cutcell' : set_disc_domain(L/2, L/2, R, mode=...) materialise le
-    # masque disque (meme level set que le mur Poisson circulaire) et est branche dans
-    # System::step depuis adc_cpp #224, le transport FV est confine au disque.
+    # masque disque (meme level set que le mur Poisson circulaire) ET est branche dans
+    # System::step depuis adc_cpp #224 -- le transport FV est confine au disque.
     # NB : experience geometrie (verdict adc_cpp "cut-cell sans effet, deficit
-    # structurel"), cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
+    # structurel") -- cut-cell n'a pas d'effet mesurable sur le taux de croissance ;
     # le deficit vient du schema temporel, pas de la geometrie.
     if geometry in ("staircase", "cutcell"):
         sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
@@ -184,14 +194,14 @@ def build_uniform(compiled, rho, params, geometry="square"):
 
 
 def amr_initial_drift(params, rho):
-    """Vitesse de derive initiale du papier `v0 = -(grad phi0 x Omega)/|Omega|^2` pour semer l'etat
-    conservatif de l'AMR (Phase B). Resout le Poisson initial `-Delta phi = alpha rho` (meme paroi
-    circulaire, resolution = niveau grossier AMR) sur un System uniforme jetable, via un compile
+    """Vitesse de derive initiale du papier ``v0 = -(grad phi0 x Omega)/|Omega|^2`` pour semer l'etat
+    conservatif de l'AMR (Phase B). Resout le Poisson initial ``-Delta phi = alpha rho`` (meme paroi
+    circulaire, resolution = niveau grossier AMR) sur un System uniforme JETABLE, via un compile
     target='system' du meme modele (le chemin AMR ne resout pas le Poisson au build, et son modele
     compile cible 'amr_system' n'est pas chargeable dans un System).
 
-    solve unique : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
-    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite single-PASS, signalee distinctement
+    SOLVE UNIQUE : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
+    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite SINGLE-PASS, signalee distinctement
     dans les metadonnees. Renvoie (u0, v0) ; leve si le solve echoue (l'appelant retombe sur set_density).
     """
     n = rho.shape[0]
@@ -241,20 +251,20 @@ def build_amr(compiled, rho, params, args):
         wall_radius=params.radius,
     )
     sim.set_refinement(args.refine_threshold)
-    # Phase B (Probleme 2) : demarrer l'AMR depuis l'etat de derive du papier (rho, rho*u0, rho*v0)
-    # au lieu de m=0. set_conservative_state pose l'etat conservatif complet sur le grossier (prolonge
-    # aux niveaux fins). Tout echec, solve degenere, ou un adc anterieur a set_conservative_state --
-    # retombe proprement sur set_density (comportement historique m=0) : aucune regression de robustesse.
+    # Phase B (Probleme 2) : demarrer l'AMR depuis l'etat de DERIVE du papier (rho, rho*u0, rho*v0)
+    # au lieu de m=0. set_conservative_state pose l'etat conservatif COMPLET sur le grossier (prolonge
+    # aux niveaux fins). Tout echec -- solve degenere, OU un adc anterieur a set_conservative_state --
+    # RETOMBE proprement sur set_density (comportement historique m=0) : aucune regression de robustesse.
     try:
         u0, v0 = amr_initial_drift(params, rho)
         # Modele isotherme 3-var : conservatif = [rho, rho*u, rho*v] (pas d'energie). On valide le
-        # nombre de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
+        # NOMBRE de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
         state = np.stack([rho, rho * u0, rho * v0])
         if state.shape[0] != compiled.n_vars:
             raise ValueError("etat de derive a %d composantes mais le bloc compile en a %d"
                              % (state.shape[0], compiled.n_vars))
         sim.set_conservative_state("electrons", state)
-    except Exception as exc:  # noqa: BLE001, fallback robuste, jamais de regression du build
+    except Exception as exc:  # noqa: BLE001 -- fallback robuste, jamais de regression du build
         if mpi_rank() == 0:
             print("[amr-imex] seed de derive indisponible (%s) -> fallback set_density (m=0)" % exc)
         sim.set_density("electrons", rho)
@@ -320,7 +330,7 @@ def run_mode(mode, compiled, params, args):
         mode=mode,
         times=times,
         amplitudes=amplitudes,
-        growth_rate=fit_growth(times, amplitudes, mode),
+        growth_rate=fit_growth(times, amplitudes, mode, rhobar=params.rho_max),
         snapshots=snapshots,
         frames=frames,
         frame_times=frame_times,
@@ -358,28 +368,33 @@ def write_mode_outputs(result, out, params, engine, make_gif):
     fig, ax = plt.subplots(figsize=(6.2, 4.0))
     normalized = result.amplitudes / max(float(result.amplitudes[0]), 1.0e-300)
     ax.semilogy(result.times, normalized, color="black", lw=1.5)
-    lo, hi = PAPER_FIT_WINDOWS[result.mode]
+    # T3 : la fenetre papier (T_d) est mappee en temps SIM ; le taux papier (unites omega_d)
+    # se trace en horloge sim avec le facteur rhobar/(2pi) (l'inverse de gamma_to_paper_units).
+    rhobar = params.rho_max
+    lo, hi = paper_to_sim_time_window(PAPER_FIT_WINDOWS[result.mode], rhobar)
+    paper_rate_sim = PAPER_GROWTH_RATES[result.mode] * rhobar / (2.0 * math.pi)
+    gamma_paper_units = gamma_to_paper_units(result.growth_rate, rhobar)
     fit = (result.times >= lo) & (result.times <= hi) & np.isfinite(normalized)
     if np.any(fit):
         anchor_index = np.flatnonzero(fit)[len(np.flatnonzero(fit)) // 2]
         anchor_time = result.times[anchor_index]
         anchor_value = normalized[anchor_index]
-        theory = anchor_value * np.exp(
-            PAPER_GROWTH_RATES[result.mode] * (result.times - anchor_time)
-        )
+        theory = anchor_value * np.exp(paper_rate_sim * (result.times - anchor_time))
         ax.semilogy(
             result.times,
             theory,
             color="tab:red",
             ls="--",
             lw=1.2,
-            label=r"$\exp(\gamma_%d t)$, paper" % result.mode,
+            label=r"$\exp(\gamma_%d^{paper} t_{sim})$" % result.mode,
         )
-    ax.axvspan(lo, hi, color="tab:blue", alpha=0.12, label="paper fit window")
-    ax.set(xlabel="time", ylabel=r"$|c_l(t)|/|c_l(0)|$",
-           title="Mode l=%d, gamma=%s" % (
+    ax.axvspan(lo, hi, color="tab:blue", alpha=0.12, label="paper fit window (mapped to sim time)")
+    ax.set(xlabel="sim time", ylabel=r"$|c_l(t)|/|c_l(0)|$",
+           title="l=%d  gamma_raw=%s  gamma_paper=%s (x2pi/rhobar)  target %.3f" % (
                result.mode,
                "n/a" if not np.isfinite(result.growth_rate) else "%.4f" % result.growth_rate,
+               "n/a" if gamma_paper_units is None else "%.3f" % gamma_paper_units,
+               PAPER_GROWTH_RATES[result.mode],
            ))
     ax.grid(alpha=0.25, which="both")
     ax.legend()
@@ -432,24 +447,27 @@ def write_mode_outputs(result, out, params, engine, make_gif):
 
 
 def write_summary(results, out, params, args):
+    # T3 : on reporte gamma_raw_sim (pente brute, fenetre MAPPEE) ET gamma_paper_units
+    # = gamma_raw_sim * 2pi/rhobar ; l'erreur compare gamma_paper_units a la cible.
+    rhobar = params.rho_max
     rows = []
     for result in results:
         target = PAPER_GROWTH_RATES[result.mode]
-        error = 100.0 * (result.growth_rate - target) / target if np.isfinite(result.growth_rate) else float("nan")
-        rows.append((result.mode, result.growth_rate, target, error))
+        g_paper = gamma_to_paper_units(result.growth_rate, rhobar)
+        error = (100.0 * (g_paper - target) / target) if g_paper is not None else float("nan")
+        rows.append((result.mode, result.growth_rate,
+                     ("" if g_paper is None else g_paper), target, error))
 
     with open(os.path.join(out, "growth_rates.csv"), "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["mode", "gamma_numeric", "gamma_paper", "relative_error_percent"])
+        writer.writerow(["mode", "gamma_raw_sim", "gamma_paper_units", "gamma_paper",
+                         "relative_error_percent"])
         writer.writerows(rows)
 
-    # Enregistrement de mesure pre-enregistre (graine de la table de validation
-    # Phase 2). Un enregistrement par mode, avec SHA des deux depots, backend, n,
-    # dt, splitting, theta du Schur, fenetre de fit verbatim, gamma_numeric (brut,
-    # aucun facteur 2 pi / rhobar) et err_pct. Le moteur est etiquete explicitement
-    # (full-system-schur vs amr-imex-experimental) pour que la pente brute du
-    # modele complet ne soit jamais melangee aux nombres reduits porteurs du 2 pi
-    # (ceux-la vivent dans diag/diag_polar_omega.py, engine='reduced-ExB').
+    # Enregistrement de mesure PRE-ENREGISTRE (graine de la table de validation Phase 2).
+    # Un enregistrement par mode, avec SHA des deux depots, backend, n, dt, splitting, theta
+    # du Schur, fenetre papier (T_d) + fenetre sim mappee, gamma_raw_sim ET gamma_paper_units
+    # (= raw * 2pi/rhobar -- T3 : le facteur s'applique au modele complet AUSSI), err_pct.
     splitting = "Strang" if args.engine == "system-schur" else "Lie"
     # system-schur : Strang H(dt/2);S(dt);H(dt/2) via adc.Strang + ssprk3.
     # amr-imex    : Lie/Godunov (CondensedSchur absent sur AmrSystem).
@@ -465,7 +483,7 @@ def write_summary(results, out, params, args):
         build_record(
             engine=args.engine,
             mode=result.mode,
-            gamma_numeric=result.growth_rate,
+            gamma_raw_sim=result.growth_rate,
             gamma_paper=PAPER_GROWTH_RATES[result.mode],
             fit_window=PAPER_FIT_WINDOWS[result.mode],
             n=args.n,
@@ -473,6 +491,7 @@ def write_summary(results, out, params, args):
             splitting=splitting,
             schur_theta=schur_theta,
             backend=backend,
+            rhobar=rhobar,
             mpi_size=mpi_size(),
             adc_cpp_sha_value=cpp_sha,
             adc_cases_sha_value=cases_sha,
@@ -489,12 +508,19 @@ def write_summary(results, out, params, args):
         "geometry_note": (
             "square: full Cartesian square transport (historical default, bit-identical). "
             "staircase/cutcell: set_disc_domain(L/2, L/2, R, mode=...) materialises the "
-            "disc mask and is routed into System::step transport (adc_cpp #224). "
-            "Cut-cell has no measurable effect on the diocotron growth rate (structural deficit)."
+            "disc mask AND is routed into System::step transport (adc_cpp #224). "
+            "Cut-cell has no measurable effect on the rate; the residual cart-vs-polar gap is "
+            "~10-20% (NOT a structural deficit -- see T2/T3 normalization audit)."
         ),
-        "normalization": "raw (no 2pi, no rhobar): full-model slope vs paper directly; "
-                         "the 2pi/rhobar factor belongs only to the reduced ExB-scalar "
-                         "path (diag/diag_polar_omega.py, engine=reduced-ExB)",
+        "normalization": (
+            "T3: gamma_paper_units = gamma_raw_sim * 2pi/rhobar (rhobar=rho_max=%g). The 2pi is "
+            "the cyclic->angular conversion of the diocotron drift clock and applies to the FULL "
+            "model AND the reduced ExB (alpha/|Omega|=1/rho_max=1 -> same drift field); the prior "
+            "'no 2pi for full' premise was incorrect. Fit windows are the paper windows MAPPED to "
+            "sim time (t_sim=2pi/rhobar * t_paper). Residual after 2pi (~8-14%%) is cart ring-edge + "
+            "resolution + window roll-off = metrologie PARTIELLE. See T2_NORMALIZATION_AUDIT.md."
+            % params.rho_max
+        ),
         "adc_cpp_sha": cpp_sha,
         "adc_cases_sha": cases_sha,
         "parameters": params.to_dict(),
@@ -527,7 +553,7 @@ def write_summary(results, out, params, args):
                     "finite-volume AMR spatial discretisation",
                     "cell-local IMEX rather than condensed Schur",
                     # Phase B : l'AMR demarre desormais a l'etat de derive (set_conservative_state),
-                    # mais via un seul solve Poisson (probe uniforme), pas la relaxation a deux passes
+                    # mais via UN SEUL solve Poisson (probe uniforme), pas la relaxation a deux passes
                     # du chemin system-schur. Sur un adc anterieur a set_conservative_state, le seed
                     # retombe sur m=0 (avertissement imprime au run).
                     "single-pass drift initialization (one Poisson solve, not the two-pass relaxation "
@@ -570,9 +596,9 @@ def parse_args():
         default="square",
         help="FV transport sub-domain (system-schur only). 'square' (default) keeps the "
              "historical full-square Cartesian transport, bit-identical. 'staircase'/'cutcell' "
-             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask and "
+             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
              "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
-             "effect on the growth rate (structural deficit, not geometry).",
+             "effect on the growth rate (the residual gap is ~10-20% cart-vs-polar, not structural).",
     )
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
     parser.add_argument("--n", type=int, default=192)
@@ -611,11 +637,11 @@ def main():
             "amr-imex uses the same PDE but not the paper Schur stage or initial drift. "
             "Re-run with --acknowledge-amr-approximation."
         )
-    # Pre-enregistrement : la comparaison du modele complet doit utiliser les
+    # Pre-enregistrement : la comparaison du modele complet DOIT utiliser les
     # fenetres de fit verbatim du papier (Fig. 5.4). Cet assert verrouille
     # PAPER_FIT_WINDOWS contre toute fenetre adaptative qui se glisserait dans le
     # chemin complet (fit_growth lit directement PAPER_FIT_WINDOWS). Leve avant
-    # toute mesure ; n'introduit aucune nouvelle fenetre.
+    # toute mesure ; n'introduit AUCUNE nouvelle fenetre.
     verify_paper_windows(PAPER_FIT_WINDOWS)
     if args.quick:
         args.n = 48
@@ -653,8 +679,10 @@ def main():
         results.append(result)
         if mpi_rank() == 0:
             target = PAPER_GROWTH_RATES[mode]
-            print("  gamma = %s (paper %.3f)" % (
+            g_paper = gamma_to_paper_units(result.growth_rate, params.rho_max)
+            print("  gamma_raw_sim = %s | gamma_paper (x2pi/rhobar) = %s | paper %.3f" % (
                 "n/a" if not np.isfinite(result.growth_rate) else "%.6f" % result.growth_rate,
+                "n/a" if g_paper is None else "%.4f" % g_paper,
                 target,
             ))
             write_mode_outputs(result, out, params, args.engine, not args.no_gif)

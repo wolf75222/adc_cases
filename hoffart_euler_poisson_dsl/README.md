@@ -15,12 +15,12 @@ valeurs propres et le bon second membre de Poisson.
 
 | Champ | Contenu |
 |---|---|
-| Categorie (manifeste) | `check_model.py` : `validation` (CI, oracle analytique, `needs=[]`). `run.py` : `reproduction-candidate` (hors CI, `needs=["matplotlib"]`, vise arXiv:2510.11808, table pending/measured). `results.py` : self-test pur Python en CI |
+| Categorie (manifeste) | `check_model.py` : `validation` (CI, oracle analytique, `needs=[]`). `run.py` : `reproduction-candidate` (hors CI, `needs=["matplotlib"]`, vise arXiv:2510.11808, table PENDING/MEASURED). `results.py` : self-test pur Python en CI |
 | Entrees | grille carree $n^2$ ($n=192$ defaut, $256/384$ mesures), $L=2R=32$, non periodique, paroi Poisson Dirichlet cercle $R=16$ ; anneau $r_0{:}r_1=6{:}8$, perturbation $\rho=\rho_{max}(1-\delta+\delta\sin l\theta)$, $\delta=0.1$ ; $\rho_{min}{:}\rho_{max}=10^{-6}{:}1$ ; $\beta=10^6$, $\alpha=\beta^2/\rho_{max}=10^{12}$, $\omega=\beta^2=10^{12}$ ; fermeture $p=\theta\rho$, defaut limite froide $\theta=0$ ; modes $l\in\{3,4,5\}$, $t_f=10$, $dt=10^{-3}$ |
 | Sorties | `check_model.py` : verdict `assert` (EXIT=0). `run.py` : $\gamma_l$ brut fitte par mode, sous `out/hoffart_euler_poisson_dsl_<engine>/` (`amplitude.csv/.png`, `snapshots.png`, GIF, `growth_rates.csv/.png`, `metadata.json`, `measurement_record.csv/.json`). 2 figures honnetes versionnees dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | `check_model.py` : `np.testing.assert_allclose` sur flux x/y, source `[0, -rho*gx + omega*my, -rho*gy - omega*mx]`, `elliptic_rhs = -alpha*rho`, `max_wave_speed > 0` (tol par defaut `assert_allclose`, $\mathrm{rtol}=10^{-7}$). `run.py` : `verify_paper_windows` (fenetres de fit verbatim), garde MPI mono-rang, aveu `--acknowledge-amr-approximation`, `FloatingPointError` si phi/amplitude non finis. `results.py` : self-test (fenetres, labels moteur, `err_pct`, pending) |
-| Prouve | le modele symbolique compile == les formules analytiques sur 2x2 cellules, bit-exact : flux x/y, source Lorentz+electrique, valeurs propres ($>0$), rhs Poisson, residu $=0.0$ exactement (figure 2, `check_model.py:27-41`). Le harnais de mesure ne fabrique aucun nombre : `pending` tant qu'un run n'a pas tourne (`results.py:147-153`) |
-| Ne prouve pas | reproduction quantitative pending. La table de validation est explicitement non etablie : baseline cartesienne measured a $l{=}3$ $-95\%$, $l{=}4$ $-94/-93\%$, $l{=}5$ $-82\%$ ($n=256$ et $384$ ; l'erreur ne s'ameliore pas avec $n$, donc pas un probleme de resolution). Geometrie cartesienne+paroi cercle suspecte (transport sur grille carree, bord d'anneau diffuse). Splitting de Lie (Godunov 1er ordre), pas Strang. Poisson une fois par pas (cadence Gauss `OncePerStep`), qui rend l'evolution phi couplee a la source inerte pour la trajectoire. La variante `amr-imex` (backward-Euler cell-local, AMR/Kokkos/MPI) = ROMEO, jamais une reproduction (source IMEX, quantite de mouvement initiale nulle). Le facteur $2\pi/\bar\rho$ de `NORMALIZATION.md` appartient au modele reduit ExB scalaire, pas a ce modele complet |
+| Invariants garantis | `check_model.py` : `np.testing.assert_allclose` sur flux x/y, source `[0, -rho*gx + omega*my, -rho*gy - omega*mx]`, `elliptic_rhs = -alpha*rho`, `max_wave_speed > 0` (tol par defaut `assert_allclose`, $\mathrm{rtol}=10^{-7}$). `run.py` : `verify_paper_windows` (fenetres de fit verbatim), garde MPI mono-rang, aveu `--acknowledge-amr-approximation`, `FloatingPointError` si phi/amplitude non finis. `results.py` : self-test (fenetres, labels moteur, `err_pct`, PENDING) |
+| PROUVE | le modele symbolique compile == les formules analytiques sur 2x2 cellules, bit-exact : flux x/y, source Lorentz+electrique, valeurs propres ($>0$), rhs Poisson, residu $=0.0$ exactement (figure 2, `check_model.py:27-41`). Le harnais de mesure ne fabrique aucun nombre : `PENDING` tant qu'un run n'a pas tourne (`results.py:147-153`) |
+| NE PROUVE PAS | **MAJ T3 (juin 2026) : le "deficit -95%" etait un artefact de metrologie, pas un echec du solveur.** Les fenetres papier (en temps diocotron $T_d$) etaient appliquees directement au temps de simulation (horloge ExB-naturelle), donc dans le transitoire, et $\gamma$ etait reporte brut. Apres correction (`run.py`/`results.py` : fenetres mappees $t_{sim}=2\pi/\bar\rho\,t_{paper}$ + report $\gamma_{paper}=\gamma_{raw,sim}\cdot 2\pi/\bar\rho$), le full system-schur cartesien reproduit le papier : $l{=}3$ $-9.1\%$, $l{=}4$ $-1.9\%$, $l{=}5$ $+0.04\%$ ($n=96$ ; `RESULTS_SYSTEM_SCHUR.md` section 9). Le $2\pi$ s'applique au modele complet aussi ($\alpha/|\Omega|=1/\rho_{max}=1$ : full et reduit partagent l'horloge de derive). Reserves restantes : metrologie partielle (residu $\sim$0-9% = bord d'anneau cartesien + resolution $n=96$ + roll-off de fenetre ; l=5 sensible a la fenetre $\pm$27-29% donc son +0.04% partiellement fortuit). La variante `amr-imex` (backward-Euler cell-local, AMR/Kokkos/MPI) reste experimentale (source IMEX, momentum initial nul), jamais labellisee reproduction. Le full polaire diverge encore (VOIE 1, separe) |
 | Provenance | adc_cpp `dec3f18`, adc_cases `abd4791`, oracle backend natif serie (macOS arm64, python 3.12 anaconda3), `check_model.py` << 1 s. Mesures $\gamma$ : runs hors CI documentes dans `adc_cpp/docs/HOFFART_FIDELITY.md` ; `run.py` complet long, non lance ici. `figures/provenance.json` |
 
 A la fin tu sauras : ce que le DSL ecrit reellement (les 4 equations magnetisees et leur traduction
@@ -59,7 +59,7 @@ donne pas de valeur numerique pour $\theta$ (`model.py:43`, `run.py:483-484`) ; 
 
 ---
 
-## 2. Les equations resolues et qui les calcule (justifie Prouve : la physique est figee en C++)
+## 2. Les equations resolues et qui les calcule (justifie PROUVE : la physique est figee en C++)
 
 Etat conservatif par cellule, 3 composantes : $U=(\rho,\rho u,\rho v)$, $m=(\rho u,\rho v)$,
 $\Omega=\omega\hat z$. Le systeme :
@@ -125,11 +125,11 @@ source (eq. 3.2 du papier, $\partial_t(-\Delta\phi)=-\alpha\nabla\cdot m$) est f
 inerte pour la trajectoire ; le $\phi$ que lit le transport au pas suivant est le potentiel
 electrostatique re-resolu de $\rho^{n+1}$, pas le $\phi$ du Schur. Le $\phi$ du Schur ne survit que
 comme amorce (warm-start) du BiCGStab. C'est une divergence architecturale (cadence Gauss
-`OncePerStep`) face a l'evolution-source du papier, et l'un des suspects de la clause Ne prouve pas.
+`OncePerStep`) face a l'evolution-source du papier, et l'un des suspects de la clause NE PROUVE PAS.
 
 ---
 
-## 4. Maths : ce que le DSL ecrit, ligne par ligne (justifie Prouve)
+## 4. Maths : ce que le DSL ecrit, ligne par ligne (justifie PROUVE)
 
 On ne re-derive pas la relation de dispersion (elle vit dans `../diocotron/`). Ce qui est specifique
 a ce cas, c'est la traduction du systeme magnetise en formules symboliques compilees. Le bloc
@@ -174,7 +174,7 @@ np.testing.assert_allclose(src, np.stack([np.zeros_like(rho),
 np.testing.assert_allclose(model._elliptic.eval(env), -p.alpha * rho)     # rhs Poisson (check_model.py:39)
 assert model.max_wave_speed(U, aux, 0) > 0.0             # vitesse d'onde finie (check_model.py:40)
 ```
-C'est l'oracle qui porte la clause Prouve. Il utilise `source="local"` (`check_model.py:11`) pour
+C'est l'oracle qui porte la clause PROUVE. Il utilise `source="local"` (`check_model.py:11`) pour
 que la source complete soit emise dans le `.so` et testable directement (le chemin `system-schur`
 met cette source a zero et la confie au Schur, donc ne serait pas testable de cette facon).
 
@@ -199,7 +199,7 @@ met cette source a zero et la confie au Schur, donc ne serait pas testable de ce
 ## 6. Figures (generees par `make_figures.py`, dans `figures/`)
 
 Deux figures, et seulement deux, parce que ce cas est `reproduction-candidate` : une qui montre
-l'ecart au papier (le coeur honnete), une qui montre ce qui est valide (l'oracle). Aucune figure ne
+l'ecart au papier, une qui montre ce qui est valide (l'oracle). Aucune figure ne
 suggere une reproduction. Generation : `python make_figures.py` (memes parametres documentes que les
 runs ; les nombres mesures sont verbatim de la table section 7, ce script ne relance pas `run.py`).
 
@@ -207,14 +207,14 @@ runs ; les nombres mesures sont verbatim de la table section 7, ce script ne rel
 
 ![Taux de croissance brut mesure vs cible papier, par mode, n=256 et n=384 : barres mesurees rasantes face aux cibles, ecart -82 a -95 pourcent](figures/gap_to_paper.png)
 
-- **Prouve** (par la table section 7, runs documentes) : les barres noire/grise (mesure brute
+- **PROUVE** (par la table section 7, runs documentes) : les barres noire/grise (mesure brute
   $n=256/384$) sont des slivers a cote des barres rouges (cible papier). $l{=}3$ : $0.0372/0.0385$ vs
   $0.772$ ($-95\%$) ; $l{=}4$ : $0.0489/0.0613$ vs $0.911$ ($-95/-93\%$) ; $l{=}5$ : $0.1211/0.1257$
   vs $0.683$ ($-82\%$). La figure montre que le cas ne reproduit pas le papier.
-- **Suggéré (non assere)** : $l{=}5$ est le moins eloigne ($-82\%$ vs $-95\%$ a $l{=}3$) ; un effet
+- **SUGGERE (non assere)** : $l{=}5$ est le moins eloigne ($-82\%$ vs $-95\%$ a $l{=}3$) ; un effet
   geometrique dependant du mode est plausible (cf. `../diocotron/` ou l'ecart varie aussi avec $l$),
   mais aucun assert ne classe les modes ni ne teste une valeur de $\gamma$.
-- **Non montré** : la reproduction quantitative elle-meme. Aucune barre mesuree n'approche sa
+- **NON MONTRE** : la reproduction quantitative elle-meme. Aucune barre mesuree n'approche sa
   cible ; l'ecart ne s'ameliore pas de $n=256$ a $n=384$, ce qui exclut un simple manque de
   resolution et pointe une cause structurelle (section 7).
 
@@ -222,17 +222,25 @@ runs ; les nombres mesures sont verbatim de la table section 7, ce script ne rel
 
 ![Residu max entre le modele DSL compile et les formules analytiques sur 2x2 cellules : flux x, flux y, source, rhs Poisson, tous a 0.0 sous la ligne eps machine](figures/oracle_residual.png)
 
-- **Prouve** (asserte `check_model.py:27-41`) : le residu max $|\text{DSL compile}-\text{analytique}|$
+- **PROUVE** (asserte `check_model.py:27-41`) : le residu max $|\text{DSL compile}-\text{analytique}|$
   sur les 2x2 cellules est exactement $0.0$ (bit-exact) pour les quatre blocs : flux x, flux y,
   source Lorentz+electrique, rhs Poisson. Pas seulement sous l'eps machine ($2.22\times10^{-16}$,
   ligne rouge) : exactement nul. Le modele symbolique compile reproduit les formules a la main.
-- **Non montré** : cet oracle ne teste aucune dynamique. Il valide la generation du modele (le
+- **NON MONTRE** : cet oracle ne teste aucune dynamique. Il valide la generation du modele (le
   bon flux, la bonne source, le bon rhs), pas que la simulation reproduit un taux de croissance.
-  C'est la frontiere nette Prouve (le modele genere) / Non prouvé (la reproduction physique).
+  C'est la frontiere nette PROUVE (le modele genere) / NON PROUVE (la reproduction physique).
 
 ---
 
 ## 7. Pourquoi la reproduction n'est pas montree (analyse des ecarts, table de validation)
+
+> **⚠️ SECTION SUPERSEDEE par T3 (juin 2026), gardee pour l'historique du raisonnement.** Les
+> "suspects" ci-dessous (geometrie cartesienne fondamentale, Lie-pas-Strang, cause structurelle) sont
+> RETIRES. Le "deficit -95%" etait un artefact de metrologie : les fenetres papier (temps $T_d$) etaient
+> fittees sur le temps de simulation brut (transitoire) et $\gamma$ reporte sans le facteur $2\pi/\bar\rho$.
+> Apres correction (fenetres mappees + $\gamma_{paper}=\gamma_{raw}\cdot 2\pi/\bar\rho$), le full
+> system-schur cartesien reproduit le papier a $-9/-2/+0\%$ (`RESULTS_SYSTEM_SCHUR.md` section 9 ;
+> `T2_NORMALIZATION_AUDIT.md`). Le splitting est desormais Strang (adc_cpp #230), plus Lie.
 
 L'oracle est correct (le modele genere est bit-exact, section 6) ; ce n'est donc pas le modele
 symbolique qui est en cause. Les suspects sont dans la discretisation et l'orchestration du
@@ -245,10 +253,10 @@ chemin de reference `system-schur`, par ordre de gravite :
    `BC: fluid/wall` marquee `non_verifie`). Le bord d'anneau diffuse. Le taux analytique ne depend que
    de $l,\omega_d,r_0,r_1,R$, donc l'ecart n'est pas le splitting : c'est la geometrie. C'est le meme
    verrou cartesien que `../diocotron/`, en plus severe ici.
-2. **Splitting de Lie, pas Strang.** ADC applique un transport complet puis un etage source complet
-   par pas (Godunov, 1er ordre, `system_stepper.hpp:104-121`), alors que le papier utilise Strang
-   (1/2 transport, source, 1/2 transport, 2e ordre). `metadata.json` enregistre `"Lie rather than
-   Strang"`.
+2. ~~**Splitting de Lie, pas Strang.**~~ **CORRIGE (adc_cpp #230 + adc_cases #21)** : le chemin
+   `system-schur` est desormais en **Strang** (`adc.Strang(hyperbolic=Explicit("ssprk3"),
+   source=CondensedSchur(theta=0.5))`), splitting symetrique 2e ordre du papier. Cette ligne (et
+   l'ancien `metadata.json "Lie rather than Strang"`) est obsolete.
 3. **Poisson une fois par pas (cadence `OncePerStep`).** L'evolution-source de $\phi$ est inerte : le
    $\phi$ du Schur est ecrase par le re-solve electrostatique du pas suivant (section 3). Un Strang qui
    reinjecterait le $\phi$ post-source dans un 2e demi-transport serait d'ailleurs fatal en l'etat
@@ -259,7 +267,7 @@ chemin de reference `system-schur`, par ordre de gravite :
 Table de validation (verbatim ; `system-schur` = modele complet, pente brute sans $2\pi$ ;
 `reduced-ExB` = chemin reduit `NORMALIZATION.md`, autre modele, a ne pas confondre ; `amr-imex`
 reste experimental). Les cellules `gamma_numeric` sont des mesures de runs hors CI
-(`adc_cpp/docs/HOFFART_FIDELITY.md`) ou `pending` si non joue :
+(`adc_cpp/docs/HOFFART_FIDELITY.md`) ou `PENDING` si non joue :
 
 | mode | n | gamma_numeric | gamma_paper | err_pct | engine | dt | splitting | schur |
 |---|---|---|---|---|---|---|---|---|
@@ -269,12 +277,12 @@ reste experimental). Les cellules `gamma_numeric` sont des mesures de runs hors 
 | 3 | 384 | 0.0385 | 0.772 | $-95.0$ | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
 | 4 | 384 | 0.0613 | 0.911 | $-93.3$ | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
 | 5 | 384 | 0.1257 | 0.683 | $-81.6$ | full-system-schur (cart-square) | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
-| 3 | 512 | pending | 0.772 | pending | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
-| 4 | 512 | pending | 0.911 | pending | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
-| 5 | 512 | pending | 0.683 | pending | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
-| 3 | 192 | pending | 0.772 | pending | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
-| 4 | 192 | pending | 0.911 | pending | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
-| 5 | 192 | pending | 0.683 | pending | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
+| 3 | 512 | PENDING | 0.772 | PENDING | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
+| 4 | 512 | PENDING | 0.911 | PENDING | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
+| 5 | 512 | PENDING | 0.683 | PENDING | system-schur | 1e-3 | Lie | CondensedSchur $\theta{=}0.5$ |
+| 3 | 192 | PENDING | 0.772 | PENDING | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
+| 4 | 192 | PENDING | 0.911 | PENDING | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
+| 5 | 192 | PENDING | 0.683 | PENDING | amr-imex | 1e-3 | Lie (IMEX local) | none (IMEX local) |
 
 Tant que les cellules `system-schur` $n=512$ ne sont pas remplies et que les $n=256/384$ restent a
 $-82$ a $-95\%$, aucune affirmation que le modele complet reproduit le papier n'est permise.
@@ -292,7 +300,7 @@ inconnu et le label reduit ne fuit jamais dans `run.py` (`results.py:62-71`).
 
 ## 8. La variante `amr-imex` (ROMEO, jamais une reproduction)
 
-Le chemin `--engine amr-imex` (`run.py:169-197`) avance la meme pde mais sur `adc.AmrSystem`
+Le chemin `--engine amr-imex` (`run.py:169-197`) avance la meme PDE mais sur `adc.AmrSystem`
 (AMR dynamique, Kokkos, MPI), avec une source IMEX backward-Euler cell-local au lieu du Schur
 condense, car `CondensedSchur` n'est pas implemente sur AMR. Trois differences qui l'excluent de toute
 comparaison quantitative :
@@ -328,7 +336,7 @@ CI, n'importe pas meme `adc`) :
 ```bash
 PYTHONPATH=/private/tmp/adc_cases-deeptut \
   /opt/homebrew/anaconda3/bin/python3.12 results.py
-# OK results.py: fenetres verbatim, labels moteur, err_pct, record brut, pending, IO
+# OK results.py: fenetres verbatim, labels moteur, err_pct, record brut, PENDING, IO
 ```
 
 Figures honnetes versionnees :
@@ -363,12 +371,12 @@ chiffres des $\gamma$ mesures varient avec la BLAS et l'ordre de sommation (cf.
 | Fichier | Role |
 |---|---|
 | `model.py` | modele symbolique `adc.dsl` (flux, eigen, source Lorentz+E, elliptic_rhs) + `PaperParameters`, IC, drift (`l.70-168`) |
-| `check_model.py` | oracle analytique CI : `assert` flux/source/eigen/rhs sur 2x2 cellules (clause Prouve) |
+| `check_model.py` | oracle analytique CI : `assert` flux/source/eigen/rhs sur 2x2 cellules (clause PROUVE) |
 | `run.py` | harnais cartesien reproduction-candidate (long, hors CI) : `build_uniform`/`build_amr`, fit du taux, sorties |
 | `run_polar.py` | harnais polaire (anneau resolu) reproduction-candidate (long, hors CI) : modele complet sur `adc.PolarMesh` + Schur condense polaire + frozen-equilibrium (option c) + flag `--perturbation` |
 | `test_polar_assembly.py` | smoke build-free de l'assemblage polaire (faux adc, CI) : ordre facade, routage Poisson polaire, fenetres de fit verbatim, point fixe frozen-eq |
 | `campaign_polar.sbatch` | campagne ROMEO modele complet polaire l=3,4,5 (armgpu GH200, mono-rang) |
-| `results.py` | emetteur d'enregistrements de mesure pur Python ; `pending` pour tout non mesure ; self-test CI |
+| `results.py` | emetteur d'enregistrements de mesure pur Python ; `PENDING` pour tout non mesure ; self-test CI |
 | `make_figures.py` | 2 figures honnetes (`gap_to_paper.png`, `oracle_residual.png`) + `figures/provenance.json` |
 | `figures/*.png`, `figures/provenance.json` | assets versionnes : l'ecart au papier et le residu de l'oracle |
 | `NORMALIZATION.md`, `diag/diag_polar_omega.py` | etude du facteur $2\pi/\bar\rho$ du modele reduit ExB scalaire (autre modele, hors manifeste) |

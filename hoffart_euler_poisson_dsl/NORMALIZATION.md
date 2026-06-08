@@ -6,7 +6,7 @@ La trouvaille en une ligne :
 
 Sur le chemin polaire ExB d'ADC (anneau global, transport ExB scalaire, WENO5 +
 SSPRK3, Poisson polaire Dirichlet), ce facteur global valide la normalisation du
-taux de croissance du diocotron réduit (modele de derive ExB scalaire, type
+taux de croissance du diocotron reduit (modele de derive ExB scalaire, type
 Petri), benchmark de la Section 5.3 de Hoffart et al. (arXiv:2510.11808). Ce
 chemin ne resout pas le modele Euler-Poisson complet (rho, rho*u, rho*v) ; seul
 l = 4 colle exactement (l = 3 +26 %, l = 5 oscille). Avec rhobar = rho_max = 1, le
@@ -17,7 +17,7 @@ Le diagnostic reproductible est `diag/diag_polar_omega.py`.
 
 ## Pourquoi gamma_raw est deja le bon Im(omega)
 
-On suit le coefficient complexe c_l(t) du mode azimutal l du potentiel phi sur le
+On suit le coefficient complexe c_l(t) du mode azimutal l du potentiel PHI sur le
 cercle interne r = r0 :
 
     c_l(t) ~ exp(-i omega_l t)
@@ -38,13 +38,13 @@ Une idee naturelle serait de normaliser par la rotation propre du mode :
     g_rot = (gamma_raw / |Omega_raw|) * |Re(omega)|_ana * 2 pi
 
 Le rapport gamma_raw/Omega_raw = Im/Re est invariant d'echelle, donc en principe
-robuste. mais au bord interne r0 la rotation mesuree Omega_raw est ~ 0 : il n'y a
+solide. Au bord interne r0, toutefois, la rotation mesuree Omega_raw est ~ 0 : il n'y a
 pas de charge enfermee a l'interieur de l'anneau [r0, r1], donc pas de rotation de
 corps rigide a r0. Omega_raw etant proche de zero, le rapport explose et g_rot
 devient absurde (voir tableau : g_rot ~ 15 a 22, au lieu de ~ 0.7 a 0.9).
 
-Conclusion : la bonne normalisation n'est pas une rotation locale ; c'est le
-facteur global 2 pi / rhobar.
+Conclusion : la bonne normalisation est le facteur global 2 pi / rhobar, pas une
+rotation locale.
 
 
 ## Resultats l = 3 / 4 / 5
@@ -88,7 +88,7 @@ ratio analytique Im/Re (~ 0.33 a 0.20) precisement parce que Omega_raw ~ 0 a r0
 pas la). Cela confirme que la rotation locale n'est pas l'echelle pertinente.
 
 Le scatter l=3 (+26 %) et l=5 (oscillation -29 % -> +27 %) provient de la
-sensibilite A la fenetre de fit du regime exponentiel, pas d'un deficit de
+sensibilite a la fenetre de fit du regime exponentiel, pas d'un deficit de
 physique : la pente log|c_l| n'est exponentielle pure que sur un intervalle borne
 (apres le transitoire initial, avant la saturation), et la pente extraite depend
 de cet intervalle. l = 4, dont la fenetre exponentielle est la plus nette, est
@@ -98,19 +98,36 @@ exact et stable en resolution.
 ## Conclusion
 
 Le chemin polaire + normalisation 2 pi / rhobar valide la normalisation du
-diocotron réduit (derive ExB scalaire) : l = 4 colle exactement a n = 128 et
+diocotron reduit (derive ExB scalaire) : l = 4 colle exactement a n = 128 et
 n = 192 ; l = 3 (+26 %) et l = 5 (oscillant -29 % / +27 %) restent decales et
 sensibles a la fenetre de fit. Ce chemin n'est pas le modele Euler-Poisson complet
 de Hoffart et al. et ne constitue donc pas une reproduction du modele complet. Le
 facteur correct est global (2 pi / rhobar), pas une rotation locale (qui echoue car
 la rotation a r0 est nulle).
 
-Pour memoire, le chemin cartesien-Schur (cf. `run.py --engine system-schur`) donne
-~ 0.035 : il omet le facteur 2 pi et subit la diffusion du bord d'anneau cartesien
-(l'anneau circulaire est impose par le mur du Poisson alors que le transport reste
-sur la grille carree). Ce n'est pas un contre-exemple a la normalisation ; c'est le
-bord cartesien + le facteur manquant. Ce chemin reste par ailleurs en splitting de
-Lie (pas Strang), donc non identique a la methode du papier.
+Pour memoire, le chemin cartesien-Schur (cf. `run.py --engine system-schur`,
+desormais en splitting de Strang SSPRK3 + CondensedSchur via adc_cpp #230,
+plus en Lie) donne `gamma_raw ~ 0.032` en fenetre papier. La geometrie n'est pas en cause :
+l'audit `T2_NORMALIZATION_AUDIT.md` montre que `alpha = beta^2/rho_max` et
+`omega = beta^2` se simplifient dans la vitesse de derive (`alpha/omega = 1/rho_max =
+1`), donc le run complet advecte rho avec exactement le meme champ que le reduit ExB
+normalise de ce diagnostic. Le `~0.032` se decompose entierement en facteurs
+dimensionnels : (a) la fenetre de fit ; `run.py` masque la fenetre papier en temps de
+simulation (transitoire) alors que `temps_papier = T_d * temps_sim` ; fitte en fenetre
+etablie, `gamma_raw` remonte a ~0.10 (facteur 3.20 mesure en l=3) ; (b) le facteur
+global `2 pi = T_d` (periode diocotron, `omega_d = rho_max alpha/|Omega| = 1`). Apres
+ces deux facteurs il reste ~20 % (grille cart `0.72` vs polaire `0.90` x2pi), la
+seule part non metrologique. Ce n'est donc pas un contre-exemple a la normalisation ;
+c'est la fenetre + le `2 pi`, pas une distorsion de bord cartesien.
+
+**MAJ T3 (juin 2026)** : ce mapping est desormais cable dans `run.py`/`results.py` (fenetres papier
+mappees en temps sim + report `gamma_paper = gamma_raw_sim * 2pi/rhobar`). Mesure directe du full
+system-schur avec les fenetres papier mappees : **l=3 -9.1%, l=4 -1.9%, l=5 +0.04%** vs papier (cf.
+`RESULTS_SYSTEM_SCHUR.md` section 9). Le facteur `2 pi/rhobar` s'applique donc au modele complet aussi
+(et plus seulement au reduit ExB de ce diagnostic) : full et reduit partagent l'horloge ExB-naturelle
+car `alpha/|Omega| = 1/rho_max = 1`. La phrase historique "le 2 pi appartient uniquement au chemin
+reduit" est donc obsolete ; le 2 pi est la conversion cyclique->angulaire de l'horloge de derive,
+commune aux deux chemins.
 
 
 ## Relancer

@@ -1,54 +1,57 @@
 #!/usr/bin/env python3
-"""Modele complet Euler-Poisson isotherme magnetise sur grille polaire (anneau resolu).
+"""Modele COMPLET Euler-Poisson isotherme magnetise sur GRILLE POLAIRE (anneau resolu).
 
-Pendant polaire du chemin cartesien `run.py` (engine `system-schur`). Au lieu du
-carre cartesien plein, le transport tourne sur un anneau (r, theta) : la direction
-radiale est portee par un axe de grille, ce qui leve le verrou des bords d'anneau
+Pendant POLAIRE du chemin cartesien ``run.py`` (engine ``system-schur``). Au lieu du
+carre cartesien plein, le transport tourne sur un ANNEAU (r, theta) : la direction
+RADIALE est portee par un axe de grille, ce qui leve le verrou des bords d'anneau
 cartesiens (cf. docs/HOFFART_GEOMETRY_VERDICT.md : le chemin cartesien plafonne a
--82/-95% independamment de la resolution). Le diagnostic reduit ExB scalaire polaire
-(diag/diag_polar_omega.py) recupere deja l=4 exact ; ce runner porte le modele complet
+-82/-95% INDEPENDAMMENT de la resolution). Le diagnostic reduit ExB scalaire polaire
+(diag/diag_polar_omega.py) recupere deja l=4 EXACT ; ce runner porte le MODELE COMPLET
 (rho / rho v_r / rho v_theta + flux isotherme polaire + courbure + etage Schur condense
-+ Lorentz) sur la meme grille polaire.
++ Lorentz) sur la MEME grille polaire.
 
-Assemblage (briques 100% natives, aucune compilation .so, CI-safe, mono-rang) :
+Assemblage (briques 100% NATIVES, aucune compilation .so, CI-safe, MONO-RANG) :
 
   1. adc.System(mesh=adc.PolarMesh(r_min, r_max, nr, ntheta))   # anneau global
   2. set_poisson(rhs="charge_density", solver="polar", bc="dirichlet")  # FFT-theta + Thomas-r
-  3. set_magnetic_field(B0 * ones((ntheta, nr)))                 # Omega = B_z, avant le Schur
+  3. set_magnetic_field(B0 * ones((ntheta, nr)))                 # Omega = B_z, AVANT le Schur
   4. adc.Model(state=FluidState(isothermal, cs2), transport=IsothermalFlux(),
               source=NoSource(),                                 # source = etage Schur (pas locale)
               elliptic=BackgroundDensity(alpha) ou ChargeDensity)
   5. add_equation(Split(hyperbolic=Explicit(ssprk3), source=CondensedSchur(theta, alpha)))
      -> dispatch polaire : IsothermalFluxPolar (#209) + PolarCondensedSchurSourceStepper (#215)
-  6. init : top-hat annulaire + perturbation sin(l*theta) + equilibre rotatif (v_r=0, v_theta(r)
-     racine du bilan radial centrifuge/pression/electrique/Lorentz) du premier solve Poisson.
-     L'ancienne derive ExB pure (v_theta=grad_r/B) n'etait pas un equilibre du fluide complet : elle
+  6. init : top-hat annulaire + perturbation sin(l*theta) + EQUILIBRE ROTATIF (v_r=0, v_theta(r)
+     racine du bilan radial centrifuge/pression/electrique/Lorentz) du PREMIER solve Poisson.
+     L'ancienne derive ExB pure (v_theta=grad_r/B) n'etait PAS un equilibre du fluide complet : elle
      portait une quantite de mouvement non equilibree -> transient radial rapide -> NaN avant la
      fenetre de fit. v_theta(r) = (r/2)[-B + sqrt(B^2 + (4/r)(d_r phi + cs2 (d_r rho)/rho))] se reduit
-     continument a la derive ExB grad_r/B quand la courbure -> 0. cs2 petit non nul (defaut 1e-4) pour
+     continument a la derive ExB grad_r/B quand la courbure -> 0. cs2 petit NON nul (defaut 1e-4) pour
      la stricte hyperbolicite (le papier autorise theta>=0).
-  6bis. bilan discret bien pose, option (c), --frozen-equilibrium (defaut on) : l'IC d'equilibre
-     rotatif (et la Newton #23) ne suffisent pas a la raideur du papier (B_z=omega=1e12) : l'etage
+  6bis. BILAN DISCRET BIEN POSE -- OPTION (c), --frozen-equilibrium (defaut ON) : l'IC d'equilibre
+     rotatif (et la Newton #23) ne suffisent PAS a la raideur du papier (B_z=omega=1e12) : l'etage
      hyperbolique (WENO5+Rusanov au saut top-hat) et l'etage Schur n'annulent le bilan electrique/
-     Lorentz qu'au continu, jamais au discret -> derive parasite O(1) axisymetrique -> NaN ~ t 0.02.
-     On precalcule le residu d'equilibre gele R_eq = step(U_eq) - U_eq une fois sur l'anneau
-     axisymetrique (perturbation=0), puis on soustrait R_eq a chaque pas (U <- step(U) - R_eq) :
-     (step - R_eq)(U_eq) = U_eq est un point fixe discret exact a la precision machine, independamment
+     Lorentz QU'AU CONTINU, jamais au DISCRET -> derive parasite O(1) axisymetrique -> NaN ~ t 0.02.
+     On PRECALCULE le residu d'equilibre GELE R_eq = step(U_eq) - U_eq UNE FOIS sur l'anneau
+     axisymetrique (perturbation=0), puis on SOUSTRAIT R_eq a chaque pas (U <- step(U) - R_eq) :
+     (step - R_eq)(U_eq) = U_eq est un POINT FIXE DISCRET EXACT a la precision machine, INDEPENDAMMENT
      du stencil ; la derive O(1) est annulee, seule la perturbation O(delta) (mode physique + petit
-     residu O(delta)) evolue. pas fixe obligatoire (le --cfl adaptatif s'effondre sur l'equilibre
+     residu O(delta)) evolue. PAS FIXE OBLIGATOIRE (le --cfl adaptatif s'effondre sur l'equilibre
      quasi-stationnaire -> dt explose -> NaN : il est ignore en mode frozen). Auto-test :
-     --check-equilibrium (sous frozen, exige la stationarite A la precision machine de U_eq).
-  7. observable : phi sur le cercle r=r0 (= colonne phi[:, i_r0], native, sans interpolation),
-     FFT en theta, fenetres de fit verbatim du papier -> growth_rates.csv (brut, matplotlib optionnel).
+     --check-equilibrium (sous frozen, exige la STATIONARITE A LA PRECISION MACHINE de U_eq).
+  7. observable : phi sur le cercle r=r0 (= colonne phi[:, i_r0], NATIVE, sans interpolation),
+     FFT en theta, fenetres de fit VERBATIM du papier -> growth_rates.csv (BRUT, matplotlib optionnel).
 
-Normalisation : la pente reportee est brute (aucun facteur 2 pi / rhobar ; ce facteur
-n'appartient qu'au chemin reduit ExB scalaire diag/diag_polar_omega.py, engine='reduced-ExB').
-Le moteur est etiquete 'full-polar-schur' (results.ENGINE_LABELS) pour ne jamais melanger ses
-nombres bruts avec les nombres reduits porteurs du 2 pi.
+Normalisation (T3 -- corrige) : on reporte gamma_raw_sim (pente brute, fenetre MAPPEE) ET
+gamma_paper_units = gamma_raw_sim * 2pi/rhobar. Le facteur 2 pi est la conversion cyclique->
+angulaire de l'horloge de derive et s'applique AU MODELE COMPLET aussi (alpha/|Omega|=1/rho_max=1
+-> meme champ de derive que le reduit ExB) ; l'ancienne premisse "pente brute directement
+comparable, aucun facteur" etait INCORRECTE (cf. T2_NORMALIZATION_AUDIT.md). ATTENTION : la repro
+quantitative du polaire COMPLET n'est PAS etablie (VOIE 1 diverge, non-positivite au bord d'anneau) ;
+ce mapping rend seulement la metrologie coherente avec le cartesien, il ne valide pas le polaire.
 
-gap connu (reporte, non bloquant) : derive_aux_polar remplit l'aux (phi, grad_r, grad_theta)
-mais aucun accesseur Python ne rend ces gradients. La derive ExB initiale est donc recalculee
-en Python a partir de phi avec exactement le stencil du moteur (centre a l'interieur, decentre
+GAP CONNU (reporte, non bloquant) : derive_aux_polar remplit l'aux (phi, grad_r, grad_theta)
+mais AUCUN accesseur Python ne rend ces gradients. La derive ExB initiale est donc RECALCULEE
+en Python a partir de phi avec EXACTEMENT le stencil du moteur (centre a l'interieur, decentre
 d'ordre 2 aux parois radiales, enroulement periodique en theta ; grad_theta = (1/r) d phi/d theta).
 """
 
@@ -79,6 +82,8 @@ from results import (  # noqa: E402
     adc_cpp_sha,
     build_record,
     engine_label,
+    gamma_to_paper_units,
+    paper_to_sim_time_window,
     verify_paper_windows,
     write_records,
 )
@@ -90,7 +95,7 @@ DEFAULT_RMIN = 2.0
 
 
 def i_radial(radius, r_min, dr, nr):
-    """Indice radial de la cellule dont le centre est le plus proche de @p radius.
+    """Indice radial de la cellule dont le CENTRE est le plus proche de @p radius.
 
     Centres : r_cell(i) = r_min + (i + 0.5) * dr (convention PolarGeometry::r_cell, mesh/geometry.hpp).
     """
@@ -116,12 +121,12 @@ def annular_density(nr, nth, mode, params, r_min):
 
 
 def polar_gradient(phi, r_min, dr, nth, nr):
-    """Gradient polaire de phi en base locale, exactement le stencil de derive_aux_polar (C++).
+    """Gradient polaire de phi en base locale, EXACTEMENT le stencil de derive_aux_polar (C++).
 
     phi : tableau (nth, nr) = phi[theta, r]. Renvoie (grad_r, grad_theta), memes formes :
-      grad_r     = d phi/dr     : centre a l'interieur, decentre d'ordre 2 aux deux parois radiales
-                   (i=0 : avant -3,4,-1 ; i=nr-1 : arriere 3,-4,1), phi sans ghost radial.
-      grad_theta = (1/r) d phi/d theta : centre avec enroulement periodique de l'indice theta.
+      grad_r     = d phi/dr     : centre a l'interieur, DECENTRE d'ordre 2 aux deux parois radiales
+                   (i=0 : avant -3,4,-1 ; i=nr-1 : arriere 3,-4,1), phi SANS ghost radial.
+      grad_theta = (1/r) d phi/d theta : centre avec ENROULEMENT periodique de l'indice theta.
     Le decentrage d'ordre 2 exige nr >= 3 (garanti par adc.PolarMesh / check_geometry).
     """
     dth = 2.0 * math.pi / nth
@@ -141,7 +146,7 @@ def polar_gradient(phi, r_min, dr, nth, nr):
 
 
 def polar_radial_derivative(field, r_min, dr, nth, nr):
-    """d field/dr en base locale, meme stencil radial que polar_gradient (branche grad_r).
+    """d field/dr en base locale, MEME stencil radial que polar_gradient (branche grad_r).
 
     Reutilise pour d_r rho dans le terme de pression de l'equilibre. field : (nth, nr).
     Centre a l'interieur, decentre d'ordre 2 aux deux parois radiales (i=0 et i=nr-1).
@@ -154,15 +159,15 @@ def polar_radial_derivative(field, r_min, dr, nth, nr):
 
 
 def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
-    r"""v_theta(r) de l'equilibre rotatif axisymetrique (bilan radial de quantite de mouvement).
+    r"""v_theta(r) de l'EQUILIBRE ROTATIF axisymetrique (bilan radial de quantite de mouvement).
 
     Derivation E1 (verifiee dans la source adc_cpp ; cf. en-tete de ce fichier). A l'etat
-    stationnaire (v_r = 0, d_t = 0, axisymetrique) le membre de droite radial des deux etages du
+    stationnaire (v_r = 0, d_t = 0, axisymetrique) le membre de droite RADIAL des DEUX etages du
     moteur s'annule :
 
-      etage hyperbolique (assemble_rhs_polar + IsothermalFluxPolar::polar_geom_source) :
+      etage HYPERBOLIQUE (assemble_rhs_polar + IsothermalFluxPolar::polar_geom_source) :
         R_hyp[1] = rho v_theta^2 / r - d_r p          (le +p/r de S_geom annule p/r de la divergence)
-      etage source (CondensedSchur / Lorentz, dv_r/dt = -(d_r phi) + B_z v_theta) :
+      etage SOURCE (CondensedSchur / Lorentz, dv_r/dt = -(d_r phi) + B_z v_theta) :
         R_src[1] = -rho d_r phi + rho B_z v_theta
 
     R_hyp[1] + R_src[1] = 0, p = cs2 rho, d_r p = cs2 d_r rho, donne la quadratique par cellule :
@@ -173,11 +178,11 @@ def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
 
       (1/r) v_theta^2 + B_z v_theta - ( d_r phi + cs2 (d_r rho)/rho ) = 0.
 
-    Racine physique (continuation ExB) = branche +sqrt. La forme naive
-    v_theta = (r/2)[ -B + sqrt(B^2 + (4/r) forcing) ] souffre d'une annulation catastrophique quand
+    Racine PHYSIQUE (continuation ExB) = branche +sqrt. La forme naive
+    v_theta = (r/2)[ -B + sqrt(B^2 + (4/r) forcing) ] souffre d'une ANNULATION CATASTROPHIQUE quand
     B = omega = beta^2 est gigantesque (1e12) : B^2 = 1e24 + O(1) perd le terme de forcing dans la
-    mantisse float64, sqrt(B^2 + small) = B exactement, et la difference -B + B = 0 aneantit la derive
-    physique grad_r/B ~ 1e-12. On utilise donc la forme multipliee-conjuguee, numeriquement stable
+    mantisse float64, sqrt(B^2 + small) = B exactement, et la difference -B + B = 0 ANEANTIT la derive
+    physique grad_r/B ~ 1e-12. On utilise donc la forme MULTIPLIEE-CONJUGUEE, numeriquement stable
     pour b = B > 0 (racine + de a v^2 + b v - c, a = 1/r, b = B, c = forcing) :
 
       v_theta(r) = 2 forcing / ( B + sqrt( B^2 + (4/r) forcing ) ),   forcing = d_r phi + cs2 (d_r rho)/rho.
@@ -186,12 +191,12 @@ def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
     quasi-egaux : le numerateur porte directement le forcing, le denominateur ~ 2B reste exact.)
 
     Quand la courbure -> 0 (cs2 -> 0 ou grand r), v_theta -> forcing/B -> d_r phi/B = grad_r/B, donc
-    elle se reduit continument a la derive azimutale ExB existante. La branche -sqrt (racine rapide
-    contre-tournante parasite) est ecartee. Tout est calcule par cellule avec exactement le stencil
+    elle se reduit CONTINUMENT a la derive azimutale ExB existante. La branche -sqrt (racine rapide
+    contre-tournante parasite) est ecartee. Tout est calcule par cellule avec EXACTEMENT le stencil
     radial du moteur (polar_gradient / polar_radial_derivative) -> coherence avec l'operateur discret.
 
     @param grad_r  d phi/dr deja calcule (meme stencil que derive_aux_polar).
-    @return v_theta : tableau (nth, nr), composante physique azimutale (base locale e_theta).
+    @return v_theta : tableau (nth, nr), composante PHYSIQUE azimutale (base locale e_theta).
     """
     B = params.omega
     r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]            # (1, nr) centres radiaux
@@ -214,8 +219,8 @@ def build_polar_system(nr, nth, mode, params, args):
     """Anneau polaire + bloc isotherme natif + Poisson polaire + B_z + etage Schur condense.
 
     Init : (A) densite top-hat (+ perturbation seed) ; (B) 1er solve Poisson -> phi ; (C) v_r = ExB
-    (-grad_theta/B) et v_theta = equilibre rotatif (racine de la quadratique de bilan radial,
-    equilibrium_v_theta), ce v_theta est un vrai etat stationnaire du modele fluide complet (il
+    (-grad_theta/B) ET v_theta = EQUILIBRE ROTATIF (racine de la quadratique de bilan radial,
+    equilibrium_v_theta) -- ce v_theta est un VRAI etat stationnaire du modele fluide complet (il
     equilibre centrifuge + pression + electrique + Lorentz), contrairement a l'ancienne derive ExB
     pure grad_r/B qui portait une quantite de mouvement non equilibree et explosait avant la fenetre
     de fit ; (D) injecte l'etat (rho, rho v_r, rho v_theta) ; (E) 2e solve_fields pour que le
@@ -229,7 +234,7 @@ def build_polar_system(nr, nth, mode, params, args):
     # second membre par cellule vient de la brique elliptique du bloc). Dirichlet phi=0 aux parois
     # radiales, theta toujours periodique cote solveur polaire.
     sim.set_poisson(rhs="charge_density", solver="polar", bc="dirichlet")
-    # B_z constant = omega (Omega = B_z). requis avant set_source_stage (l'etage Lorentz lit Omega).
+    # B_z constant = omega (Omega = B_z). REQUIS avant set_source_stage (l'etage Lorentz lit Omega).
     # Layout (ntheta, nr) C-order = flat[j*nr+i], coherent avec set_density / set_state polaire.
     sim.set_magnetic_field(params.omega * np.ones((nth, nr), dtype=np.float64))
 
@@ -258,10 +263,10 @@ def build_polar_system(nr, nth, mode, params, args):
     # (B) premier solve Poisson -> phi.
     sim.solve_fields()
     phi = np.asarray(sim.potential(), dtype=np.float64).reshape(nth, nr)   # phi[theta, r]
-    # (C) v_r = ExB (-grad_theta/B, point fixe de l'etage source) ; v_theta = equilibre rotatif
+    # (C) v_r = ExB (-grad_theta/B, point fixe de l'etage source) ; v_theta = EQUILIBRE ROTATIF
     # (racine de la quadratique de bilan radial : centrifuge + pression + electrique + Lorentz). Meme
     # stencil radial que le moteur (polar_gradient). L'ancien v_theta = grad_r/B (ExB pur) portait une
-    # quantite de mouvement non equilibree -> transient radial rapide -> NaN avant la fenetre de fit.
+    # quantite de mouvement NON equilibree -> transient radial rapide -> NaN avant la fenetre de fit.
     grad_r, grad_theta = polar_gradient(phi, r_min, dr, nth, nr)
     B = params.omega
     v_r = -grad_theta / B
@@ -275,31 +280,31 @@ def build_polar_system(nr, nth, mode, params, args):
 
 
 def compute_frozen_residual(params, args):
-    r"""Residu d'equilibre gele R_eq = step(U_eq) - U_eq (option c, bilan discret bien pose).
+    r"""Residu d'equilibre GELE R_eq = step(U_eq) - U_eq (option c, bilan discret bien pose).
 
-    Le modele complet polaire n'est pas discretement bien pose a la raideur du papier
+    Le modele complet polaire n'est PAS discretement bien pose a la raideur du papier
     (B_z = omega = 1e12) : l'etage hyperbolique (WENO5 + Rusanov au saut top-hat de l'anneau) et
-    l'etage Schur n'annulent le bilan electrique/Lorentz/centrifuge/pression qu'au continu, jamais
-    au discret. Resultat : un seul pas du schema applique a l'etat d'equilibre axisymetrique U_eq
-    produit une derive parasite O(1) (R_eq != 0) qui fait diverger les modes azimutaux (NaN ~ t 0.02),
-    quel que soit le pas de temps ou la tentative de Newton (#23 etait un no-op : jacobienne
+    l'etage Schur n'annulent le bilan electrique/Lorentz/centrifuge/pression QU'AU CONTINU, jamais
+    au DISCRET. Resultat : un seul pas du schema applique a l'etat d'equilibre axisymetrique U_eq
+    produit une DERIVE PARASITE O(1) (R_eq != 0) qui fait diverger les modes azimutaux (NaN ~ t 0.02),
+    quel que soit le pas de temps ou la tentative de Newton (#23 etait un NO-OP : jacobienne
     rho*B_z ~ 1e12 -> correction ~ 1e-12).
 
-    Option c (soustraction du residu gele) : on precalcule R_eq une fois sur l'etat axisymetrique
+    Option c (soustraction du residu gele) : on PRECALCULE R_eq UNE FOIS sur l'etat axisymetrique
     U_eq (perturbation=0), puis on remplace la carte d'avancement step() par step()-R_eq dans la
-    boucle perturbee. Par construction U_eq devient un point fixe discret exact :
+    boucle perturbee. Par construction U_eq devient un POINT FIXE DISCRET EXACT :
 
         (step - R_eq)(U_eq) = step(U_eq) - (step(U_eq) - U_eq) = U_eq
 
-    a la precision machine, independamment du stencil. La derive axisymetrique O(1) est donc annulee
+    a la PRECISION MACHINE, INDEPENDAMMENT du stencil. La derive axisymetrique O(1) est donc annulee
     a chaque pas ; seule subsiste la perturbation (le mode physique O(delta) et son petit residu
     O(delta), car R_eq est evalue au phi d'equilibre alors que le phi perturbe differe : la
     soustraction enleve la derive axisymetrique dominante O(1) et laisse un residu O(delta) tolerable,
     le mode physique etant lui-meme O(delta) et croissant exponentiellement au-dessus).
 
-    R_eq est calcule sur un System sonde dedie (jamais le sim de production : step() avance time()
-    de facon irreversible, ce qui decalerait les fenetres de fit absolues du papier). dt_fixed est le
-    meme pas que la boucle de production (R_eq est la derive par pas A ce dt ; step()-R_eq n'a U_eq pour
+    R_eq est calcule sur un System SONDE DEDIE (jamais le sim de production : step() avance time()
+    de facon IRREVERSIBLE, ce qui decalerait les fenetres de fit absolues du papier). dt_fixed est le
+    MEME pas que la boucle de production (R_eq est la derive PAR PAS A CE dt ; step()-R_eq n'a U_eq pour
     point fixe qu'a ce dt). La sonde est ensuite jetee.
 
     @return (U_eq, R_eq) : tableaux (3, ntheta, nr) comp-major (rho, mom_r, mom_theta).
@@ -308,7 +313,7 @@ def compute_frozen_residual(params, args):
     dt = args.dt
     # perturbation=0 -> annular_density ignore le terme sin(l theta) : anneau strictement axisymetrique
     # quel que soit l'argument mode (ici 1). Meme nr/ntheta/cs2/theta/B/dt que la production -> R_eq
-    # correspond exactement a la derive du schema de production sur son equilibre.
+    # correspond exactement a la derive du schema de production sur SON equilibre.
     flat_params = PaperParameters(final_time=params.final_time, temperature=params.temperature,
                                   perturbation=0.0)
     probe = build_polar_system(nr, nth, mode=1, params=flat_params, args=args)
@@ -318,19 +323,19 @@ def compute_frozen_residual(params, args):
     # en tete de macro-pas, mais on reste explicite pour la robustesse du contrat).
     probe.set_state("ne", U_eq.ravel())
     probe.solve_fields()
-    probe.step(dt)                        # un macro-pas complet : SSPRK3 hyperbolique + Schur polaire
+    probe.step(dt)                        # UN macro-pas complet : SSPRK3 hyperbolique + Schur polaire
     U1 = np.asarray(probe.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
     R_eq = U1 - U_eq                       # derive parasite O(1) du schema sur l'anneau axisymetrique
     return U_eq, R_eq
 
 
 def step_frozen_subtracted(sim, dt, R_eq, nth, nr):
-    """Un pas de la carte corrigee U <- step(U) - R_eq (option c), puis solve_fields.
+    """Un pas de la carte CORRIGEE U <- step(U) - R_eq (option c), puis solve_fields.
 
     Avance le sim d'un macro-pas (Split/Strang : SSPRK3 hyperbolique + etage Schur polaire), relit
-    l'etat conservatif (3, ntheta, nr), soustrait le residu d'equilibre gele R_eq (constant, calcule
+    l'etat conservatif (3, ntheta, nr), SOUSTRAIT le residu d'equilibre GELE R_eq (constant, calcule
     une seule fois), re-impose l'etat corrige, puis re-resout Poisson pour que sim.potential() reflete
-    l'etat corrige a l'echantillonnage. R_eq est le meme tableau a chaque pas (gele).
+    l'etat corrige a l'echantillonnage. R_eq est le MEME tableau a chaque pas (gele).
     """
     sim.step(dt)
     U = np.asarray(sim.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
@@ -341,7 +346,7 @@ def step_frozen_subtracted(sim, dt, R_eq, nth, nr):
 def mode_amplitude_polar(sim, mode, i_r0, nth, nr):
     """Amplitude du mode l de phi sur le cercle r=r0 (colonne native phi[:, i_r0]).
 
-    phi est rendu (ny, nx) = (ntheta, nr) (cf. to_2d(s.ny(), s.nx())). Le cercle r=r0 est exactement
+    phi est rendu (ny, nx) = (ntheta, nr) (cf. to_2d(s.ny(), s.nx())). Le cercle r=r0 est EXACTEMENT
     la colonne radiale i_r0 (une ligne complete en theta a r fixe) : aucune interpolation bilineaire
     autour d'un cercle (contrairement au cartesien sample_circle). Convention diag_polar_omega :
     c_l = (rfft(phi[:, i_r0]) / ntheta)[l], amplitude = 2 |c_l|.
@@ -352,9 +357,15 @@ def mode_amplitude_polar(sim, mode, i_r0, nth, nr):
     return 2.0 * abs(coeffs[mode])
 
 
-def fit_growth(times, amplitudes, mode):
-    """Pente exp brute sur la fenetre de fit verbatim du papier (PAPER_FIT_WINDOWS), sans adaptation."""
-    lo, hi = PAPER_FIT_WINDOWS[mode]
+def fit_growth(times, amplitudes, mode, rhobar=1.0):
+    """Pente BRUTE sur la fenetre papier MAPPEE en temps sim (T3 : t_sim=2pi/rhobar * t_paper).
+
+    Comme le chemin cartesien, le solveur polaire tourne en horloge ExB-naturelle ; la fenetre
+    papier (T_d) doit etre mappee avant le fit (sinon transitoire). gamma_raw_sim ; conversion
+    x2pi/rhobar a l'enregistrement. NB : la repro quantitative du polaire COMPLET n'est PAS
+    etablie (VOIE 1 diverge) ; ce mapping rend juste la metrologie coherente avec le cartesien.
+    """
+    lo, hi = paper_to_sim_time_window(PAPER_FIT_WINDOWS[mode], rhobar)
     times = np.asarray(times)
     amplitudes = np.asarray(amplitudes)
     mask = (times >= lo) & (times <= hi) & (amplitudes > 0.0)
@@ -367,8 +378,8 @@ def run_mode(mode, params, args, R_eq=None):
     """Avance le mode l sur l'anneau polaire et renvoie (temps, amplitudes, gamma, masse initiale).
 
     Si @p R_eq est fourni (mode --frozen-equilibrium), la carte d'avancement est step()-R_eq (option c,
-    soustraction du residu d'equilibre gele) avec un pas fixe args.dt ; le chemin CFL adaptatif
-    (step_cfl) est alors interdit car il s'effondre sur l'equilibre quasi-stationnaire (estimation de
+    soustraction du residu d'equilibre gele) avec un pas FIXE args.dt ; le chemin CFL adaptatif
+    (step_cfl) est alors INTERDIT car il s'effondre sur l'equilibre quasi-stationnaire (estimation de
     vitesse -> 0 -> dt explose -> NaN). Sinon, comportement historique (step() nu, --cfl autorise).
     """
     nr, nth = args.nr, args.ntheta
@@ -394,7 +405,7 @@ def run_mode(mode, params, args, R_eq=None):
         if t >= args.t_end - 0.5 * args.dt:
             break
         if frozen:
-            # Option c : pas fixe + soustraction du residu gele (R_eq est calcule a ce dt).
+            # Option c : pas FIXE + soustraction du residu gele (R_eq est calcule a ce dt).
             step_frozen_subtracted(sim, args.dt, R_eq, nth, nr)
         elif args.cfl > 0.0:
             sim.step_cfl(args.cfl)                            # pas stable CFL polaire (chemin historique)
@@ -404,7 +415,7 @@ def run_mode(mode, params, args, R_eq=None):
         if step > args.max_steps:
             raise RuntimeError("max_steps atteint avant t_end (mode l=%d)" % mode)
 
-    gamma = fit_growth(times, amplitudes, mode)
+    gamma = fit_growth(times, amplitudes, mode, rhobar=params.rho_max)
     mass1 = float(sim.mass("ne"))
     return dict(mode=mode, times=np.asarray(times), amplitudes=np.asarray(amplitudes),
                 gamma=gamma, mass0=mass0, mass1=mass1)
@@ -421,8 +432,8 @@ def write_mode_amplitude(result, out):
         for t, a in zip(result["times"], result["amplitudes"]):
             writer.writerow([t, a, a / a0])
 
-    # Figure optionnelle : amplitude.csv (ci-dessus) + growth_rates.csv (aval) sont les sorties
-    # de verite. On tolere toute panne matplotlib (absent, ou ABI numpy/matplotlib bancale comme
+    # Figure OPTIONNELLE : amplitude.csv (ci-dessus) + growth_rates.csv (aval) sont les sorties
+    # de verite. On tolere TOUTE panne matplotlib (absent, ou ABI numpy/matplotlib bancale comme
     # sur certains noeuds) sans jamais abandonner le run de donnees.
     try:
         import matplotlib
@@ -448,27 +459,32 @@ def write_mode_amplitude(result, out):
 
 
 def write_summary(results, out, params, args):
-    """growth_rates.csv (brut) + measurement_record (CSV/JSON) + metadata.json. matplotlib optionnel."""
+    """growth_rates.csv (BRUT) + measurement_record (CSV/JSON) + metadata.json. matplotlib optionnel."""
+    # T3 : gamma_raw_sim (fenetre MAPPEE) + gamma_paper_units = raw*2pi/rhobar ; err vs paper_units.
+    rhobar = params.rho_max
     rows = []
     for r in results:
         target = PAPER_GROWTH_RATES[r["mode"]]
-        error = (100.0 * (r["gamma"] - target) / target) if np.isfinite(r["gamma"]) else float("nan")
-        rows.append((r["mode"], r["gamma"], target, error))
+        g_paper = gamma_to_paper_units(r["gamma"], rhobar)
+        error = (100.0 * (g_paper - target) / target) if g_paper is not None else float("nan")
+        rows.append((r["mode"], r["gamma"], ("" if g_paper is None else g_paper), target, error))
 
     with open(os.path.join(out, "growth_rates.csv"), "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["mode", "gamma_numeric", "gamma_paper", "relative_error_percent"])
+        writer.writerow(["mode", "gamma_raw_sim", "gamma_paper_units", "gamma_paper",
+                         "relative_error_percent"])
         writer.writerows(rows)
 
     # Enregistrement de mesure (graine de la table de validation Phase 2), engine='polar-schur'
-    # -> label 'full-polar-schur'. Pente brute (aucun facteur 2 pi / rhobar). Mono-rang.
+    # -> label 'full-polar-schur'. T3 : meme conversion 2pi/rhobar que le cartesien (meme horloge
+    # ExB-naturelle, alpha/|Omega|=1). NB : repro quantitative polaire complete NON etablie (diverge).
     cpp_sha = adc_cpp_sha(adc)
     cases_sha = adc_cases_sha()
     records = [
         build_record(
             engine="polar-schur",
             mode=r["mode"],
-            gamma_numeric=r["gamma"],
+            gamma_raw_sim=r["gamma"],
             gamma_paper=PAPER_GROWTH_RATES[r["mode"]],
             fit_window=PAPER_FIT_WINDOWS[r["mode"]],
             n=args.nr,
@@ -476,6 +492,7 @@ def write_summary(results, out, params, args):
             splitting=("Strang" if args.strang else "Lie"),
             schur_theta=args.theta,
             backend="kokkos-serial",   # mono-rang (l'etage Schur polaire l'exige)
+            rhobar=rhobar,
             mpi_size=1,
             adc_cpp_sha_value=cpp_sha,
             adc_cases_sha_value=cases_sha,
@@ -496,9 +513,13 @@ def write_summary(results, out, params, args):
             "Poisson polaire direct (FFT-theta + Thomas-r), etage Schur condense polaire (#215, "
             "PolarCondensedSchurSourceStepper), mono-rang."
         ),
-        "normalization": "raw (no 2pi, no rhobar): full-model slope vs paper directly; the "
-                         "2pi/rhobar factor belongs only to the reduced ExB-scalar path "
-                         "(diag/diag_polar_omega.py, engine=reduced-ExB)",
+        "normalization": (
+            "T3: gamma_paper_units = gamma_raw_sim * 2pi/rhobar (rhobar=rho_max=%g); the 2pi "
+            "(cyclic->angular drift clock) applies to the full model too (alpha/|Omega|=1). Fit on "
+            "paper windows MAPPED to sim time. NB: polar full-model quantitative reproduction is NOT "
+            "established (VOIE 1 diverges); this only aligns metrology with the Cartesian path."
+            % params.rho_max
+        ),
         "adc_cpp_sha": cpp_sha,
         "adc_cases_sha": cases_sha,
         "parameters": params.to_dict(),
@@ -514,10 +535,10 @@ def write_summary(results, out, params, args):
             "dt": args.dt, "cfl": args.cfl, "nr": args.nr, "ntheta": args.ntheta, "mpi_size": 1,
             "frozen_equilibrium": bool(args.frozen_equilibrium),
             "frozen_equilibrium_note": (
-                "option c (well-balanced discret) : R_eq = step(U_eq) - U_eq precalcule une fois sur "
-                "l'anneau axisymetrique (perturbation=0) puis soustrait a chaque pas (U <- step(U) - "
-                "R_eq), faisant de U_eq un point fixe discret exact et annulant la derive parasite "
-                "O(1) du schema (qui produisait NaN ~ t 0.02). pas fixe obligatoire (le CFL adaptatif "
+                "option c (well-balanced discret) : R_eq = step(U_eq) - U_eq precalcule UNE FOIS sur "
+                "l'anneau axisymetrique (perturbation=0) puis SOUSTRAIT a chaque pas (U <- step(U) - "
+                "R_eq), faisant de U_eq un point fixe discret EXACT et annulant la derive parasite "
+                "O(1) du schema (qui produisait NaN ~ t 0.02). PAS FIXE OBLIGATOIRE (le CFL adaptatif "
                 "s'effondre sur l'equilibre quasi-stationnaire)."
             ) if args.frozen_equilibrium else "desactive (chemin historique step() nu)",
         },
@@ -550,7 +571,7 @@ def write_summary(results, out, params, args):
     with open(os.path.join(out, "metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2, sort_keys=True)
 
-    # Figure recap optionnelle : growth_rates.csv + metadata.json + record sont deja ecrits.
+    # Figure recap OPTIONNELLE : growth_rates.csv + metadata.json + record sont deja ecrits.
     # On tolere toute panne matplotlib (absent / ABI bancale) sans casser le run.
     try:
         import matplotlib
@@ -593,7 +614,7 @@ def parse_args():
     parser.add_argument("--cfl", type=float, default=0.0,
                         help="si > 0 : pas adaptatif step_cfl(cfl) ; sinon pas fixe --dt")
     parser.add_argument("--cs2", type=float, default=1.0e-4,
-                        help="vitesse du son au carre. Defaut 1e-4 (petit mais non nul) pour la "
+                        help="vitesse du son au carre. Defaut 1e-4 (petit mais NON nul) pour la "
                              "stricte hyperbolicite sur la grille polaire (le papier autorise "
                              "theta >= 0). Mettre 0 pour la limite froide exacte du papier.")
     parser.add_argument("--theta", type=float, default=0.5,
@@ -603,25 +624,25 @@ def parse_args():
     # --- Option c : soustraction du residu d'equilibre gele (well-balanced discret) -----------------
     parser.add_argument("--frozen-equilibrium", dest="frozen_equilibrium",
                         action="store_true", default=True,
-                        help="defaut on : bilan discret bien pose par soustraction du residu "
-                             "d'equilibre gele R_eq = step(U_eq) - U_eq (option c). U_eq devient un "
-                             "point fixe discret exact (step()-R_eq), la derive parasite O(1) "
+                        help="DEFAUT ON : bilan discret bien pose par soustraction du residu "
+                             "d'equilibre GELE R_eq = step(U_eq) - U_eq (option c). U_eq devient un "
+                             "point fixe discret EXACT (step()-R_eq), la derive parasite O(1) "
                              "axisymetrique du schema (qui faisait NaN ~ t 0.02) est annulee a chaque "
-                             "pas. exige un pas fixe --dt (le --cfl adaptatif s'effondre sur "
+                             "pas. EXIGE un pas FIXE --dt (le --cfl adaptatif s'effondre sur "
                              "l'equilibre quasi-stationnaire -> dt explose -> NaN ; il est ignore "
                              "dans ce mode).")
     parser.add_argument("--no-frozen-equilibrium", dest="frozen_equilibrium",
                         action="store_false",
-                        help="desactive l'option c : chemin historique step() nu (NaN ~ t 0.02 a la "
+                        help="DESACTIVE l'option c : chemin historique step() nu (NaN ~ t 0.02 a la "
                              "raideur du papier ; conserve pour comparaison / debogage seulement).")
     parser.add_argument("--frozen-check-const", dest="frozen_check_const", type=float, default=1.0e3,
                         help="constante C du critere de stationarite a la precision machine "
                              "(max_n ||U^n - U_eq||_inf <= C eps_mach ||U_eq||_inf, defaut 1e3). "
-                             "N'agit que sur --check-equilibrium quand --frozen-equilibrium est on.")
+                             "N'agit que sur --check-equilibrium quand --frozen-equilibrium est ON.")
     parser.add_argument("--sample-every", dest="sample_every", type=int, default=10)
     parser.add_argument("--perturbation", dest="perturbation", type=float, default=0.1,
                         help="amplitude delta du mode azimutal initial sin(l theta) (eq. 35 du "
-                             "papier, defaut 0.1). N'agit pas sur --check-equilibrium ni sur le "
+                             "papier, defaut 0.1). N'agit PAS sur --check-equilibrium ni sur le "
                              "calcul du residu gele R_eq (qui imposent perturbation=0, anneau "
                              "axisymetrique). Diagnostic : varier delta discrimine le mecanisme "
                              "de divergence du chemin perturbe (derive parasite O(delta) residuelle "
@@ -629,10 +650,10 @@ def parse_args():
     parser.add_argument("--max-steps", dest="max_steps", type=int, default=2_000_000)
     parser.add_argument("--quick", action="store_true", help="smoke minuscule (parse/assemblage)")
     parser.add_argument("--check-equilibrium", dest="check_equilibrium", action="store_true",
-                        help="auto-test de stationarite : force perturbation=0 (anneau axisymetrique), "
-                             "avance quelques pas et verifie que l'amplitude de chaque mode azimutal "
+                        help="auto-test de STATIONARITE : force perturbation=0 (anneau axisymetrique), "
+                             "avance quelques pas et verifie que l'amplitude de CHAQUE mode azimutal "
                              "reste plate (pas de croissance, pas de NaN). C'est la validation cle que "
-                             "l'IC d'equilibre est genuinement stationnaire avant de mesurer une "
+                             "l'IC d'equilibre est genuinement stationnaire AVANT de mesurer une "
                              "croissance. Code de sortie non nul si l'equilibre derive.")
     parser.add_argument("--check-tol", dest="check_tol", type=float, default=0.05,
                         help="tolerance relative de derive d'amplitude pour --check-equilibrium "
@@ -645,19 +666,19 @@ def parse_args():
 
 
 def check_equilibrium_frozen(params, args):
-    r"""stationarite A la precision machine (frozen-equilibrium on, la validation de l'option c).
+    r"""STATIONARITE A LA PRECISION MACHINE (frozen-equilibrium ON, la VRAIE validation de l'option c).
 
-    Le test laxiste base-amplitude (check_equilibrium ci-dessous) normalise la derive par l'echelle de
-    fond O(1) ; il masque l'echec discret car la derive parasite O(1) y parait "petite" en relatif. La
-    validation genuine est : avec soustraction du residu gele, U_eq doit etre un point fixe discret
-    exact. On construit U_eq (perturbation=0), on calcule R_eq, puis on avance la carte corrigee
-    step()-R_eq sur ce meme U_eq. Par construction (step-R_eq)(U_eq)=U_eq, donc chaque pas doit
+    Le test laxiste base-amplitude (check_equilibrium ci-dessous) NORMALISE la derive par l'echelle de
+    fond O(1) ; il MASQUE l'echec discret car la derive parasite O(1) y parait "petite" en relatif. La
+    validation GENUINE est : avec soustraction du residu gele, U_eq DOIT etre un point fixe discret
+    EXACT. On construit U_eq (perturbation=0), on calcule R_eq, puis on avance la carte CORRIGEE
+    step()-R_eq SUR CE MEME U_eq. Par construction (step-R_eq)(U_eq)=U_eq, donc chaque pas doit
     reproduire U_eq a l'arrondi flottant pres.
 
-    critere (assertion reelle) : max_n ||U^n - U_eq||_inf <= C eps_mach ||U_eq||_inf sur N >= 200 pas,
+    CRITERE (assertion reelle) : max_n ||U^n - U_eq||_inf <= C eps_mach ||U_eq||_inf sur N >= 200 pas,
     C ~ 1e3 (l'arrondi des etages SSPRK3 + Schur + Poisson + l'aller-retour get_state/set_state
-    s'accumule lineairement en N ; C eps couvre largement). Floor absolu calcule sur l'echelle de U_eq,
-    pas sur le fond 1e12 : c'est la correction precise de l'ancien check laxiste qui cachait l'echec.
+    s'accumule lineairement en N ; C eps couvre largement). Floor ABSOLU calcule sur l'echelle de U_eq,
+    PAS sur le fond 1e12 : c'est la correction precise de l'ancien check laxiste qui cachait l'echec.
 
     @return (ok, report) : ok bool ; report = liste d'un seul dict (max_dev, floor, n_steps, finite).
     """
@@ -667,7 +688,7 @@ def check_equilibrium_frozen(params, args):
                                   perturbation=0.0)
     U_eq, R_eq = compute_frozen_residual(flat_params, args)
     sim = build_polar_system(nr, nth, mode=1, params=flat_params, args=args)
-    # Repart exactement de U_eq (le meme etat que celui ayant servi a calculer R_eq) -> point fixe.
+    # Repart EXACTEMENT de U_eq (le meme etat que celui ayant servi a calculer R_eq) -> point fixe.
     sim.set_state("ne", U_eq.ravel())
     sim.solve_fields()
 
@@ -695,17 +716,17 @@ def check_equilibrium_frozen(params, args):
 
 
 def check_equilibrium(params, args):
-    """stationarite : anneau d'equilibre sans perturbation -> chaque mode azimutal reste plat.
+    """STATIONARITE : anneau d'equilibre SANS perturbation -> chaque mode azimutal reste plat.
 
     Pose perturbation=0 (rho axisymetrique top-hat), construit l'IC d'equilibre (v_r=0 a O(eps), v_theta
     = racine du bilan radial), avance args.max_steps_check pas et verifie pour chaque mode l de
     args.check_modes que (a) le potentiel reste fini a chaque echantillon et (b) la derive relative
     d'amplitude reste <= args.check_tol.
 
-    attention : ce critere base-amplitude est laxiste (normalise par l'echelle de fond O(1)) et masque
-    l'echec discret a la raideur du papier ; il n'est conserve que pour le chemin historique sans
+    ATTENTION : ce critere base-amplitude est LAXISTE (normalise par l'echelle de fond O(1)) et MASQUE
+    l'echec discret a la raideur du papier ; il n'est conserve que pour le chemin HISTORIQUE sans
     soustraction de residu. Avec --frozen-equilibrium (defaut), main() route vers
-    check_equilibrium_frozen qui exige la stationarite A la precision machine (le test de l'option c).
+    check_equilibrium_frozen qui exige la STATIONARITE A LA PRECISION MACHINE (le vrai test de l'option c).
 
     @return (ok, report) : ok bool ; report = liste de dicts par mode (amp0, amp_max, rel_drift, finite).
     """
@@ -737,7 +758,7 @@ def check_equilibrium(params, args):
     report = []
     # Echelle de reference : amplitude du mode dominant initial (sinon, pour un anneau purement
     # axisymetrique, amp0 ~ bruit machine et toute derive parait enorme en relatif). On compare la
-    # montee absolue de chaque mode a cette echelle.
+    # MONTEE absolue de chaque mode a cette echelle.
     scale = max(max(amp0.values()), 1.0e-300)
     ok = True
     for l in modes:
@@ -754,12 +775,12 @@ def main():
     args = parse_args()
     if any(mode not in PAPER_GROWTH_RATES for mode in args.modes):
         raise SystemExit("--modes doit etre choisi parmi 3, 4, 5")
-    # mono-rang : l'etage Schur condense polaire = boite unique couvrant l'anneau (solveur direct).
+    # MONO-RANG : l'etage Schur condense POLAIRE = boite unique couvrant l'anneau (solveur direct).
     if mpi_size() > 1:
         raise SystemExit(
             "run_polar.py est mono-rang : l'etage Schur condense polaire refuse n_ranks>1 "
             "(le solveur polaire = boite unique). Lancer avec 1 seul rang (ntasks=1).")
-    # Pre-enregistrement : la comparaison du modele complet doit utiliser les fenetres verbatim du
+    # Pre-enregistrement : la comparaison du modele complet DOIT utiliser les fenetres verbatim du
     # papier (Fig. 5.4). Verrou contre toute fenetre adaptative (fit_growth lit PAPER_FIT_WINDOWS).
     verify_paper_windows(PAPER_FIT_WINDOWS)
 
@@ -774,11 +795,11 @@ def main():
         args.max_steps_check = 5
         args.check_modes = [1, 2, 3]
 
-    # --frozen-equilibrium (option c) impose un pas fixe : le --cfl adaptatif est brise pour ce modele
+    # --frozen-equilibrium (option c) IMPOSE un pas FIXE : le --cfl adaptatif est BRISE pour ce modele
     # (l'estimation de vitesse s'effondre a ~0 sur l'equilibre quasi-stationnaire -> dt ~ 1e28 -> NaN
     # instantane). On force donc args.cfl <= 0 et on previent si l'utilisateur avait demande --cfl.
     if args.frozen_equilibrium and args.cfl > 0.0:
-        print("[frozen-equilibrium] --cfl=%g ignore : l'option c exige un pas fixe (le CFL adaptatif "
+        print("[frozen-equilibrium] --cfl=%g IGNORE : l'option c exige un pas fixe (le CFL adaptatif "
               "s'effondre sur l'equilibre quasi-stationnaire). Utilisation de --dt=%g."
               % (args.cfl, args.dt))
         args.cfl = 0.0
@@ -788,28 +809,28 @@ def main():
                              perturbation=args.perturbation)
 
     # --check-equilibrium : auto-test de stationarite (perturbation=0). C'est la validation cle de
-    # l'IC d'equilibre avant toute mesure de croissance ; sort sans ecrire de growth_rates.csv.
+    # l'IC d'equilibre AVANT toute mesure de croissance ; sort sans ecrire de growth_rates.csv.
     if args.check_equilibrium:
         if args.frozen_equilibrium:
-            # validation de l'option c : stationarite a la precision machine (U_eq point fixe
+            # VRAIE validation de l'option c : stationarite a la PRECISION MACHINE (U_eq point fixe
             # discret exact de step()-R_eq). Le critere base-amplitude (laxiste, normalise par le fond
-            # O(1)) masquait l'echec discret ; ici floor = C eps_mach ||U_eq||_inf.
-            print("[check-equilibrium] frozen : anneau axisymetrique (perturbation=0), "
-                  ">= %d pas, critere precision machine (C=%g)" % (
+            # O(1)) MASQUAIT l'echec discret ; ici floor = C eps_mach ||U_eq||_inf.
+            print("[check-equilibrium] FROZEN : anneau axisymetrique (perturbation=0), "
+                  ">= %d pas, critere PRECISION MACHINE (C=%g)" % (
                       max(args.max_steps_check, 200), args.frozen_check_const))
             ok, report = check_equilibrium_frozen(params, args)
             row = report[0]
             print("  max_dev=%.3e floor=%.3e (= C eps ||U_eq||_inf, ||U_eq||_inf=%.3e) "
                   "n_steps=%d finite=%s -> %s" % (
                       row["max_dev"], row["floor"], row["state_scale"], row["n_steps"], row["finite"],
-                      "OK" if ok else "derive"))
+                      "OK" if ok else "DERIVE"))
             if ok:
                 print("[check-equilibrium] OK : U_eq est un point fixe discret a la precision machine "
                       "(option c : derive axisymetrique O(1) annulee par R_eq).")
                 return
             raise SystemExit(
-                "[check-equilibrium] echec : ||U^n - U_eq||_inf=%.3e depasse le floor machine %.3e. "
-                "La soustraction du residu gele ne rend pas U_eq point fixe (bug dans R_eq ou la "
+                "[check-equilibrium] ECHEC : ||U^n - U_eq||_inf=%.3e depasse le floor machine %.3e. "
+                "La soustraction du residu gele ne rend PAS U_eq point fixe (bug dans R_eq ou la "
                 "carte step()-R_eq)." % (row["max_dev"], row["floor"]))
         print("[check-equilibrium] anneau axisymetrique (perturbation=0), %d pas, modes %s, tol=%g"
               % (args.max_steps_check, args.check_modes, args.check_tol))
@@ -817,17 +838,17 @@ def main():
         for row in report:
             print("  mode l=%d : amp0=%.3e amp_max=%.3e rel_drift=%.3e finite=%s -> %s" % (
                 row["mode"], row["amp0"], row["amp_max"], row["rel_drift"], row["finite"],
-                "OK" if (row["finite"] and row["rel_drift"] <= args.check_tol) else "derive"))
+                "OK" if (row["finite"] and row["rel_drift"] <= args.check_tol) else "DERIVE"))
         if ok:
             print("[check-equilibrium] OK : l'equilibre rotatif est stationnaire (chaque mode plat).")
             return
-        raise SystemExit("[check-equilibrium] echec : l'equilibre derive (un mode croit ou NaN). "
-                         "L'IC n'est pas un etat stationnaire du modele complet.")
+        raise SystemExit("[check-equilibrium] ECHEC : l'equilibre derive (un mode croit ou NaN). "
+                         "L'IC n'est PAS un etat stationnaire du modele complet.")
 
     out = case_output_dir("hoffart_euler_poisson_dsl_polar_schur")
 
-    # Option c : calcule R_eq une fois (anneau axisymetrique perturbation=0), avant la boucle des
-    # modes. R_eq est gele (constant) et reutilise pour chaque mode/pas (step()-R_eq).
+    # Option c : calcule R_eq UNE FOIS (anneau axisymetrique perturbation=0), avant la boucle des
+    # modes. R_eq est GELE (constant) et reutilise pour CHAQUE mode/pas (step()-R_eq).
     R_eq = None
     if args.frozen_equilibrium:
         print("[frozen-equilibrium] precalcul du residu gele R_eq = step(U_eq) - U_eq "

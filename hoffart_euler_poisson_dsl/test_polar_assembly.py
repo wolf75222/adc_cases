@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Smoke test build-free de l'assemblage du modele complet polaire (run_polar.py).
+"""Smoke test BUILD-FREE de l'assemblage du modele complet POLAIRE (run_polar.py).
 
-Ce test n'a pas besoin de l'extension lourde Kokkos/AMReX `adc` : il installe un faux module
-`adc` minimal qui enregistre chaque appel sur un faux `System` (et restitue un potentiel non
+Ce test n'a PAS besoin de l'extension lourde Kokkos/AMReX `adc` : il installe un faux module
+`adc` minimal qui ENREGISTRE chaque appel sur un faux `System` (et restitue un potentiel non
 trivial pour que la derive ExB se calcule), puis pilote `build_polar_system`. Les assertions
-sont reelles et verrouillent le contrat d'assemblage du chemin polaire :
+sont REELLES et verrouillent le contrat d'assemblage du chemin polaire :
 
   (1) ordre des appels facade : set_poisson(polar/dirichlet) -> set_magnetic_field -> add_equation
-      -> set_density -> solve_fields -> set_state -> solve_fields. set_magnetic_field doit preceder
+      -> set_density -> solve_fields -> set_state -> solve_fields. set_magnetic_field DOIT preceder
       l'etage Schur (add_equation), exigence dure de set_source_stage polaire.
   (2) set_poisson route bien sur solver='polar', bc='dirichlet', rhs='charge_density'.
   (3) add_equation utilise WENO5 + Rusanov + SSPRK3 + CondensedSchur(electrostatic_lorentz).
   (4) la densite posee est le top-hat annulaire (fond rho_min hors anneau, perturbation dans [R0,R1]),
       layout (ntheta, nr) aplati flat[j*nr+i].
   (5) l'etat conservatif injecte est (3, ntheta, nr) comp-major (rho, mom_r, mom_theta) avec
-      (5a) v_r = derive ExB radiale -grad_theta/B ; (5b) v_theta = racine de la quadratique de bilan
-      radial (equilibre rotatif : centrifuge + pression + electrique + Lorentz), residu ~ 0 par
-      cellule ; (5c) l'anneau d'equilibre sans perturbation est stationnaire (check_equilibrium) ;
-      (5d) cs2=0 -> v_theta se reduit exactement a la derive ExB grad_r/B (continuation froide).
-  (6) le stencil polar_gradient est exactement celui de derive_aux_polar (centre interieur,
+      (5a) v_r = derive ExB radiale -grad_theta/B ; (5b) v_theta = racine de la quadratique de BILAN
+      RADIAL (equilibre rotatif : centrifuge + pression + electrique + Lorentz), residu ~ 0 par
+      cellule ; (5c) l'anneau d'equilibre SANS perturbation est stationnaire (check_equilibrium) ;
+      (5d) cs2=0 -> v_theta se reduit EXACTEMENT a la derive ExB grad_r/B (continuation froide).
+  (6) le stencil polar_gradient EST exactement celui de derive_aux_polar (centre interieur,
       decentre ordre 2 aux parois radiales, enroulement periodique en theta).
-  (7) fit_growth lit la fenetre verbatim du papier et recupere une pente exp pure exactement.
+  (7) fit_growth lit la fenetre VERBATIM du papier et recupere une pente exp pure exactement.
   (8) un run multi-rang est refuse (mono-rang : l'etage Schur polaire = boite unique).
 
 Lancer en standalone (`python3 test_polar_assembly.py`) ou sous pytest.
@@ -78,12 +78,12 @@ def _install_fake_adc():
         def solve_fields(self, *a, **k):
             self._record("solve_fields")
 
-        # --- drive parasite deterministe : un faux schema non discretement bien pose. step() ajoute a
-        # l'etat une derive fixe par cellule D(r, theta) (independante de l'etat), modelisant l'imbalance
-        # O(1) axisymetrique du schema sur l'equilibre. Ainsi R_eq = step(U_eq) - U_eq = D, et la
-        # carte corrigee step()-R_eq = U + D - D = U a la precision machine : U_eq devient point fixe
+        # --- DRIVE PARASITE DETERMINISTE : un faux schema NON discretement bien pose. step() ajoute a
+        # l'etat une derive FIXE par cellule D(r, theta) (independante de l'etat), modelisant l'imbalance
+        # O(1) axisymetrique du vrai schema sur l'equilibre. Ainsi R_eq = step(U_eq) - U_eq = D, et la
+        # carte corrigee step()-R_eq = U + D - D = U a la PRECISION MACHINE : U_eq devient point fixe
         # exact, exactement ce que --frozen-equilibrium doit verifier. (Avant l'option c, cette derive
-        # ferait diverger l'etat, d'ou l'utilite du test.)
+        # ferait diverger l'etat -- d'ou l'utilite du test.)
         def _spurious_drift(self):
             nr, nth = self._nr, self._nth
             r_min = self.kwargs["mesh"].r_min
@@ -92,7 +92,7 @@ def _install_fake_adc():
             dth = 2.0 * math.pi / nth
             th = ((np.arange(nth) + 0.5) * dth)[:, None]
             r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]
-            base = 1.0e-3 * np.sin(r) * np.cos(th)   # (nth, nr) derive O(1e-3) non triviale, fixe
+            base = 1.0e-3 * np.sin(r) * np.cos(th)   # (nth, nr) derive O(1e-3) non triviale, FIXE
             return np.stack([base, 0.5 * base, -0.25 * base], axis=0)  # (3, nth, nr)
 
         def step(self, *a, **k):
@@ -199,7 +199,7 @@ def test_assembly_call_order_and_routing():
     i_eq = names.index("add_equation")
     i_rho = names.index("set_density")
     i_state = names.index("set_state")
-    assert i_poisson < i_bz < i_eq, "set_magnetic_field doit preceder l'etage Schur (add_equation)"
+    assert i_poisson < i_bz < i_eq, "set_magnetic_field DOIT preceder l'etage Schur (add_equation)"
     assert i_eq < i_rho < i_state, "densite posee avant l'etat drift"
     assert names.count("solve_fields") >= 2, "deux solves : apres densite, puis apres l'etat drift"
 
@@ -278,15 +278,15 @@ def test_state_radial_velocity_is_exb_drift():
 
 
 def test_state_azimuthal_velocity_solves_radial_balance():
-    """(5b) v_theta est la racine de la quadratique de bilan radial (equilibre rotatif).
+    """(5b) v_theta est la racine de la quadratique de BILAN RADIAL (equilibre rotatif).
 
     Verifie que le residu (rho/r) v_theta^2 + (rho B) v_theta - (d_r p + rho d_r phi) ~ 0 par cellule,
-    et que la branche choisie se reduit a la derive ExB grad_r/B quand la courbure -> 0 (B grand).
+    ET que la branche choisie se reduit a la derive ExB grad_r/B quand la courbure -> 0 (B grand).
     """
     _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
-    # cs2 non nul pour exercer le terme de pression d_r p de l'equilibre.
+    # cs2 NON nul pour exercer le terme de pression d_r p de l'equilibre.
     args = _Args(cs2=1.0e-4)
     sim = rp.build_polar_system(args.nr, args.ntheta, 4, params, args)
     state_flat = [c for c in sim.calls if c[0] == "set_state"][0][1][1]
@@ -307,7 +307,7 @@ def test_state_azimuthal_velocity_solves_radial_balance():
 
     # Residu de la quadratique (rho/r) v^2 + (rho B) v - (d_r p + rho d_r phi) = 0.
     residual = (rho / rr) * v_th ** 2 + (rho * B) * v_th - (p_term + rho * gr)
-    # Echelle de normalisation par cellule (max des termes en valeur absolue) pour un residu relatif.
+    # Echelle de normalisation par cellule (max des termes en valeur absolue) pour un residu RELATIF.
     scale = np.maximum.reduce([np.abs(rho * B * v_th), np.abs(p_term + rho * gr),
                                np.abs((rho / rr) * v_th ** 2), np.full_like(residual, 1e-300)])
     assert np.max(np.abs(residual) / scale) < 1e-10, \
@@ -324,7 +324,7 @@ def test_state_azimuthal_velocity_solves_radial_balance():
 
 
 def test_equilibrium_v_theta_reduces_to_exb_when_cold():
-    """(5d) cs2 = 0 : v_theta se reduit exactement a la derive ExB grad_r/B (limite froide du papier).
+    """(5d) cs2 = 0 : v_theta se reduit EXACTEMENT a la derive ExB grad_r/B (limite froide du papier).
 
     Sans terme de pression, forcing = d_r phi, et a B grand v_theta -> d_r phi/B = grad_r/B : la
     continuation ExB est verifiee verbatim (la nouvelle IC degenere bien en l'ancienne quand cs2=0).
@@ -348,7 +348,7 @@ def test_equilibrium_v_theta_reduces_to_exb_when_cold():
 
 
 def test_check_equilibrium_is_stationary():
-    """(5c) stationarite : l'anneau d'equilibre sans perturbation reste plat (chaque mode).
+    """(5c) STATIONARITE : l'anneau d'equilibre SANS perturbation reste plat (chaque mode).
 
     Pilote check_equilibrium sur le faux adc : avec perturbation=0 et le phi axisymetrique du faux
     System, l'amplitude de chaque mode azimutal ne doit pas croitre au-dela de la tolerance et le
@@ -372,7 +372,7 @@ def test_compute_frozen_residual_captures_scheme_drift():
 
     Avec le faux adc, step() ajoute la derive deterministe D = _spurious_drift() ; compute_frozen_residual
     doit donc renvoyer R_eq == D (a la precision machine) et un U_eq non trivial (3, ntheta, nr).
-    Verifie aussi l'ordre des appels sur la sonde : set_state -> solve_fields -> step -> get_state.
+    Verifie aussi l'ORDRE des appels sur la sonde : set_state -> solve_fields -> step -> get_state.
     """
     adc = _install_fake_adc()
     rp = _import_run_polar()
@@ -391,9 +391,9 @@ def test_compute_frozen_residual_captures_scheme_drift():
 
 
 def test_step_frozen_subtracted_call_order_and_cancellation():
-    """(c2) step_frozen_subtracted : ordre step -> get_state -> set_state -> solve_fields, et annulation.
+    """(c2) step_frozen_subtracted : ORDRE step -> get_state -> set_state -> solve_fields, ET annulation.
 
-    La carte corrigee step()-R_eq applique deux fois de suite a U_eq doit reproduire U_eq exactement
+    La carte corrigee step()-R_eq applique deux fois de suite a U_eq doit reproduire U_eq EXACTEMENT
     (R_eq = derive constante : U + D - D = U). On verifie l'ordre des appels facade et l'invariance.
     """
     adc = _install_fake_adc()
@@ -408,7 +408,7 @@ def test_step_frozen_subtracted_call_order_and_cancellation():
     before = len(sim.calls)
     rp.step_frozen_subtracted(sim, args.dt, R_eq, args.ntheta, args.nr)
     names = [c[0] for c in sim.calls[before:]]
-    # ordre exige : step (avance + derive), get_state, set_state (etat corrige), solve_fields.
+    # ORDRE EXIGE : step (avance + derive), get_state, set_state (etat corrige), solve_fields.
     assert names.index("step") < names.index("get_state") < names.index("set_state") \
         < names.index("solve_fields"), "ordre step -> get_state -> set_state -> solve_fields : %r" % names
     # Annulation : l'etat courant du sim doit etre U_eq a la precision machine (point fixe exact).
@@ -418,11 +418,11 @@ def test_step_frozen_subtracted_call_order_and_cancellation():
 
 
 def test_check_equilibrium_frozen_is_machine_precision_stationary():
-    """(c3) stationarite A la precision machine : la validation de l'option c.
+    """(c3) STATIONARITE A LA PRECISION MACHINE : la VRAIE validation de l'option c.
 
-    Avec --frozen-equilibrium, U_eq est un point fixe discret exact de step()-R_eq ; check_equilibrium_frozen
+    Avec --frozen-equilibrium, U_eq est un point fixe discret EXACT de step()-R_eq ; check_equilibrium_frozen
     doit donc reporter max_dev <= floor = C eps_mach ||U_eq||_inf sur >= 200 pas. Le critere laxiste
-    base-amplitude (check_equilibrium) masquait l'echec ; ce test exerce le bon critere.
+    base-amplitude (check_equilibrium) MASQUAIT l'echec ; ce test exerce le bon critere.
     """
     _install_fake_adc()
     rp = _import_run_polar()
@@ -436,7 +436,7 @@ def test_check_equilibrium_frozen_is_machine_precision_stationary():
     assert row["max_dev"] <= row["floor"], \
         "max_dev=%.3e doit rester sous le floor machine %.3e" % (row["max_dev"], row["floor"])
     assert ok
-    # Le floor est echelle sur U_eq, pas sur le fond 1e12 (correction du check laxiste).
+    # Le floor est ECHELLE sur U_eq, PAS sur le fond 1e12 (correction du check laxiste).
     assert row["floor"] < 1e-6 * max(row["state_scale"], 1.0), \
         "le floor doit etre ~ eps * ||U_eq|| (et non l'echelle laxiste du fond)"
     print("OK (c3) check_equilibrium_frozen : U_eq point fixe a la precision machine (max_dev=%.2e)"
@@ -447,12 +447,12 @@ def test_run_mode_frozen_uses_subtracted_stepping():
     """(c4) run_mode(R_eq=...) cable la carte step()-R_eq dans la boucle perturbee (option c).
 
     Verifie que, R_eq fourni, run_mode appelle bien la sequence step -> get_state -> set_state ->
-    solve_fields a chaque iteration (et jamais step_cfl, meme si --cfl etait demande).
+    solve_fields a chaque iteration (et JAMAIS step_cfl, meme si --cfl etait demande).
     """
     _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
-    # t_end petit = quelques pas ; sample_every=1 ; --cfl>0 doit etre ignore en mode frozen.
+    # t_end petit = quelques pas ; sample_every=1 ; --cfl>0 doit etre IGNORE en mode frozen.
     args = _Args(cs2=1.0e-4, dt=1.0e-3, cfl=0.7, t_end=0.004, sample_every=1, max_steps=100,
                  strang=False, frozen_equilibrium=True)
     _, R_eq = rp.compute_frozen_residual(params, args)
@@ -470,7 +470,7 @@ def test_run_mode_frozen_uses_subtracted_stepping():
 
 
 def test_main_frozen_ignores_cfl_and_runs_quick():
-    """(c5) main --quick --cfl=0.5 : frozen on par defaut -> --cfl ignore, run frozen jusqu'au bout.
+    """(c5) main --quick --cfl=0.5 : frozen ON par defaut -> --cfl ignore, run frozen jusqu'au bout.
 
     main() doit forcer args.cfl=0 sous --frozen-equilibrium, precalculer R_eq, et terminer le smoke
     --quick sans NaN (la sortie est ecrite). On verifie que le run aboutit (pas de SystemExit).
@@ -485,7 +485,7 @@ def test_main_frozen_ignores_cfl_and_runs_quick():
         os.environ.pop("SLURM_NTASKS", None)
         sys.argv = ["run_polar.py", "--quick", "--cfl", "0.5"]
         try:
-            rp.main()  # ne doit pas lever : --cfl ignore, frozen on, smoke complet
+            rp.main()  # ne doit PAS lever : --cfl ignore, frozen ON, smoke complet
         finally:
             sys.argv = argv
             os.environ.clear()
@@ -503,7 +503,7 @@ def test_polar_gradient_matches_derive_aux_polar_stencil():
     r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]
     phi = r ** 2 * np.cos(2.0 * th)
     gr, gt = rp.polar_gradient(phi, r_min, dr, nth, nr)
-    # Reference exacte = les formules verbatim de derive_aux_polar (block_builder_polar.hpp).
+    # Reference EXACTE = les formules verbatim de derive_aux_polar (block_builder_polar.hpp).
     gr_ref = np.empty_like(phi)
     gr_ref[:, 1:-1] = (phi[:, 2:] - phi[:, :-2]) / (2.0 * dr)
     gr_ref[:, 0] = (-3.0 * phi[:, 0] + 4.0 * phi[:, 1] - phi[:, 2]) / (2.0 * dr)
@@ -514,15 +514,25 @@ def test_polar_gradient_matches_derive_aux_polar_stencil():
     print("OK (6) polar_gradient == stencil derive_aux_polar (r centre/decentre ordre 2, theta enroule)")
 
 
-def test_fit_growth_uses_paper_window_and_is_exact():
+def test_fit_growth_uses_mapped_paper_window_and_is_exact():
+    """T3 : fit_growth fitte la fenetre papier MAPPEE en temps sim (t_sim = 2pi/rhobar t_paper),
+    PAS la fenetre papier brute. Signal en deux pentes : pente parasite g_other AVANT la fenetre
+    mappee, pente vraie g_true DEDANS. fit_growth doit renvoyer g_true (preuve qu'il fitte bien
+    [2pi*0.60, 2pi*0.75] = [3.77, 4.71], pas [0.60, 0.75])."""
+    import math
     _install_fake_adc()
     rp = _import_run_polar()
-    ts = np.linspace(0.0, 2.0, 400)
-    g_true = 0.911
-    amps = 1e-3 * np.exp(g_true * ts)
-    g = rp.fit_growth(ts, amps, 4)  # fenetre verbatim l=4 [0.60, 0.75]
-    assert abs(g - g_true) < 1e-6, g
-    print("OK (7) fit_growth exact sur expo pure, fenetre verbatim papier")
+    lo_sim, hi_sim = 0.60 * 2 * math.pi, 0.75 * 2 * math.pi  # fenetre l=4 mappee = [3.770, 4.712]
+    ts = np.linspace(0.0, 6.0, 2400)
+    g_true, g_other = 0.911, 0.200
+    # expo continue par morceaux : pente g_other sur [0, lo_sim], pente g_true au-dela.
+    amps = np.where(ts <= lo_sim,
+                    1e-3 * np.exp(g_other * ts),
+                    1e-3 * np.exp(g_other * lo_sim) * np.exp(g_true * (ts - lo_sim)))
+    g = rp.fit_growth(ts, amps, 4, rhobar=1.0)
+    assert abs(g - g_true) < 1e-6, "fit_growth doit fitter la fenetre MAPPEE -> g_true, obtenu %r" % g
+    assert abs(g - g_other) > 0.5, "fit_growth ne doit PAS fitter la fenetre brute (g_other)"
+    print("OK (7) fit_growth exact sur la fenetre papier MAPPEE en temps sim (T3)")
 
 
 def test_multirank_is_rejected():
