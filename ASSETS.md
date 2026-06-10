@@ -27,7 +27,8 @@ soit -22/-27/-5 % vs l'oracle analytique, cf. `diocotron/README.md`, section « 
   `reproduction-candidate` **pending** (la reproduction quantitative d'arXiv:2510.11808 n'est pas
   etablie, cf. `hoffart_euler_poisson_dsl/README.md` et `adc_cpp/docs/HOFFART_FIDELITY.md`).
   Committer ces figures laisserait croire a une reproduction validee. La variante `amr-imex` exige
-  en plus un build Kokkos/MPI (ROMEO/GH200), hors de portee d'un poste local.
+  en plus un build MPI / multi-GPU (ROMEO/GH200), hors de portee d'un poste local (Kokkos lui-meme,
+  desormais obligatoire, reste accessible en local via une install Kokkos Serial).
 - Les cas DSL et de validation (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`,
   `two_fluid_ap`, `schur_magnetized_cartesian`, ...) ecrivent leurs `.so`/`.csv` sous `out/`
   (gitignore) : artefacts de build/mesure, non versionnes.

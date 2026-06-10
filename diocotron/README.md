@@ -231,7 +231,8 @@ et structurelle du chemin cartesien, motivant le chantier de geometrie polaire c
 ## 8. Reproduire
 
 ```bash
-cd ../adc_cpp && cmake -B build-py -DADC_BUILD_PYTHON=ON && cmake --build build-py --target _adc -j
+# adc_cpp est Kokkos-only : un Kokkos installe (Serial pour un poste CPU) est requis (-DKokkos_ROOT).
+cd ../adc_cpp && cmake -B build-py -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT && cmake --build build-py --target _adc -j
 cd ../adc_cases
 PYTHONPATH=$PWD/../adc_cpp/build-py/python python3 diocotron/run.py        # ~60 s, ecrit figures/ + provenance.json
 ```

@@ -28,6 +28,13 @@ jobs:
     name: ubuntu-latest / cases (legers)
     runs-on: ubuntu-latest
 
+    # adc_cpp est Kokkos-only : le module _adc se construit AVEC Kokkos, et les cas qui compilent un
+    # solveur natif / loader DSL au runtime (manifeste needs=["cxx"]) ont besoin d'un Kokkos installe
+    # (ADC_KOKKOS_ROOT). On installe donc un Kokkos Serial (mis en cache) partage par les deux.
+    env:
+      KOKKOS_VERSION: 4.4.01
+      KOKKOS_PREFIX: ${{ github.workspace }}/.kokkos-install
+
     steps:
       - name: Checkout adc_cases
         uses: actions/checkout@v5
@@ -42,12 +49,36 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build the adc Python module
-        # pybind11 est tire par FetchContent si absent du systeme (cf. adc_cpp/CMakeLists).
-        # -j 2 : le module (System + facades) est leger, mais on cape par prudence.
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      # Kokkos Serial (PIC) installe + mis en cache : sert au build de _adc ET aux cas needs=["cxx"]
+      # (loaders DSL / solveur natif compiles au runtime contre ADC_KOKKOS_ROOT).
+      - name: Cache Kokkos install (Serial ${{ env.KOKKOS_VERSION }})
+        id: kokkos-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KOKKOS_PREFIX }}
+          key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-serial-cxx20-gcc-pic
+
+      - name: Build + install Kokkos (Serial, PIC)
+        if: steps.kokkos-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 -b ${KOKKOS_VERSION} https://github.com/kokkos/kokkos.git /tmp/kokkos
+          cmake -S /tmp/kokkos -B /tmp/kbuild -G Ninja -DKokkos_ENABLE_SERIAL=ON \
+            -DCMAKE_INSTALL_PREFIX="${KOKKOS_PREFIX}" -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=20 -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          cmake --build /tmp/kbuild --parallel 2 --target install
+
+      - name: Build the adc Python module (Kokkos Serial)
+        # adc_cpp est Kokkos-only : on construit _adc AVEC Kokkos (-DADC_USE_KOKKOS=ON), en pointant
+        # le Kokkos installe ci-dessus (memes en-tetes/ABI que les loaders DSL des cas needs=["cxx"]).
         run: |
           cmake -B adc_cpp/build-py -S adc_cpp -DCMAKE_BUILD_TYPE=Release \
-                -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF
+                -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF \
+                -DADC_USE_KOKKOS=ON -DKokkos_ROOT="${KOKKOS_PREFIX}"
           cmake --build adc_cpp/build-py --target _adc -j 2
 
       - name: Install adc_cases + deps
@@ -64,9 +95,13 @@ jobs:
 
       - name: Run light cases (manifest ci = true)
         # On lit le manifeste et on lance les cas legers UNIQUEMENT. Le module `adc` (binding
-        # C++) est fourni par le PYTHONPATH du build adc_cpp.
+        # C++) est fourni par le PYTHONPATH du build adc_cpp. Les cas needs=["cxx"] compilent un
+        # loader DSL / solveur natif au runtime : ils lisent Kokkos via Kokkos_ROOT / ADC_KOKKOS_ROOT
+        # (meme install que _adc -> ABI coherente).
         env:
           PYTHONPATH: ${{ github.workspace }}/adc_cpp/build-py/python
+          Kokkos_ROOT: ${{ github.workspace }}/.kokkos-install
+          ADC_KOKKOS_ROOT: ${{ github.workspace }}/.kokkos-install
         run: |
           set -e
           python - <<'PY' > ci_cases.txt

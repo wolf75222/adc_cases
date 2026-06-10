@@ -47,13 +47,14 @@ L'erreur décroît avec la résolution : à n=256 les trois modes tombent sous 1
 ## 2. Installation
 
 Le cas a besoin du module Python `adc`, fourni par le dépôt `adc_cpp`. Prérequis : un compilateur C++20,
-CMake, Ninja, Python 3.12 avec NumPy. Matplotlib et Pillow sont optionnels (figures et GIF).
+CMake, Ninja, Python 3.12 avec NumPy, et un **Kokkos installé** (`adc_cpp` est Kokkos-only : un Kokkos
+`Serial` suffit pour un poste CPU). Matplotlib et Pillow sont optionnels (figures et GIF).
 
 ```bash
-# 1. construire le module adc (depuis le dépôt adc_cpp)
+# 1. construire le module adc (depuis le dépôt adc_cpp) -- Kokkos-only : Kokkos requis (-DKokkos_ROOT)
 cd adc_cpp
 cmake -B build -G Ninja \
-      -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=OFF -DCMAKE_BUILD_TYPE=Release \
+      -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release \
       -DPYTHON_EXECUTABLE=$(which python3)
 ninja -C build _adc
 
@@ -313,8 +314,9 @@ L'erreur relative au papier tend vers zéro quand la grille se raffine. Le rési
 
 ### Coût local (1 cœur)
 
-Le build local de référence est sériel (Kokkos OFF), donc un seul thread même sur une machine
-8 cœurs. Pour le modèle complet `system-schur` avec le solve Krylov de Schur, dt=2e-3, t_end=10
+Le build local de référence est séquentiel (Kokkos Serial), donc un seul thread même sur une machine
+8 cœurs ; le multi-thread passe par une install Kokkos OpenMP. Pour le modèle complet `system-schur`
+avec le solve Krylov de Schur, dt=2e-3, t_end=10
 (5000 pas), par mode, sur Apple Silicon arm64 :
 
 | n | wall (1 cœur) | gamma_paper (l=3) | erreur |

@@ -66,6 +66,67 @@ def _compiler():
     return cxx
 
 
+def _kokkos_root():
+    """Racine d'une install Kokkos (ADC_KOKKOS_ROOT / Kokkos_ROOT / KOKKOS_ROOT), ou None."""
+    for key in ("ADC_KOKKOS_ROOT", "Kokkos_ROOT", "KOKKOS_ROOT"):
+        root = os.environ.get(key)
+        if root and os.path.isfile(os.path.join(root, "include", "Kokkos_Core.hpp")):
+            return root
+    return None
+
+
+def _libomp_prefix():
+    """Prefixe Homebrew libomp sur macOS (pour -Xpreprocessor -fopenmp), ou None."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        p = subprocess.run(["brew", "--prefix", "libomp"], capture_output=True, text=True)
+        prefix = p.stdout.strip()
+        if prefix and os.path.isdir(os.path.join(prefix, "lib")):
+            return prefix
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _kokkos_build_flags():
+    """adc_cpp est KOKKOS-ONLY : un solveur natif qui inclut les en-tetes adc (mesh/for_each) ne
+    compile PAS sans Kokkos (for_each.hpp #error). Comme la .so est STANDALONE (chargee via ctypes,
+    sans partager le runtime Kokkos de `_adc`), elle compile ET LINKE Kokkos elle-meme.
+
+    Renvoie (compile_flags, link_flags). Compile_flags entre dans la cle d'ABI (recompilation si le
+    backend Kokkos change). Leve si aucun Kokkos installe n'est visible (Serial suffit sur CPU)."""
+    import glob
+    root = _kokkos_root()
+    if root is None:
+        raise RuntimeError(
+            "adc_cpp est Kokkos-only : un Kokkos installe est requis pour compiler le solveur natif. "
+            "Pointe-le via ADC_KOKKOS_ROOT (ou Kokkos_ROOT), p.ex. `export ADC_KOKKOS_ROOT=/chemin/kokkos` "
+            "(Serial suffit sur un poste CPU).")
+    inc = os.path.join(root, "include")
+    lib = os.path.join(root, "lib")
+    if not os.path.isdir(lib) and os.path.isdir(os.path.join(root, "lib64")):
+        lib = os.path.join(root, "lib64")
+    cflags = ["-DADC_HAS_KOKKOS", "-I", inc]
+    lflags = ["-L", lib, "-Wl,-rpath," + lib, "-ldl"]
+    for comp in ("kokkoscore", "kokkoscontainers", "kokkossimd", "kokkosalgorithms"):
+        if glob.glob(os.path.join(lib, "lib" + comp + ".*")):
+            lflags.append("-l" + comp)
+    # OpenMP (espace Kokkos OpenMP ; inoffensif sous Serial). macOS / AppleClang : -Xpreprocessor.
+    # Standalone -> on LIE libomp (seul runtime OpenMP du process, pas de _adc partage ici).
+    libomp = _libomp_prefix()
+    if libomp is not None:
+        cflags += ["-Xpreprocessor", "-fopenmp", "-I", os.path.join(libomp, "include")]
+        lflags += ["-L", os.path.join(libomp, "lib"), "-lomp"]
+    elif sys.platform == "darwin":
+        cflags += ["-Xpreprocessor", "-fopenmp"]
+        lflags.append("-lomp")
+    else:
+        cflags.append("-fopenmp")
+        lflags.append("-fopenmp")
+    return cflags, lflags
+
+
 def _include_signature(include):
     """Signature de l'arbre d'en-tetes du coeur (chemin relatif, taille, mtime de chaque .hpp).
 
@@ -120,7 +181,11 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
     cpp = next((s for s in sources if s.endswith(".cpp")), None)
     if cpp is None:
         raise ValueError("build_shared : aucun source .cpp dans " + repr(sources))
-    full_flags = ["-shared", "-fPIC", "-std=" + std, *flags]
+    # adc_cpp est Kokkos-only : le solveur natif inclut les en-tetes adc (mesh/for_each) et exige donc
+    # Kokkos. Les flags de COMPILATION entrent dans la cle d'ABI (recompilation si le backend change) ;
+    # les flags de LIEN (libs Kokkos + OpenMP) s'ajoutent a la commande (la .so est standalone, ctypes).
+    kokkos_cflags, kokkos_lflags = _kokkos_build_flags()
+    full_flags = ["-shared", "-fPIC", "-std=" + std, *flags, *kokkos_cflags]
 
     cache = os.path.join(case_output_dir(case_name), "build")
     os.makedirs(cache, exist_ok=True)
@@ -136,7 +201,7 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
             have = f.read().strip()
 
     if have != want:
-        cmd = [cxx, *full_flags, "-I", include, cpp, "-o", lib]
+        cmd = [cxx, *full_flags, "-I", include, cpp, "-o", lib, *kokkos_lflags]
         print("%s : (re)compilation du solveur natif\n  %s" % (case_name, " ".join(cmd)))
         subprocess.run(cmd, check=True)
         with open(keyfile, "w") as f:

@@ -249,7 +249,9 @@ prudent de PR-0 Suggéré seulement, et reste a confirmer.
 ## Reproduire
 
 ```bash
-cd ../adc_cpp && cmake -S . -B build-py -DADC_BUILD_PYTHON=ON -DCMAKE_BUILD_TYPE=Release \
+# adc_cpp est Kokkos-only : un Kokkos installe (Serial pour CPU) est requis (-DKokkos_ROOT).
+cd ../adc_cpp && cmake -S . -B build-py -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=ON \
+  -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release \
   && cmake --build build-py -j4
 cd ../adc_cases
 PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py        # O2 + O5 (defaut)
@@ -267,6 +269,7 @@ garde-fou `max_steps=4000` couvre n=512 (~2600 pas a `t_end=48`).
 Sur ROMEO (haute resolution, job 639912 ci-dessus) : le balayage est CPU (Poisson + transport, pas
 de GPU), partition `short` `--constraint=x64cpu`, et le module `_adc` se rebatit sur le noeud de
 login depuis `adc_cpp` (Spack : python@3.10.14 + numpy@1.26.4 + pybind11@2.13.5 + cmake@3.31.8 +
-gcc@11.4.1) via la meme commande `cmake -S . -B build-py -DADC_BUILD_PYTHON=ON
--DCMAKE_BUILD_TYPE=Release`. Les 18 runs (n=384/512 x 3 ordres x 3 modes) tournent mono-thread en
+gcc@11.4.1, plus un Kokkos installe) via la meme commande `cmake -S . -B build-py -DADC_BUILD_PYTHON=ON
+-DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release` (adc_cpp est Kokkos-only :
+le serie passe par Kokkos Serial). Les 18 runs (n=384/512 x 3 ordres x 3 modes) tournent mono-thread en
 parallele sur un noeud (192 coeurs).

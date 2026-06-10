@@ -14,11 +14,16 @@ dans `adc_cases.common.native` ; les artefacts vont dans `out/<cas>/build/`.
 
 ## Prérequis : construire le module `adc`
 
-Le module Python est compilé depuis `adc_cpp` :
+Le module Python est compilé depuis `adc_cpp`. `adc_cpp` est désormais **Kokkos-only**. Kokkos n'a
+pas besoin d'être pré-installé : CMake le récupère + construit automatiquement (FetchContent) s'il est
+introuvable. Pour réutiliser une install (plus rapide, et nécessaire au *runtime* des cas DSL
+`production`/natifs, cf. `ADC_KOKKOS_ROOT`), pointer `-DKokkos_ROOT` :
 
 ```bash
 cd ../adc_cpp
-cmake -B build-py -DADC_BUILD_PYTHON=ON
+cmake -B build-py -DADC_BUILD_PYTHON=ON                       # Kokkos fetch+build auto (Serial)
+# ou, pour réutiliser une install Kokkos (Serial suffit sur CPU) :
+# cmake -B build-py -DADC_BUILD_PYTHON=ON -DKokkos_ROOT=$KOKKOS_ROOT
 cmake --build build-py --target _adc -j
 ```
 

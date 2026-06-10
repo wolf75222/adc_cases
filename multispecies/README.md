@@ -306,8 +306,8 @@ visible une derive qui serait invisible a l'echelle de $2304$.
 ## 7. Reproduire
 
 ```bash
-# 1. construire le module adc (si absent), depuis adc_cpp :
-cmake -B build-py -DADC_BUILD_PYTHON=ON && cmake --build build-py --target _adc -j
+# 1. construire le module adc (si absent), depuis adc_cpp (Kokkos-only : Kokkos requis, -DKokkos_ROOT) :
+cmake -B build-py -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT && cmake --build build-py --target _adc -j
 # 2. le cas (CI, sans figure) : imprime les masses et OK multispecies
 cd multispecies
 PYTHONPATH=<adc_cpp>/build-py/python:<repo> python3 run.py
