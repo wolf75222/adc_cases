@@ -141,7 +141,7 @@ def fit_growth(times, amplitudes, mode, rhobar=1.0):
     return float(np.polyfit(times[mask], np.log(amplitudes[mask]), 1)[0])
 
 
-def build_uniform(compiled, rho, params, geometry="square"):
+def build_uniform(compiled, rho, params, geometry="square", gauss_policy="restart"):
     n = rho.shape[0]
     sim = adc.System(n=n, L=params.length, periodic=False)
     sim.set_poisson(
@@ -183,6 +183,12 @@ def build_uniform(compiled, rho, params, geometry="square"):
             source=adc.CondensedSchur(theta=0.5, alpha=params.alpha),
         ),
     )
+
+    # Loi de Gauss : 'restart' (defaut) re-resout le Poisson a chaque solve_fields
+    # (bit-identique a l'historique) ; 'evolve' ne resout qu'a t=0 puis laisse l'etage
+    # source Schur porter phi in-place. Pose AVANT le premier solve_fields (le premier
+    # solve resout dans les deux cas ; le verrou gauss_solved_once_ est remis a zero ici).
+    sim.set_gauss_policy(gauss_policy)
 
     zeros = np.zeros_like(rho)
     sim.set_primitive_state("electrons", rho=rho, u=zeros, v=zeros)
@@ -282,7 +288,8 @@ def potential(sim):
 def run_mode(mode, compiled, params, args):
     rho0 = paper_initial_density(args.n, mode, params)
     if args.engine == "system-schur":
-        sim = build_uniform(compiled, rho0, params, geometry=args.geometry)
+        sim = build_uniform(compiled, rho0, params, geometry=args.geometry,
+                            gauss_policy=args.gauss_policy)
     else:
         sim = build_amr(compiled, rho0, params, args)
 
@@ -599,6 +606,17 @@ def parse_args():
              "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
              "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
              "effect on the growth rate (the residual gap is ~10-20% cart-vs-polar, not structural).",
+    )
+    parser.add_argument(
+        "--gauss-policy",
+        choices=("restart", "evolve"),
+        default="restart",
+        help="loi de Gauss du chemin system-schur (System.set_gauss_policy, adc_cpp). "
+             "'restart' (defaut) : solve_fields re-resout -Delta phi = rho a chaque appel "
+             "(bit-identique a l'historique ; 3 solves Poisson par macro-pas Strang). "
+             "'evolve' : seul le premier pas resout le Poisson (phi^0) ; ensuite phi est "
+             "porte in-place par l'etage source Schur (Gauss imposee a t=0 seulement), ce "
+             "qui supprime les solves elliptiques repetes. Sans effet sur --engine amr-imex.",
     )
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
     parser.add_argument("--n", type=int, default=192)
