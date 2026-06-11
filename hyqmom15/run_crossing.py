@@ -173,11 +173,60 @@ def check_crossing_smoke():
           "(5) snapshot %s -- OK" % (ma, nsteps, drift, os.path.basename(out)))
 
 
+def check_hll_fidelity():
+    """(6) fidelite HLL au schema MATLAB de reference (ADC-89) : golden_hll_state.csv est
+    produit par golden_hll_gen.m (Octave sur RIEMOM2D) avec le SCHEMA du depot -- vitesses
+    eigenvalues15_2D(M, 1), flux Flux_closure15_2D, HLL de Davis pas_HLL, split dimensionnel
+    ADDITIF + Euler explicite -- sur le crossing Ma = 2, Np = 64, 20 pas. adc rejoue la MEME
+    sequence de dt (golden_hll_dts.csv) avec le modele exact_speeds (memes vitesses, ADC-88) en
+    riemann='hll' NON-splite ssprk2 : l'ecart residuel mesure la difference de SCHEMA seule.
+    Verifie aussi que adc-HLL est PLUS PROCHE du golden HLL que adc-Rusanov (HLL moins
+    diffusif : critere qualitatif de l'issue, rendu quantitatif)."""
+    from adc_cases.common.io import case_output_dir
+    from adc_cases.common.native import adc_include
+
+    g = os.path.join(HERE, "golden")
+    meta = np.loadtxt(os.path.join(g, "golden_hll_meta.csv"), delimiter=",")
+    n, ma, nsteps = int(meta[0]), float(meta[1]), int(meta[2])
+    dts = np.atleast_1d(np.loadtxt(os.path.join(g, "golden_hll_dts.csv"), delimiter=","))
+    raw = np.loadtxt(os.path.join(g, "golden_hll_state.csv"), delimiter=",")
+    gold = np.stack([raw[k * n:(k + 1) * n, :].T for k in range(15)], axis=0)  # (15, ny, nx)
+
+    m = build_moment_model(name="hyqmom15_exact", exact_speeds=True)
+    compiled = m.compile(os.path.join(case_output_dir("hyqmom15"), "hyqmom15_exact.so"),
+                         adc_include(), backend="aot")
+    U0 = crossing_state(n, ma)
+    dist = {}
+    for riemann in ("hll", "rusanov"):
+        sim = adc.System(n=n, L=1.0, periodic=True)
+        sim.add_equation("mom", model=compiled,
+                         spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
+                         time=adc.Explicit())
+        sim.set_state("mom", U0)
+        for dt in dts:
+            sim.step(float(dt))
+        U = np.array(sim.get_state("mom"))
+        assert np.all(np.isfinite(U)), "etat %s non fini" % riemann
+        num = float(np.sqrt(np.sum((U - gold) ** 2)))
+        den = float(np.sqrt(np.sum(gold ** 2)))
+        dist[riemann] = num / den
+    assert dist["hll"] < 0.05, ("fidelite HLL : ecart L2 relatif %.3f au golden MATLAB-HLL "
+                                "(attendu : niveau discretisation, schema split-Euler vs "
+                                "non-splite ssprk2)" % dist["hll"])
+    assert dist["hll"] < dist["rusanov"], (
+        "adc-HLL (%.4f) devrait etre plus proche du golden HLL que adc-Rusanov (%.4f)"
+        % (dist["hll"], dist["rusanov"]))
+    print("(6) fidelite HLL (%d pas rejoues, Ma = %g) : ecart L2 relatif au golden MATLAB-HLL "
+          "= %.4f (difference de schema seule) ; Rusanov = %.4f > HLL (moins diffusif) -- OK"
+          % (nsteps, ma, dist["hll"], dist["rusanov"]))
+
+
 def main():
     print("=== hyqmom15/run_crossing : sources de moments + croisement de jets (Rusanov) ===")
     check_sources_vs_pdf()
     check_larmor_rotation()
     check_crossing_smoke()
+    check_hll_fidelity()
     print("hyqmom15/run_crossing : OK")
 
 

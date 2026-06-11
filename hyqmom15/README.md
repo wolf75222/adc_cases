@@ -176,7 +176,30 @@ de `HYQMOM_BLOCKS`).
 Ne prouve pas : l'execution compilee dans un System (couverte cote adc_cpp par les tests
 d'ADC-87 : eval_rhs HLL == reference numpy a 8e-15) ; la bascule des drivers (ADC-89).
 
-## 8. Limites et suite
+## 8. Bascule HLL : fidelite au schema MATLAB (ADC-89)
+
+La cible fidele est ATTEINTE : les drivers tournent en `riemann='hll'` avec les vitesses
+exactes (`exact_speeds=True`, section 7).
+
+- Golden HLL matche : `golden_hll_gen.m` (Octave sur RIEMOM2D) fait tourner le crossing Ma = 2
+  (Np = 64, 20 pas, sans relaxation) avec le SCHEMA du depot de reference -- vitesses
+  `eigenvalues15_2D(M, 1)`, flux `Flux_closure15_2D`, HLL de Davis `pas_HLL`, split
+  dimensionnel ADDITIF + Euler explicite, ghosts periodiques -- et enregistre la SEQUENCE de
+  dt. adc REJOUE ces dt (`run_crossing.py`, check 6) avec le meme modele en non-splite ssprk2 :
+  l'ecart residuel mesure la difference de SCHEMA seule : **L2 relatif 4.4 %** apres 20 pas
+  (premier ordre, attendu a ce niveau). adc-Rusanov sur les memes dt : 5.9 % > HLL -- le
+  « HLL moins diffusif » est quantifie contre la reference.
+- Diocotron complet (Poisson + source electrique) en HLL exact (`run_diocotron.py`, check 6) :
+  stable, masse conservee a 2.6e-16, phi fini ; `robust=False` sur ce chemin (fidele au MATLAB
+  sans gardes ; les planchers du mode robust restent derivables -- diff(Abs), adc_cpp ADC-87).
+- Note bit-match : le cas degenere |sL - sR| < 1e-10 differe par construction (MATLAB force
+  W* = 0, adc rend FL/FR) -- mesure nulle, hors des etats compares.
+
+Ne prouve pas : le TAUX DE CROISSANCE diocotron vs un golden MATLAB-HLL long (le run de
+reference dure des heures sous Octave : campagne dediee, suivi d'ADC-89) ; la convergence de
+l'ecart de schema en maillage/pas (un second golden a Np = 128 le permettrait).
+
+## 9. Limites et suite
 
 La validation est ponctuelle (flux en un etat) : rien ici ne fait avancer un pas de temps, ne
 resout Poisson, ni ne calcule de vitesses d'onde HLL. Suite prevue (epic ADC-81) : sources et

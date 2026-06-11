@@ -102,21 +102,25 @@ def diocotron_state(n):
     return U
 
 
-def build_sim(n, rho_bg, name="mom"):
+def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False):
     """System periodique + modele avec sources electriques et Poisson
     (Delta phi = (M00 - rho_bg)/lam^2, fond neutralisant = moyenne du scenario : un rhs
     periodique a moyenne non nulle rend le MG singulier), rusanov + borne bring-up."""
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
 
-    m = build_moment_model(name="hyqmom15_vp", robust=True, with_sources=True,
+    # robust=False sur le chemin exact : fidele au MATLAB (aucune garde) ; les planchers du
+    # mode robust sont par ailleurs derivables depuis diff(Abs) (adc_cpp ADC-87) si besoin.
+    m = build_moment_model(name="hyqmom15_vp" + ("_ex" if exact_speeds else ""),
+                           robust=not exact_speeds, with_sources=True,
                            q_over_m=1.0, omega_c=0.0, debye=DEBYE, rho_background=rho_bg,
-                           omega_p=OMEGA_P)
-    compiled = m.compile(os.path.join(case_output_dir("hyqmom15"), "hyqmom15_vp.so"),
+                           omega_p=OMEGA_P, exact_speeds=exact_speeds)
+    compiled = m.compile(os.path.join(case_output_dir("hyqmom15"),
+                                      "hyqmom15_vp%s.so" % ("_ex" if exact_speeds else "")),
                          adc_include(), backend="aot")
     sim = adc.System(n=n, L=1.0, periodic=True)
     sim.add_equation(name, model=compiled,
-                     spatial=adc.FiniteVolume(limiter="none", riemann="rusanov"),
+                     spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
                      time=adc.Explicit())
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     return sim
@@ -219,10 +223,36 @@ def check_diocotron():
     print("(5) snapshots cadences : %d fichiers npz avec etat + phi -- OK" % len(snaps))
 
 
+def check_diocotron_hll_exact():
+    """(6) bascule ADC-89 : le diocotron complet (Poisson + source electrique) tourne en
+    riemann='hll' avec les vitesses EXACTES (exact_speeds, ADC-88) -- la cible fidele au MATLAB.
+    Smoke : 10 pas stables, masse conservee, phi fini. Le taux de croissance quantitatif vs un
+    golden MATLAB-HLL long est un suivi (campagne dediee : le run de reference dure des heures
+    sous Octave)."""
+    n, nsteps = 64, 10
+    U0 = diocotron_state(n)
+    sim = build_sim(n, rho_bg=float(U0[0].mean()), riemann="hll", exact_speeds=True)
+    sim.set_state("mom", U0)
+    sim.solve_fields()
+    mass0 = float(U0[0].sum())
+    for _ in range(nsteps):
+        sim.step_cfl(0.4)
+    U = np.array(sim.get_state("mom"))
+    assert np.all(np.isfinite(U)), "diocotron HLL exact : etat non fini"
+    assert np.all(U[0] > 0), "diocotron HLL exact : M00 non positif"
+    drift = abs(float(U[0].sum()) - mass0) / mass0
+    assert drift < 1e-12, "diocotron HLL exact : masse non conservee (%.2e)" % drift
+    assert np.all(np.isfinite(np.array(sim.potential()))), "phi non fini"
+    print("(6) diocotron en riemann='hll' + vitesses exactes : %d pas stables, masse conservee "
+          "%.1e, phi fini (cible fidele au MATLAB ; taux de croissance = campagne dediee) -- OK"
+          % (nsteps, drift))
+
+
 def main():
     print("=== hyqmom15/run_diocotron : Vlasov-Poisson 15 moments, anneau diocotron ===")
     check_poisson_oracle()
     check_diocotron()
+    check_diocotron_hll_exact()
     print("hyqmom15/run_diocotron : OK")
 
 
