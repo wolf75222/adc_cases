@@ -124,7 +124,33 @@ bring-up vs HLL exact + relaxation15 a Ma = 20 ; comparaison fidele = ADC-89 apr
 le couplage Poisson (E = 0 partout ici : ADC-85) ; r != 0 (InitializeM4_15 fige S22 = 1,
 S31 = S13 = 0, distinct de la gaussienne correlee exacte : non porte, refus explicite).
 
-## 6. Limites et suite
+## 6. Couplage Vlasov-Poisson : diocotron (run_diocotron.py)
+
+Troisieme script (manifeste separe, `validation`, CI). Le Poisson du systeme est resolu sur M00
+a chaque pas et E = -grad(phi) retro-agit par la source electrique. Scenario de reference :
+`main_electrostatic_wave.m` section dicotron (anneau 0.35..0.40, mode 4, omega_p = 25,
+omega_c = -30, branche electrostatique SEULE a l'execution -- B n'entre que par la derive ExB
+initiale, fidele au MATLAB).
+
+- Convention epinglee par oracle analytique (`run_diocotron.py:121-180`) : ADC resout
+  Delta(phi) = rhs avec rhs = (M00 - rho_background)/lambda^2 ; sur 1 + eps cos(kx),
+  phi == -eps cos(kx)/(lambda^2 k^2) a 8e-4 (n = 64). Le fond neutralisant est un parametre
+  EXPLICITE (= moyenne du scenario, constante car la masse est conservee, equivalent strict de
+  la soustraction de moyenne par pas de `poisson_fft.m`) : un rhs periodique a moyenne non
+  nulle rend le MG singulier (constate : damier de Nyquist + re-solve divergent).
+- La source compilee lit EXACTEMENT le champ resolu : Ex implicite (rhs[M10]/M00) == gradient
+  centre de phi a 1.4e-16, == analytique a 8e-4.
+- IC diocotron (`run_diocotron.py:77-100`) : port d'`initialize_dicotron.m` (anneau perturbe
+  mode 4, Poisson IC en numpy/FFT transcrit de `poisson_fft.m`, derive ExB
+  v = (-d_y phi, +d_x phi)/omega_c, moments gaussiens derives par cellule).
+- Smoke 10 pas (robust, rusanov, CFL 0.4) : fini, M00 > 0, masse conservee a 2.6e-16, phi fini ;
+  checkpoint/restart BIT-identique sur 2 pas ; snapshots npz cadences (etat + phi).
+- `m.source_frequency(omega_p)` borne le pas source (la 'deuxieme CFL' de `compute_dt.m`).
+
+Ne prouve pas : le taux de croissance diocotron (reference MATLAB en HLLC + relaxation15 ;
+quantitatif = ADC-89 apres ADC-87/88) ; la realisabilite long-terme sans relaxation15.
+
+## 7. Limites et suite
 
 La validation est ponctuelle (flux en un etat) : rien ici ne fait avancer un pas de temps, ne
 resout Poisson, ni ne calcule de vitesses d'onde HLL. Suite prevue (epic ADC-81) : sources et

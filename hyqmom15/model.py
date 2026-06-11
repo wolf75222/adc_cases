@@ -111,7 +111,8 @@ def moment_sources(U, ex, ey, qm, oc):
 
 def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
                        eps_m00=1e-12, eps_c=1e-12, with_sources=False,
-                       q_over_m=1.0, omega_c=0.0):
+                       q_over_m=1.0, omega_c=0.0, debye=None, rho_background=0.0,
+                       omega_p=None):
     """Construit le modele DSL 15 moments avec la fermeture @p closure.
 
     @p robust : False (defaut) = mode bit_match, AUCUNE garde, fidele au MATLAB qui n'en a
@@ -121,9 +122,22 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
 
     @p with_sources : ajoute la source de la hierarchie (moment_sources) -- electrique via les
     canaux aux canoniques grad_x/grad_y (Ex = -d phi/dx, rempli par le Poisson du systeme ou
-    nul sans champ) et magnetique via la constante @p omega_c (q B / m, cuite au codegen ; le
-    passage en parametre runtime viendra avec le diocotron ADC-85). False (defaut) : modele
-    STRICTEMENT identique a la validation golden ADC-82 (hash inchange).
+    nul sans champ) et magnetique via la constante @p omega_c (q B / m, cuite au codegen).
+    False (defaut) : modele STRICTEMENT identique a la validation golden ADC-82 (hash inchange).
+
+    @p debye : longueur de Debye ADIMENSIONNEE lambda (None = pas de couplage Poisson). Emet
+    elliptic_rhs((M00 - rho_background) / lambda^2) : ADC resout Delta(phi) = rhs SANS deflater
+    la moyenne en periodique (un rhs a moyenne non nulle rend le systeme singulier : l'iteration
+    MG derive, verifie experimentalement -- damier de Nyquist + re-solve divergent). Le fond
+    NEUTRALISANT @p rho_background doit donc valoir la moyenne de M00 sur le domaine : la masse
+    etant conservee, c'est une CONSTANTE du scenario, strictement equivalente a la soustraction
+    de moyenne par pas du MATLAB poisson_fft. Le 'signe electron' du MATLAB est porte par
+    q_over_m = +1 dans la source avec E = -grad phi (electric_source_term.m). Verifie par
+    l'oracle sinusoidal analytique de run_diocotron.py (signe lu sur l'assert qui passe).
+
+    @p omega_p : frequence locale de la SOURCE (m.source_frequency) bornant le pas de temps
+    source (None = pas de borne) -- la 'deuxieme CFL' du MATLAB compute_dt, portee par la
+    frequence plasma omega_p = 1/lambda.
     @return adc.dsl.Model pret a compiler."""
     m = dsl.Model(name)
     cons = m.conservative_vars(*MOMENT_NAMES)
@@ -251,6 +265,12 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
         qm = m.param("q_over_m", q_over_m)
         oc = m.param("omega_c", omega_c)
         m.source(moment_sources(U, -1.0 * gx, -1.0 * gy, qm, oc))  # E = -grad phi
+        if omega_p is not None:
+            m.source_frequency(omega_p + 0.0 * U["M00"])  # borne dt source (constante)
+    if debye is not None:
+        inv_l2 = m.param("inv_debye2", 1.0 / float(debye) ** 2)
+        rho_bg = m.param("rho_background", float(rho_background))
+        m.elliptic_rhs(inv_l2 * (U["M00"] - rho_bg))
 
     m.check()
     return m
