@@ -120,6 +120,13 @@ needs = ["cxx"]
 desc = "Fluide isotherme magnetise en formules (adc.dsl.Model) ; force de Lorentz pilotee par B_z (aux etendu)."
 
 [[case]]
+path = "hyqmom15/run.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "Modele 2D a 15 moments (fermeture HyQMOM) en formules ; flux valide vs RIEMOM2D (golden Octave + oracle gaussien)."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
