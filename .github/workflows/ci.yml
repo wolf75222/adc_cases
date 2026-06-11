@@ -75,11 +75,18 @@ jobs:
       - name: Build the adc Python module (Kokkos Serial)
         # adc_cpp est Kokkos-only : on construit _adc AVEC Kokkos (-DADC_USE_KOKKOS=ON), en pointant
         # le Kokkos installe ci-dessus (memes en-tetes/ABI que les loaders DSL des cas needs=["cxx"]).
+        #
+        # OOM/timeout (ADC-75) : `python/system.cpp` sous Kokkos en -O3 fait exploser la RAM de cc1plus
+        # (>1-2 GB RSS), ce qui tue le runner (le cap -O0 d'adc_cpp ne couvre que les cibles de TESTS,
+        # pas _adc). On borne donc l'optimisation Release a -O1 (RAM cc1plus bien moindre, _adc reste
+        # assez rapide pour les cas legers) et on serialise la compilation (-j 1) pour ne charger qu'une
+        # TU lourde a la fois. Cap propre cote adc_cpp (par-fichier sur system.cpp) = chantier separe.
         run: |
           cmake -B adc_cpp/build-py -S adc_cpp -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_FLAGS_RELEASE="-O1 -DNDEBUG" \
                 -DADC_BUILD_PYTHON=ON -DADC_USE_EIGEN=OFF \
                 -DADC_USE_KOKKOS=ON -DKokkos_ROOT="${KOKKOS_PREFIX}"
-          cmake --build adc_cpp/build-py --target _adc -j 2
+          cmake --build adc_cpp/build-py --target _adc -j 1
 
       - name: Install adc_cases + deps
         # Le paquet adc_cases est installe en editable : les cas font `import adc_cases`
