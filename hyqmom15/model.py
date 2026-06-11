@@ -78,14 +78,53 @@ def hyqmom_closure(S):
     }
 
 
+def moment_sources(U, ex, ey, qm, oc):
+    """Table des 15 termes sources de la hierarchie de moments (document maths eq. 1.2),
+    generee PROGRAMMATIQUEMENT (les eq. explicites 1.3-1.7 du document servent d'oracle de
+    verification dans run_crossing.py, jamais de source de copie) :
+
+        S[M_pq] = qm (p Ex M_{p-1,q} + q Ey M_{p,q-1}) + oc (p M_{p-1,q+1} - q M_{p+1,q-1})
+
+    avec qm = q/m, oc = Omega_c = qB/m. Le terme electrique ABAISSE l'ordre (les moments
+    references existent toujours) ; le terme magnetique CONSERVE l'ordre total (rotation dans
+    l'espace des vitesses : la hierarchie d'ordre <= 4 est fermee sous B). @p U : dict nom ->
+    Expr/valeur ; @p ex, ey : champ electrique (Expr aux ou valeurs) ; @return liste de 15
+    expressions dans l'ordre de MOMENT_NAMES (S[M00] = 0.0 : la masse n'a pas de source)."""
+    def M(a, b):
+        return U[MOMENT_NAMES[MOMENT_PQ.index((a, b))]]
+
+    out = []
+    for (p, q) in MOMENT_PQ:
+        terms = []
+        if p >= 1:
+            terms.append(qm * (float(p) * ex * M(p - 1, q)))
+            terms.append(oc * (float(p) * M(p - 1, q + 1)))
+        if q >= 1:
+            terms.append(qm * (float(q) * ey * M(p, q - 1)))
+            terms.append(-1.0 * oc * (float(q) * M(p + 1, q - 1)))
+        expr = None
+        for t in terms:
+            expr = t if expr is None else expr + t
+        out.append(0.0 if expr is None else expr)
+    return out
+
+
 def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
-                       eps_m00=1e-12, eps_c=1e-12):
+                       eps_m00=1e-12, eps_c=1e-12, with_sources=False,
+                       q_over_m=1.0, omega_c=0.0):
     """Construit le modele DSL 15 moments avec la fermeture @p closure.
 
     @p robust : False (defaut) = mode bit_match, AUCUNE garde, fidele au MATLAB qui n'en a
     aucune (division par M00, sqrt(C20), sqrt(C02) inconditionnels) -- requis pour la
     validation golden. True = planchers M00/C20/C02 (max lisse via |.|) dans les formules,
-    cote cas uniquement, jamais dans le coeur. @return adc.dsl.Model pret a compiler."""
+    cote cas uniquement, jamais dans le coeur.
+
+    @p with_sources : ajoute la source de la hierarchie (moment_sources) -- electrique via les
+    canaux aux canoniques grad_x/grad_y (Ex = -d phi/dx, rempli par le Poisson du systeme ou
+    nul sans champ) et magnetique via la constante @p omega_c (q B / m, cuite au codegen ; le
+    passage en parametre runtime viendra avec le diocotron ADC-85). False (defaut) : modele
+    STRICTEMENT identique a la validation golden ADC-82 (hash inchange).
+    @return adc.dsl.Model pret a compiler."""
     m = dsl.Model(name)
     cons = m.conservative_vars(*MOMENT_NAMES)
     U = dict(zip(MOMENT_NAMES, cons))
@@ -206,6 +245,13 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
     m.primitive_vars(*cons)
     m.conservative_from(list(cons))
 
+    if with_sources:
+        gx = m.aux("grad_x")
+        gy = m.aux("grad_y")
+        qm = m.param("q_over_m", q_over_m)
+        oc = m.param("omega_c", omega_c)
+        m.source(moment_sources(U, -1.0 * gx, -1.0 * gy, qm, oc))  # E = -grad phi
+
     m.check()
     return m
 
@@ -252,6 +298,37 @@ def gaussian_state(rho, ux, uy, c20, c11, c02):
     """Vecteur d'etat (15,) des moments bruts exacts d'une gaussienne 2D."""
     return np.array([gaussian_raw_moment(rho, ux, uy, c20, c11, c02, p, q)
                      for (p, q) in MOMENT_PQ])
+
+
+def crossing_state(n, ma, rho_in=1.0, rho_out=1e-3, T=1.0, r=0.0):
+    """Condition initiale du croisement de jets (main_pb_2Dcrossing_2DHyQMOM15.m) : fond au
+    repos a basse densite @p rho_out sur [-0.5, 0.5]^2, carre central [3n/8, 5n/8) coupe par
+    l'anti-diagonale -- jets gaussiens (+Uc, +Uc) sous la diagonale, (-Uc, -Uc) au-dessus,
+    repos sur la diagonale exacte, Uc = ma / sqrt(2). @p r : correlation initiale (0 dans le
+    driver de reference : gaussian_state == InitializeM4_15 exactement ; pour r != 0 le MATLAB
+    fige S22 = 1, S31 = S13 = 0, ce qui n'est PAS la gaussienne correlee exacte -- non porte).
+    @return tableau (15, n, n), axe x en dernier (convention des cas adc)."""
+    if r != 0.0:
+        raise NotImplementedError("crossing_state : r != 0 non porte (InitializeM4_15 fige "
+                                  "S22=1, S31=S13=0, distinct de la gaussienne correlee exacte)")
+    uc = ma / np.sqrt(2.0)
+    c11 = r * T
+    m_out = gaussian_state(rho_out, 0.0, 0.0, T, c11, T)     # fond au repos
+    m_mid = gaussian_state(rho_in, 0.0, 0.0, T, c11, T)      # anti-diagonale au repos
+    m_top = gaussian_state(rho_in, -uc, -uc, T, c11, T)      # au-dessus : jet (-Uc, -Uc)
+    m_bot = gaussian_state(rho_in, uc, uc, T, c11, T)        # en dessous : jet (+Uc, +Uc)
+    U = np.empty((15, n, n))
+    U[:] = m_out[:, None, None]
+    lo, hi = 3 * n // 8, 5 * n // 8                          # bornes 0-based [lo, hi)
+    for j in range(lo, hi):          # j : indice y
+        for i in range(lo, hi):      # i : indice x (dernier axe)
+            if i + j == n - 1:
+                U[:, j, i] = m_mid
+            elif i + j > n - 1:
+                U[:, j, i] = m_top
+            else:
+                U[:, j, i] = m_bot
+    return U
 
 
 def mixture_state(weights, vxs, vys):

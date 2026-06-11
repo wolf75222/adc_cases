@@ -100,7 +100,31 @@ Realisabilite des etats de test : les melanges discrets $f = \sum_k w_k \delta(v
 c'est ainsi qu'on obtient des etats fortement asymetriques (S30 != 0) et le quasi-degenere
 (trois points resserres a 1e-3 en vx : C20 ~ 1e-6, test de cancellation des sqrt).
 
-## 5. Limites et suite
+## 5. Evolution temporelle : sources et croisement de jets (run_crossing.py)
+
+Second script du cas (manifeste separe, `validation`, CI). Trois apports :
+
+- Sources de la hierarchie (document maths eq. 1.2) generees PROGRAMMATIQUEMENT
+  (`model.py` `moment_sources` : boucle sur (p, q), terme electrique qm (p Ex M_{p-1,q} +
+  q Ey M_{p,q-1}), terme magnetique oc (p M_{p-1,q+1} - q M_{p+1,q-1})) et verifiees contre les
+  15 equations EXPLICITES 1.3-1.7 transcrites a la main (`run_crossing.py:55-75`, oracle : 20
+  tirages aleatoires, rtol 1e-14). S[M00] = 0 et conservation de M20 + M02 par B verifies.
+- Rotation de Larmor a travers le System COMPLET (`run_crossing.py:100-138`) : etat gaussien
+  uniforme derivant, omega_c = 2, E = 0 -> M10/M01 suivent l'analytique cos/sin a 1e-3 apres
+  1/8 de tour (source compilee dans la brique, ssprk2) ; M20 + M02 conserve a 1e-10.
+- Croisement de jets de reference (`main_pb_2Dcrossing_2DHyQMOM15.m`) : IC portee dans
+  `model.py` `crossing_state` (fond rho = 1e-3 au repos, carre central [3n/8, 5n/8) coupe par
+  l'anti-diagonale, jets +-Uc, Uc = Ma/sqrt(2)) ; smoke a Ma = 2 MODERE (le Ma = 20 du MATLAB
+  exige la projection de realisabilite `relaxation15`, non portee : question ouverte), mode
+  `robust`, Rusanov + borne bring-up, 10 pas CFL 0.4 : etat fini, M00 > 0, C20/C02 >= 0,
+  masse conservee (0.0) ; snapshot npz des 15 moments ecrit (`System.write`).
+
+Ne prouve pas : la fidelite quantitative au MATLAB (schema different : Rusanov + borne
+bring-up vs HLL exact + relaxation15 a Ma = 20 ; comparaison fidele = ADC-89 apres ADC-87/88) ;
+le couplage Poisson (E = 0 partout ici : ADC-85) ; r != 0 (InitializeM4_15 fige S22 = 1,
+S31 = S13 = 0, distinct de la gaussienne correlee exacte : non porte, refus explicite).
+
+## 6. Limites et suite
 
 La validation est ponctuelle (flux en un etat) : rien ici ne fait avancer un pas de temps, ne
 resout Poisson, ni ne calcule de vitesses d'onde HLL. Suite prevue (epic ADC-81) : sources et
