@@ -141,6 +141,13 @@ needs = ["cxx"]
 desc = "HyQMOM 15 moments Vlasov-Poisson : oracle Poisson analytique, source lisant le champ resolu, anneau diocotron + restart + snapshots."
 
 [[case]]
+path = "hyqmom15/run_waves.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM 15 moments : vitesses HLL exactes (autodiff + eig par blocs) vs eigenvalues15_2D.m flagsym=1 (golden Octave)."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false

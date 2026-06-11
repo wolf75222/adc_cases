@@ -150,7 +150,33 @@ initiale, fidele au MATLAB).
 Ne prouve pas : le taux de croissance diocotron (reference MATLAB en HLLC + relaxation15 ;
 quantitatif = ADC-89 apres ADC-87/88) ; la realisabilite long-terme sans relaxation15.
 
-## 7. Limites et suite
+## 7. Vitesses HLL exactes : autodiff + eig par blocs (run_waves.py)
+
+Quatrieme script (manifeste separe, `validation`, CI ; exige adc_cpp >= ADC-87). Le verrou HLL
+est leve SANS jacobienne generee a la main ni SymPy : `exact_speeds=True` branche
+`m.wave_speeds_from_jacobian(blocks=HYQMOM_BLOCKS)` -- AUTODIFF du flux declare (dsl.diff) +
+valeurs propres numeriques par sous-blocs (adc::real_eig_minmax), le jacobien ne pouvant pas se
+desynchroniser du flux. `HYQMOM_BLOCKS` est le miroir exact du chemin production MATLAB
+(`eigenvalues15_2D.m` flagsym = 1) : chaines x contiguës 1:5 / 6:9 / 13:15 (10:12 saute) et,
+en y, les listes d'indices NON CONTIGUES [0,5,9,12,14] / [1,6,10,13] / [3,8,4] sur le dFy/dU
+direct -- strictement equivalentes au swap d'arguments de `jacobian15` (`model.py`, commentaire
+de `HYQMOM_BLOCKS`).
+
+- 9 etats bien conditionnes : [vpxmin, vpxmax, vpymin, vpymax] == golden Octave a 1.2e-11 (x)
+  et 2.2e-15 (y) -- la direction y, ou une mauvaise partition se rate silencieusement, est un
+  gate dur (`run_waves.py:93-101`).
+- Etat quasi-degenere (C20 ~ 1e-6, paires de valeurs propres quasi-defectives) : ecart 8e-4
+  IMPUTE AU CONDITIONNEMENT et PROUVE en test (`run_waves.py:58-79` : une perturbation 1e-12
+  des entrees du jacobien deplace les extremes de ~7e-3 mesure ; tolerance = 100 x sensibilite
+  mesuree, auto-justifiee).
+- La borne CFL exacte (max_wave_speed, memes blocs) couvre les vraies vitesses sur les 10
+  etats : la faille de surete de la borne bring-up (section 3 / invariant 6 de run.py) est
+  FERMEE par le chemin exact (`run_waves.py:113-128`).
+
+Ne prouve pas : l'execution compilee dans un System (couverte cote adc_cpp par les tests
+d'ADC-87 : eval_rhs HLL == reference numpy a 8e-15) ; la bascule des drivers (ADC-89).
+
+## 8. Limites et suite
 
 La validation est ponctuelle (flux en un etat) : rien ici ne fait avancer un pas de temps, ne
 resout Poisson, ni ne calcule de vitesses d'onde HLL. Suite prevue (epic ADC-81) : sources et

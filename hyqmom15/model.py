@@ -47,6 +47,17 @@ IDX = {name: k for k, name in enumerate(MOMENT_NAMES)}
 # chemin production est la jacobienne exacte (ADC-87/ADC-88).
 K_SPEED = 3.0
 
+# Partitions de sous-blocs du jacobien de flux pour les vitesses HLL EXACTES
+# (m.wave_speeds_from_jacobian), miroir EXACT du chemin production du MATLAB
+# (eigenvalues15_2D.m flagsym=1 : eig par blocs 1:5 / 6:9 / 13:15 de Jx, le bloc 10:12 est
+# sciemment saute ; Jy y est obtenu en appelant jacobian15 avec les arguments x<->y permutes,
+# ce qui revient EXACTEMENT a prendre, sur le dFy/dU DIRECT, les chaines par exposant en x --
+# listes d'indices NON CONTIGUES ci-dessous ; la chaine sautee est [2, 7, 11]).
+HYQMOM_BLOCKS = {
+    "x": [[0, 1, 2, 3, 4], [5, 6, 7, 8], [12, 13, 14]],
+    "y": [[0, 5, 9, 12, 14], [1, 6, 10, 13], [3, 8, 4]],
+}
+
 # Parametres (rho, ux, uy, C20, C11, C02) des etats gaussiens du jeu golden : SOURCE UNIQUE,
 # consommee par gen_states.py (generation des etats figes) ET run.py (oracle d'Isserlis +
 # verification anti-derive contre golden_states.csv).
@@ -112,7 +123,7 @@ def moment_sources(U, ex, ey, qm, oc):
 def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
                        eps_m00=1e-12, eps_c=1e-12, with_sources=False,
                        q_over_m=1.0, omega_c=0.0, debye=None, rho_background=0.0,
-                       omega_p=None):
+                       omega_p=None, exact_speeds=False):
     """Construit le modele DSL 15 moments avec la fermeture @p closure.
 
     @p robust : False (defaut) = mode bit_match, AUCUNE garde, fidele au MATLAB qui n'en a
@@ -138,6 +149,13 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
     @p omega_p : frequence locale de la SOURCE (m.source_frequency) bornant le pas de temps
     source (None = pas de borne) -- la 'deuxieme CFL' du MATLAB compute_dt, portee par la
     frequence plasma omega_p = 1/lambda.
+
+    @p exact_speeds : True = vitesses d'onde signees EXACTES par valeurs propres du jacobien de
+    flux (m.wave_speeds_from_jacobian : AUTODIFF du flux declare + blocs HYQMOM_BLOCKS, miroir
+    du chemin flagsym=1 du MATLAB) -- ouvre riemann='hll' fidele et REMPLACE la borne bring-up
+    k*sqrt(C) par la verite spectrale pour Rusanov/CFL aussi (max_wave_speed sur les memes
+    blocs). Exige adc_cpp >= ADC-87. False (defaut) : borne bring-up historique (eigenvalues
+    k*sqrt(C)), modele golden ADC-82 strictement inchange.
     @return adc.dsl.Model pret a compiler."""
     m = dsl.Model(name)
     cons = m.conservative_vars(*MOMENT_NAMES)
@@ -249,10 +267,15 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
            U["M04"], M14,
            M05])
 
-    # Borne de vitesse bring-up (Rusanov / CFL) : voir K_SPEED. NON-production.
-    k = m.param("k_speed", K_SPEED)
-    m.eigenvalues(x=[ux - k * sC20, ux + k * sC20],
-                  y=[uy - k * sC02, uy + k * sC02])
+    if exact_speeds:
+        # vitesses EXACTES : autodiff du flux + blocs du MATLAB flagsym=1 (HYQMOM_BLOCKS).
+        # PAS de m.eigenvalues : max_wave_speed derive des memes blocs (une seule verite).
+        m.wave_speeds_from_jacobian(blocks=HYQMOM_BLOCKS)
+    else:
+        # Borne de vitesse bring-up (Rusanov / CFL) : voir K_SPEED. NON-production.
+        k = m.param("k_speed", K_SPEED)
+        m.eigenvalues(x=[ux - k * sC20, ux + k * sC20],
+                      y=[uy - k * sC02, uy + k * sC02])
 
     # Layout primitif identite (pas de reconstruction en variables primitives pour ce modele) ;
     # to_conservative est l'identite correspondante.
