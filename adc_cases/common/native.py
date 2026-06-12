@@ -211,6 +211,11 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
     else:
         full_flags = ["-shared", "-fPIC", "-std=" + std, *flags, *kokkos_cflags]
 
+    # Dossier des en-tetes communs aux cas (common/), pour que les sources trouvent case_export.h
+    # (macro ADC_CASE_EXPORT : __declspec(dllexport) portable sur les entry points C charges par ctypes).
+    # Dans full_flags -> capture par la cle d'ABI (recompilation si le contrat d'export change).
+    full_flags = [*full_flags, "-I", os.path.dirname(os.path.abspath(__file__))]
+
     cache = os.path.join(case_output_dir(case_name), "build")
     os.makedirs(cache, exist_ok=True)
     suffix = ".dll" if sys.platform == "win32" else (".dylib" if sys.platform == "darwin" else ".so")

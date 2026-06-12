@@ -12,6 +12,8 @@
 
 #include "two_fluid_ap.hpp"
 
+#include "case_export.h"  // ADC_CASE_EXPORT : dllexport portable des entry points (common/, via -I de native.py)
+
 #include <adc/numerics/elliptic/geometric_mg.hpp>
 #include <adc/mesh/for_each.hpp>  // device_fence
 
@@ -78,36 +80,36 @@ struct Solver {
 extern "C" {
 
 // Cree un solveur (les champs correspondent a l'ancien TwoFluidAPConfig). Renvoie un handle.
-void* tfap_create(int n, double L, double cse2, double csi2, double omega_pe, double omega_pi,
+ADC_CASE_EXPORT void* tfap_create(int n, double L, double cse2, double csi2, double omega_pe, double omega_pi,
                   int stabilize, double eps, int upwind_continuity, double omega_ce,
                   double omega_ci) {
   return new Solver(n, L, cse2, csi2, omega_pe, omega_pi, stabilize != 0, eps,
                     upwind_continuity != 0, omega_ce, omega_ci);
 }
 
-void tfap_destroy(void* h) { delete static_cast<Solver*>(h); }
+ADC_CASE_EXPORT void tfap_destroy(void* h) { delete static_cast<Solver*>(h); }
 
-void tfap_step(void* h, double dt) {
+ADC_CASE_EXPORT void tfap_step(void* h, double dt) {
   Solver* s = static_cast<Solver*>(h);
   s->d.step(dt, s->stabilize);
 }
-void tfap_advance(void* h, double dt, int nsteps) {
+ADC_CASE_EXPORT void tfap_advance(void* h, double dt, int nsteps) {
   Solver* s = static_cast<Solver*>(h);
   for (int k = 0; k < nsteps; ++k) s->d.step(dt, s->stabilize);
 }
 
-int tfap_nx(void* h) { return static_cast<Solver*>(h)->d.n; }
-double tfap_mass_e(void* h) { return adc::sum(static_cast<Solver*>(h)->d.e, 0); }
-double tfap_mass_i(void* h) { return adc::sum(static_cast<Solver*>(h)->d.ion, 0); }
-double tfap_max_charge(void* h) { return static_cast<Solver*>(h)->max_charge(); }
-double tfap_max_dev(void* h) { return static_cast<Solver*>(h)->max_dev(); }
+ADC_CASE_EXPORT int tfap_nx(void* h) { return static_cast<Solver*>(h)->d.n; }
+ADC_CASE_EXPORT double tfap_mass_e(void* h) { return adc::sum(static_cast<Solver*>(h)->d.e, 0); }
+ADC_CASE_EXPORT double tfap_mass_i(void* h) { return adc::sum(static_cast<Solver*>(h)->d.ion, 0); }
+ADC_CASE_EXPORT double tfap_max_charge(void* h) { return static_cast<Solver*>(h)->max_charge(); }
+ADC_CASE_EXPORT double tfap_max_dev(void* h) { return static_cast<Solver*>(h)->max_dev(); }
 
 // densites n_e / n_i ecrites dans out (n*n, row-major) ; out doit avoir nx*nx doubles.
-void tfap_density_e(void* h, double* out) {
+ADC_CASE_EXPORT void tfap_density_e(void* h, double* out) {
   Solver* s = static_cast<Solver*>(h);
   s->copy_comp(s->d.e, out);
 }
-void tfap_density_i(void* h, double* out) {
+ADC_CASE_EXPORT void tfap_density_i(void* h, double* out) {
   Solver* s = static_cast<Solver*>(h);
   s->copy_comp(s->d.ion, out);
 }
