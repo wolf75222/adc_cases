@@ -29,6 +29,7 @@ python hyqmom15/run_waves.py      # vitesses d'onde exactes vs goldens
 python hyqmom15/run_crossing.py   # sources E/B, rotation de Larmor, croisement de jets
 python hyqmom15/run_diocotron.py  # Vlasov-Poisson complet : anneau diocotron
 python hyqmom15/run_relaxation.py # projection de réalisabilité + crossing Ma=20
+mpirun -np 2 python hyqmom15/run_mpi.py  # smoke MPI multi-rang (Poisson geometric_mg) ; cf. section
 ```
 
 ## Composer le modèle
@@ -116,6 +117,38 @@ Ce que les drivers garantissent, chiffres en CI :
   ≡ −∇φ centré à 1e-16, checkpoint/restart bit-identique ;
 - `relaxation15` ≡ Octave à 4e-14 sur 12 états couvrant les 5 branches ; à Ma=20 le
   contraste projeté/nu se mesure en réalisabilité (13 % vs 52 % de cellules violées).
+
+## Smoke MPI multi-rang (geometric_mg)
+
+[run_mpi.py](run_mpi.py) rejoue le diocotron Vlasov-Poisson sous `mpirun` (np=2 et 4) avec le
+solveur de Poisson multigrille géométrique (`solver="geometric_mg"`). Le solveur FFT direct est
+mono-rang par conception (il déroule une seule boîte en round-robin) et le cœur le refuse
+explicitement quand `n_ranks>1` ; le MG est le seul chemin elliptique distribué.
+
+```bash
+# mpi4py compilé contre la MÊME libmpi qu'_adc est requis : son import appelle MPI_Init, après
+# quoi le cœur lit le rang via _adc.my_rank()/n_ranks(). Lancer 1 thread on-node pour la parité.
+OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/run_mpi.py   # référence série (écrit l'état np=1)
+OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/run_mpi.py   # np=2 : checks + parité + rejet FFT
+OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/run_mpi.py   # np=4 : idem
+```
+
+Topologie (mesurée, pas supposée) : le `adc.System` cartésien est MONO-BOÎTE (une boîte couvre
+tout le domaine) ; sous MPI la `DistributionMapping(1, n_ranks)` l'attribue au seul rang 0. Le
+smoke exerce donc la sûreté collective du Poisson MG et des réductions (CFL max, masse) sous MPI,
+plus le garde-fou FFT, mais pas l'échange de halos entre boîtes disjointes (il n'y en a qu'une ;
+le multi-boîtes cartésien distribué relève d'AMR).
+
+Mesuré (n=64, 12 pas, 1 thread on-node, Mac M1, build MPI+Kokkos Serial) :
+
+- np=1/2/4 : 12 pas finis, masse conservée à 2.6e-16, φ fini ; `solver="fft"` rejeté par le message
+  cœur « solveur fft non supporté en MPI (n_ranks>1) », `solver="fft_spectral"` rejeté comme solveur
+  inconnu (non implémenté dans cette révision du cœur), tous deux en RuntimeError propre sans
+  interblocage ni segfault ;
+- parité np=2 et np=4 vs np=1 : BIT-IDENTIQUE (dU_max = dφ_max = 0), halos déterministes ;
+- coût/scaling indicatif : boucle de 12 pas ~0.11 s (np=1), ~0.21 s (np=2), ~0.19 s (np=4) ; aucun
+  speedup, c'est attendu (la grille tient dans une boîte sur le rang 0, les autres rangs ne font que
+  les collectifs) : ce smoke valide la justesse MPI, pas l'équilibrage de charge.
 
 ## Limites
 
