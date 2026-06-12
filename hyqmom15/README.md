@@ -121,8 +121,9 @@ Second script du cas (manifeste separe, `validation`, CI). Trois apports :
   1/8 de tour (source compilee dans la brique, ssprk2) ; M20 + M02 conserve a 1e-10.
 - Croisement de jets de reference (`main_pb_2Dcrossing_2DHyQMOM15.m`) : IC portee dans
   `model.py` `crossing_state` (fond rho = 1e-3 au repos, carre central [3n/8, 5n/8) coupe par
-  l'anti-diagonale, jets +-Uc, Uc = Ma/sqrt(2)) ; smoke a Ma = 2 MODERE (le Ma = 20 du MATLAB
-  exige la projection de realisabilite `relaxation15`, non portee : question ouverte), mode
+  l'anti-diagonale, jets +-Uc, Uc = Ma/sqrt(2)) ; smoke a Ma = 2 MODERE (le Ma = 20 passe par
+  la projection de realisabilite `relaxation15`, PORTEE depuis ADC-176 : run_relaxation.py),
+  mode
   `robust`, Rusanov + borne bring-up, 10 pas CFL 0.4 : etat fini, M00 > 0, C20/C02 >= 0,
   masse conservee (0.0) ; snapshot npz des 15 moments ecrit (`System.write`).
 
@@ -201,6 +202,17 @@ exactes (`exact_speeds=True`, section 7).
   sans gardes ; les planchers du mode robust restent derivables -- diff(Abs), adc_cpp ADC-87).
 - Note bit-match : le cas degenere |sL - sR| < 1e-10 differe par construction (MATLAB force
   W* = 0, adc rend FL/FR) -- mesure nulle, hors des etats compares.
+- **Fidelite EXACTE au schema (ADC-176)** : le split dimensionnel ADDITIF + Euler du MATLAB
+  est algebriquement le Euler non-splite (Mx + My - M = M + dt(Lx + Ly)) ; en rejouant les
+  dt golden avec `time='euler'` (adc_cpp ADC-174), l'ecart de schema disparait (~arrondi,
+  assert < 1e-9 dans run_crossing check 6) -- le 4.4 % de ssprk2 etait bien le 2e etage,
+  pas une infidelite. ssprk2 reste le mode science (ordre 2).
+- **Poisson fidele (ADC-175/176)** : `build_sim` est en `solver='fft'` par defaut (solveur
+  direct periodique, l'analogue de `poisson_fft.m` -- meme operateur discret que le MG sans
+  tolerance iterative) ; `solver='fft_spectral'` (symbole continu -(kx^2+ky^2), l'EXACT
+  `poisson_fft.m`) atteint la solution continue a ~1e-12 sur l'oracle sinusoidal
+  (run_diocotron check 7 : la meme mesure discrimine le symbole et fige les chemins
+  existants). Le champ E reste un gradient centre des deux cotes (`electric_source_term.m`).
 
 Ne prouve pas : le TAUX DE CROISSANCE diocotron vs un golden MATLAB-HLL long (le run de
 reference dure des heures sous Octave : campagne dediee, suivi d'ADC-89) ; la convergence de
@@ -215,5 +227,12 @@ eig dense generique (86), vitesses exactes autodiff + blocs (87/88), bascule HLL
 Depuis ADC-172, le pipeline est genere par `adc.moments` (adc_cpp ADC-164) : ecrire un AUTRE
 systeme de moments 2D = fournir une fermeture (callable S -> ordre N+1 standardise) et, si
 besoin, une partition spectrale -- l'algebre, les sources Lorentz et les vitesses exactes
-viennent du generateur. Restent ouverts : taux de croissance diocotron vs golden MATLAB-HLL
-long (campagne dediee), projection de realisabilite `relaxation15` (Ma = 20), golden Np = 128.
+viennent du generateur. La projection de realisabilite
+`relaxation15` est PORTEE (run_relaxation.py + [relaxation.py](relaxation.py), ADC-176) :
+port verbatim valide contre Octave (12 etats, 5 branches, 3.9e-14), crossing Ma = 20 en HLL
+exact sans gardes avec projection par pas -- le contraste projete/nu est mesure en
+REALISABILITE (lambda_min(p2p2) par cellule : ~-1 / 13 % de cellules en un pas vs -12.8 /
+52 % en accumulation ; nos schemas, plus diffusifs que le MATLAB, ne produisent pas de NaN a
+cet horizon). Application par pas en Python (System.get/set_state) ; chemin compile =
+ADC-177 (backlog). Restent ouverts : taux de croissance diocotron vs golden MATLAB-HLL long
+(campagne dediee), golden Np = 128, terme de collision BGK (`collision15.m`, hors scope).

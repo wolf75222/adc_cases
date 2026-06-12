@@ -216,9 +216,34 @@ def check_hll_fidelity():
     assert dist["hll"] < dist["rusanov"], (
         "adc-HLL (%.4f) devrait etre plus proche du golden HLL que adc-Rusanov (%.4f)"
         % (dist["hll"], dist["rusanov"]))
-    print("(6) fidelite HLL (%d pas rejoues, Ma = %g) : ecart L2 relatif au golden MATLAB-HLL "
-          "= %.4f (difference de schema seule) ; Rusanov = %.4f > HLL (moins diffusif) -- OK"
-          % (nsteps, ma, dist["hll"], dist["rusanov"]))
+
+    # replay en time='euler' (adc_cpp ADC-174) : le split dimensionnel ADDITIF + Euler du
+    # MATLAB est ALGEBRIQUEMENT le Euler non-splite (Mx + My - M = M + dt(Lx + Ly)), donc en
+    # rejouant les dt golden avec le meme flux/vitesses, l'ecart de SCHEMA disparait : il ne
+    # reste que l'arrondi (et la convention degeneree |sL-sR| < 1e-10, de mesure nulle).
+    # la jambe euler passe par backend='production' : l'ABI du .so AOT fige SSPRK2 (le
+    # coeur rejette explicitement euler sur ce chemin), le loader production marshale method.
+    compiled_prod = m.compile(os.path.join(case_output_dir("hyqmom15"),
+                                           "hyqmom15_exact_prod.so"),
+                              adc_include(), backend="production")
+    sim = adc.System(n=n, L=1.0, periodic=True)
+    sim.add_equation("mom", model=compiled_prod,
+                     spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+                     time=adc.Explicit(method="euler"))
+    sim.set_state("mom", U0)
+    for dt in dts:
+        sim.step(float(dt))
+    Ue = np.array(sim.get_state("mom"))
+    assert np.all(np.isfinite(Ue)), "etat euler non fini"
+    dist["euler"] = float(np.sqrt(np.sum((Ue - gold) ** 2)) / np.sqrt(np.sum(gold ** 2)))
+    assert dist["euler"] < 1e-9, (
+        "replay euler : ecart L2 relatif %.3e au golden MATLAB-HLL (attendu ~arrondi : "
+        "memes flux, memes vitesses, meme schema -- le 4.4 %% de ssprk2 etait bien le "
+        "2e etage)" % dist["euler"])
+    print("(6) fidelite HLL (%d pas rejoues, Ma = %g) : ssprk2 = %.4f (difference de schema "
+          "seule) ; Rusanov = %.4f > HLL ; time='euler' = %.2e (== schema MATLAB a "
+          "l'arrondi : split additif + Euler == Euler non-splite) -- OK"
+          % (nsteps, ma, dist["hll"], dist["rusanov"], dist["euler"]))
 
 
 def main():

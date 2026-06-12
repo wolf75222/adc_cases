@@ -102,7 +102,8 @@ def diocotron_state(n):
     return U
 
 
-def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False):
+def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
+              solver="fft"):
     """System periodique + modele avec sources electriques et Poisson
     (Delta phi = (M00 - rho_bg)/lam^2, fond neutralisant = moyenne du scenario : un rhs
     periodique a moyenne non nulle rend le MG singulier), rusanov + borne bring-up."""
@@ -122,7 +123,11 @@ def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False):
     sim.add_equation(name, model=compiled,
                      spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
                      time=adc.Explicit())
-    sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+    # solver : "fft" par defaut (ADC-176 fidelite (a) : solveur DIRECT periodique, l'analogue
+    # de poisson_fft.m -- meme operateur discret que le MG, zero tolerance iterative) ;
+    # "fft_spectral" = symbole continu (adc_cpp ADC-175, l'EXACT poisson_fft.m) ;
+    # "geometric_mg" disponible (cas non periodiques / comparaisons).
+    sim.set_poisson(rhs="charge_density", solver=solver)
     return sim
 
 
@@ -248,9 +253,44 @@ def check_diocotron_hll_exact():
           % (nsteps, drift))
 
 
+def check_poisson_solvers():
+    """(7) fidelite Poisson (ADC-175/176) : le MEME oracle sinusoidal a travers les trois
+    solveurs. fft (stencil discret diagonalise) == geometric_mg au residu MG pres (meme
+    operateur) et tous deux a O(h^2) du continu ; fft_spectral (symbole continu, l'exact
+    poisson_fft.m de RIEMOM2D) atteint la solution continue a ~1e-12 : la MEME mesure
+    discrimine le symbole ET prouve le no-default-change des chemins existants."""
+    n, eps = 64, 1e-3
+    k = 2.0 * np.pi
+    xm = -0.5 + (np.arange(n) + 0.5) / n
+    rho = 1.0 + eps * np.cos(k * xm)[None, :] * np.ones((n, n))
+    base = gaussian_state(1.0, 0.0, 0.0, T, 0.0, T)
+    U = base[:, None, None] * rho[None, :, :]
+    phi_ref = -(eps / (DEBYE ** 2 * k ** 2)) * np.cos(k * xm)[None, :] * np.ones((n, n))
+    errs = {}
+    phis = {}
+    for solver in ("fft", "fft_spectral", "geometric_mg"):
+        sim = build_sim(n, rho_bg=1.0, solver=solver)
+        sim.set_state("mom", U)
+        sim.solve_fields()
+        phi = np.array(sim.potential())
+        phis[solver] = phi - phi.mean()
+        errs[solver] = float(np.max(np.abs(phis[solver] - phi_ref)) / np.max(np.abs(phi_ref)))
+    assert errs["fft_spectral"] < 1e-11, (
+        "fft_spectral devrait etre exact sur la sinusoide (err %.2e)" % errs["fft_spectral"])
+    for sname in ("fft", "geometric_mg"):
+        assert 1e-5 < errs[sname] < 1e-2, (
+            "%s : fenetre O(h^2) attendue (err %.2e)" % (sname, errs[sname]))
+    dmg = float(np.max(np.abs(phis["fft"] - phis["geometric_mg"])) / np.max(np.abs(phi_ref)))
+    assert dmg < 1e-5, "fft != geometric_mg (%.2e) : meme operateur attendu" % dmg
+    print("(7) Poisson : fft_spectral == continu a %.1e ; fft == MG (%.1e) a O(h^2) du "
+          "continu (%.1e) -- symbole discrimine, defauts intacts -- OK"
+          % (errs["fft_spectral"], dmg, errs["fft"]))
+
+
 def main():
     print("=== hyqmom15/run_diocotron : Vlasov-Poisson 15 moments, anneau diocotron ===")
     check_poisson_oracle()
+    check_poisson_solvers()
     check_diocotron()
     check_diocotron_hll_exact()
     print("hyqmom15/run_diocotron : OK")
