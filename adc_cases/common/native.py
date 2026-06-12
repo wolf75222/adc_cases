@@ -58,7 +58,14 @@ def adc_include():
 
 
 def _compiler():
-    """Compilateur C++ : $CXX, sinon c++ / g++ / clang++. Leve si aucun n'est trouve."""
+    """Compilateur C++ : $CXX, sinon (Windows) cl/clang-cl, (Unix) c++/g++/clang++. Leve si aucun."""
+    if sys.platform == "win32":
+        cxx = (os.environ.get("CXX") or shutil.which("cl") or shutil.which("clang-cl")
+               or shutil.which("clang-cl", path=r"C:\Program Files\LLVM\bin"))
+        if not cxx:
+            raise RuntimeError("aucun compilateur C++ trouve (definir CXX, ou lancer depuis un "
+                               "invite vcvars / installer MSVC ou clang-cl)")
+        return cxx
     cxx = (os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++")
            or shutil.which("clang++"))
     if not cxx:
@@ -107,6 +114,17 @@ def _kokkos_build_flags():
     lib = os.path.join(root, "lib")
     if not os.path.isdir(lib) and os.path.isdir(os.path.join(root, "lib64")):
         lib = os.path.join(root, "lib64")
+    if sys.platform == "win32":
+        # Windows (cl/clang-cl) : Kokkos en DLL partagee -> linker les import libs (.lib) par chemin.
+        # cl accepte -D/-I. Pas de -L/-Wl/-ldl/-fopenmp (Unix). La .dll standalone (ctypes) initialise
+        # son propre runtime Kokkos contre kokkos*.dll (a cote de la .dll au chargement).
+        cflags = ["-DADC_HAS_KOKKOS", "-DKOKKOS_DEPENDENCE", "-I", inc]
+        lflags = []
+        for comp in ("kokkoscore", "kokkoscontainers", "kokkossimd", "kokkosalgorithms"):
+            cand = os.path.join(lib, comp + ".lib")
+            if os.path.exists(cand):
+                lflags.append(cand)
+        return cflags, lflags
     cflags = ["-DADC_HAS_KOKKOS", "-I", inc]
     lflags = ["-L", lib, "-Wl,-rpath," + lib, "-ldl"]
     for comp in ("kokkoscore", "kokkoscontainers", "kokkossimd", "kokkosalgorithms"):
@@ -185,11 +203,17 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
     # Kokkos. Les flags de COMPILATION entrent dans la cle d'ABI (recompilation si le backend change) ;
     # les flags de LIEN (libs Kokkos + OpenMP) s'ajoutent a la commande (la .so est standalone, ctypes).
     kokkos_cflags, kokkos_lflags = _kokkos_build_flags()
-    full_flags = ["-shared", "-fPIC", "-std=" + std, *flags, *kokkos_cflags]
+    if sys.platform == "win32":
+        # cl/clang-cl : .dll standalone (ctypes). /O2 remplace les flags -O* Unix. /permissive- +
+        # /Zc:preprocessor requis par la STL/Kokkos modernes ; /DNOMINMAX (windows.h via adc).
+        full_flags = ["/nologo", "/LD", "/std:" + std, "/O2", "/EHsc",
+                      "/permissive-", "/Zc:preprocessor", "/DNOMINMAX", "/bigobj", *kokkos_cflags]
+    else:
+        full_flags = ["-shared", "-fPIC", "-std=" + std, *flags, *kokkos_cflags]
 
     cache = os.path.join(case_output_dir(case_name), "build")
     os.makedirs(cache, exist_ok=True)
-    suffix = ".dylib" if sys.platform == "darwin" else ".so"
+    suffix = ".dll" if sys.platform == "win32" else (".dylib" if sys.platform == "darwin" else ".so")
     base = os.path.splitext(os.path.basename(cpp))[0]
     lib = os.path.join(cache, base + suffix)
     keyfile = lib + ".abikey"
@@ -201,7 +225,11 @@ def build_shared(case_name, sources, include=None, flags=("-O2",), std="c++20"):
             have = f.read().strip()
 
     if have != want:
-        cmd = [cxx, *full_flags, "-I", include, cpp, "-o", lib, *kokkos_lflags]
+        if sys.platform == "win32":
+            cmd = [cxx, *full_flags, "-I", include, cpp, "/Fe:" + lib,
+                   "/Fo" + cache + os.sep, "/link", *kokkos_lflags]
+        else:
+            cmd = [cxx, *full_flags, "-I", include, cpp, "-o", lib, *kokkos_lflags]
         print("%s : (re)compilation du solveur natif\n  %s" % (case_name, " ".join(cmd)))
         subprocess.run(cmd, check=True)
         with open(keyfile, "w") as f:
