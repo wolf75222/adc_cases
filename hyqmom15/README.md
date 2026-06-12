@@ -1,4 +1,4 @@
-# hyqmom15 — Vlasov–Poisson 2D à 15 moments (fermeture HyQMOM)
+# hyqmom15 : Vlasov-Poisson 2D à 15 moments (fermeture HyQMOM)
 
 Modèle cinétique 2D : on transporte les moments en vitesse `M_pq = ∫ f v_x^p v_y^q dv`
 d'ordre p+q ≤ 4 (15 composantes) de l'équation de Vlasov, couplés au Poisson du système.
@@ -35,7 +35,7 @@ python hyqmom15/run_relaxation.py # projection de réalisabilité + crossing Ma=
 
 Tout passe par `build_moment_model` ([model.py](model.py)), qui délègue l'algèbre des
 moments au générateur générique `adc.moments` d'adc_cpp. La seule physique écrite ici est
-la fermeture — un callable qui reçoit les moments standardisés et rend ceux d'ordre 5 :
+la fermeture, un callable qui reçoit les moments standardisés et rend ceux d'ordre 5 :
 
 ```python
 from model import build_moment_model, hyqmom_closure
@@ -91,7 +91,7 @@ pas aux campagnes GPU (chemin compilé à venir côté adc_cpp).
 
 ## Validation
 
-Les références sont générées en exécutant le vrai code MATLAB (RIEMOM2D) sous Octave —
+Les références sont générées en exécutant le vrai code MATLAB (RIEMOM2D) sous Octave ;
 jamais re-transcrites :
 
 ```bash
@@ -110,7 +110,7 @@ Ce que les drivers garantissent, chiffres en CI :
 - sources ≡ les équations explicites du document de référence à 1e-14 ; rotation de
   Larmor ≡ analytique ;
 - trajectoire : en rejouant les pas de temps du golden HLL avec `time='euler'`, l'écart
-  L2 au MATLAB après 20 pas est ~1e-16 (le schéma MATLAB — split additif + Euler — est
+  L2 au MATLAB après 20 pas est ~1e-16 (le schéma MATLAB, split additif + Euler, est
   algébriquement l'Euler non-splitté) ; en ssprk2 l'écart est 4 %, c'est l'ordre 2 ;
 - Poisson : φ ≡ analytique sur sinusoïde (1e-14 en `fft_spectral`), champ E de la source
   ≡ −∇φ centré à 1e-16, checkpoint/restart bit-identique ;
