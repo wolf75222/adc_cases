@@ -45,7 +45,7 @@ Normalisation (T3 -- corrige) : on reporte gamma_raw_sim (pente brute, fenetre M
 gamma_paper_units = gamma_raw_sim * 2pi/rhobar. Le facteur 2 pi est la conversion cyclique->
 angulaire de l'horloge de derive et s'applique AU MODELE COMPLET aussi (alpha/|Omega|=1/rho_max=1
 -> meme champ de derive que le reduit ExB) ; l'ancienne premisse "pente brute directement
-comparable, aucun facteur" etait INCORRECTE (cf. T2_NORMALIZATION_AUDIT.md). ATTENTION : la repro
+comparable, aucun facteur" etait INCORRECTE (cf. docs/T2_NORMALIZATION_AUDIT.md). ATTENTION : la repro
 quantitative du polaire COMPLET n'est PAS etablie (VOIE 1 diverge, non-positivite au bord d'anneau) ;
 ce mapping rend seulement la metrologie coherente avec le cartesien, il ne valide pas le polaire.
 
@@ -249,7 +249,7 @@ def build_polar_system(nr, nth, mode, params, args):
     sim.add_equation(
         "ne",
         model=model,
-        spatial=adc.FiniteVolume(limiter="weno5", riemann="rusanov", variables="conservative"),
+        spatial=adc.FiniteVolume(limiter=args.limiter, riemann="rusanov", variables="conservative"),
         time=split_factory(
             hyperbolic=adc.Explicit(method="ssprk3"),
             source=adc.CondensedSchur(kind="electrostatic_lorentz", theta=args.theta,
@@ -270,7 +270,16 @@ def build_polar_system(nr, nth, mode, params, args):
     grad_r, grad_theta = polar_gradient(phi, r_min, dr, nth, nr)
     B = params.omega
     v_r = -grad_theta / B
-    v_theta = equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, args.cs2)
+    # IC azimutale : "equilibrium" (defaut historique) = racine de la quadratique du bilan radial
+    # (centrifuge + pression + electrique + Lorentz) ; "exb" = derive ExB PURE v_theta = grad_r/B
+    # (la limite de derive du papier, sans inertie ni pression). L'IC exb avait ete abandonnee car
+    # elle "explosait avant la fenetre de fit" -- mesure PRE-fix-seam (adc_cpp #289) : a re-tester,
+    # la phase du mode (ADC-78) montre que l'equilibre rotatif a une rotation de fond quasi nulle
+    # (omega_phase -0.07) la ou le cartesien paper-faithful tourne a +0.42.
+    if getattr(args, "ic", "equilibrium") == "exb":
+        v_theta = grad_r / B
+    else:
+        v_theta = equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, args.cs2)
     # (D) etat conservatif (3, ntheta, nr) comp-major (rho, mom_r, mom_theta), aplati C-order.
     U = np.stack([rho, rho * v_r, rho * v_theta], axis=0)        # (3, nth, nr)
     sim.set_state("ne", U.ravel())
@@ -529,7 +538,9 @@ def write_summary(results, out, params, args):
             "nr": args.nr, "ntheta": args.ntheta,
         },
         "numerics": {
-            "finite_volume": "WENO5-Z + Rusanov (polaire)",
+            "finite_volume": "%s + Rusanov (polaire)" % (
+                "WENO5-Z" if args.limiter == "weno5" else args.limiter),
+            "limiter": args.limiter,
             "time": "SSPRK3 + CondensedSchur(theta=%g) (%s)" % (
                 args.theta, "Strang" if args.strang else "Lie"),
             "dt": args.dt, "cfl": args.cfl, "nr": args.nr, "ntheta": args.ntheta, "mpi_size": 1,
@@ -619,6 +630,13 @@ def parse_args():
                              "theta >= 0). Mettre 0 pour la limite froide exacte du papier.")
     parser.add_argument("--theta", type=float, default=0.5,
                         help="theta du CondensedSchur (0.5 Crank-Nicolson, 1 Euler retrograde)")
+    parser.add_argument("--ic", choices=["equilibrium", "exb"], default="equilibrium",
+                        help="IC azimutale : equilibrium = bilan radial exact (historique) ; exb = "
+                             "derive ExB pure (limite du papier ; re-testable post-fix-seam, ADC-78)")
+    parser.add_argument("--limiter", choices=["weno5", "minmod"], default="weno5",
+                        help="reconstruction FV. weno5 = historique (overshoote au saut top-hat -> "
+                             "rho<0, suspect de la divergence t=0.01, ADC-62) ; minmod = TVD, "
+                             "preserve la positivite (fix valide cote cartesien, ADC-74)")
     parser.add_argument("--strang", action="store_true",
                         help="splitting de Strang (2e ordre) au lieu de Lie (defaut)")
     # --- Option c : soustraction du residu d'equilibre gele (well-balanced discret) -----------------

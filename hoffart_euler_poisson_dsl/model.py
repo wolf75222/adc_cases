@@ -2,7 +2,7 @@
 
 Note : ce module definit le modele symbolique complet (rho, rho*u, rho*v + flux +
 source electrostatique/Lorentz). La validation de normalisation du taux de
-croissance (NORMALIZATION.md, diag/diag_polar_omega.py) porte sur un modele
+croissance (docs/NORMALIZATION.md, diag/diag_polar_omega.py) porte sur un modele
 different et reduit (derive ExB scalaire, sans quantite de mouvement). Aucune
 reproduction quantitative du modele complet ci-dessous n'est encore etablie.
 

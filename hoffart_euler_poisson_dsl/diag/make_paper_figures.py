@@ -10,8 +10,8 @@ colormap Blues blanc->bleu marine) :
 
 Modele : densite advectee par la derive ExB NORMALISEE (Scalar + ExB(B0=1) + ChargeDensity(
 charge=1)). C'est le champ que le full system-schur advecte (alpha/|Omega|=1/rho_max=1, cf.
-T2_NORMALIZATION_AUDIT.md) -- representation de la limite de derive magnetique du papier. Le
-panneau (d) porte AUSSI le taux du full system-schur (T3, RESULTS_SYSTEM_SCHUR.md section 9).
+../docs/T2_NORMALIZATION_AUDIT.md) -- representation de la limite de derive magnetique du papier. Le
+panneau (d) porte AUSSI le taux du full system-schur (T3, ../docs/RESULTS_SYSTEM_SCHUR.md section 9).
 Temps final t_f = 10 periodes diocotron = 2pi (en temps sim, rhobar=rho_max=1).
 
 Lancer :
@@ -33,6 +33,16 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.colors import to_rgba
+
+# --- chemin du cas : model.py / run.py / results.py vivent un cran au-dessus de diag/ ----------
+_CASE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # hoffart_euler_poisson_dsl/
+_REPO_ROOT = os.path.dirname(_CASE_ROOT)                                    # adc_cases/
+for _p in (_CASE_ROOT, _REPO_ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from adc_cases.common.io import case_output_dir           # noqa: E402
+from model import PaperParameters, paper_initial_density, drift_velocity_from_potential  # noqa: E402
+from run import compile_model                              # noqa: E402
 
 # --- geometrie de l'anneau (echelle papier 6:8:16) ---
 R0, R1, RW = 6.0, 8.0, 16.0
@@ -58,14 +68,22 @@ def ring_ic(n, l):
 
 
 def schlieren_rgba(rho, rmask, n):
-    """log(1+|grad rho|) normalise -> Blues ; exterieur du disque -> ardoise. Style papier."""
+    """Schlieren |grad rho| -> Blues ; exterieur du disque -> ardoise. Style papier (ADC-80).
+
+    Normalisation par PERCENTILE (p99.5 sur le disque) au lieu du max global : le max est domine
+    par la cellule de bord la plus raide, qui comprimait tout le reste vers le bas (bords en bandes
+    saturees au lieu des lignes fines du papier). Gamma 1.5 (sweep 0.6/1.0/1.5/2.2 sur l=4 n=256 :
+    1.5 amincit les traits sans perdre les filaments faibles ; 2.2 les perd) et PAS de plancher de
+    colormap (le papier a un interieur de disque franchement blanc ; l'ancien 0.15+0.85*img
+    bleutait le fond)."""
     h = 2 * RW / n
     gy, gx = np.gradient(rho, h, h, edge_order=2)
     g = np.hypot(gx, gy)
-    img = np.log1p(20.0 * g / max(float(g.max()), 1e-30))
-    img = img / max(float(img.max()), 1e-30)
-    rgba = BLUES(0.15 + 0.85 * img)
-    rgba[img < 1e-3] = BLUES(0.0)
+    inside = rmask <= RW
+    ref = float(np.percentile(g[inside], 99.5)) if inside.any() else float(g.max())
+    img = np.log1p(20.0 * g / max(ref, 1e-30))
+    img = np.clip(img / max(float(np.log1p(20.0)), 1e-30), 0.0, 1.0) ** 1.5
+    rgba = BLUES(img)
     rgba[rmask > RW] = SLATE
     return rgba
 
@@ -117,6 +135,82 @@ def run_mode(l, n=128, cfl=0.4, nframes=120):
                 ftimes=np.array(ftimes), ts=np.array(ts), cs=np.array(cs))
 
 
+def build_real(compiled, rho0, params, limiter="minmod"):
+    """Assemble le System system-schur (modele complet) pour les figures, reconstruction `limiter`.
+
+    Identique a run.build_uniform mais limiteur **minmod** par defaut (TVD, preserve la positivite) :
+    WENO5 overshoote au saut top-hat de l'anneau -> densite negative -> step_cfl s'effondre a dt=0
+    ou la sim diverge (NaN), cf. ADC-62/ADC-74. Avec minmod la densite reste > 0 et step_cfl avance
+    jusqu'au rollup complet. Relaxation a deux passes du papier (rho -> phi -> derive v0 -> phi).
+    """
+    sim = adc.System(n=rho0.shape[0], L=params.length, periodic=False)
+    sim.set_poisson(rhs="composite", solver="geometric_mg", bc="dirichlet",
+                    wall="circle", wall_radius=params.radius)
+    sim.set_magnetic_field(params.omega * np.ones_like(rho0))     # B_z avant l'etage Schur
+    sim.add_equation("electrons", model=compiled,
+                     spatial=adc.FiniteVolume(limiter=limiter, riemann="rusanov",
+                                              variables="conservative"),
+                     time=adc.Strang(hyperbolic=adc.Explicit(method="ssprk3"),
+                                     source=adc.CondensedSchur(theta=0.5, alpha=params.alpha)))
+    zeros = np.zeros_like(rho0)
+    sim.set_primitive_state("electrons", rho=rho0, u=zeros, v=zeros); sim.solve_fields()
+    u0, v0 = drift_velocity_from_potential(np.asarray(sim.potential()), params)
+    sim.set_primitive_state("electrons", rho=rho0, u=u0, v=v0);     sim.solve_fields()
+    return sim
+
+
+def run_mode_real(l, n=96, cfl=0.4, nframes=120, t_end=None, limiter="minmod"):
+    """Snapshots/GIF du VRAI modele complet ``system-schur`` (ADC-74 / fix positivite ADC-62).
+
+    Avance le modele Euler-Poisson magnetise COMPLET (``model.py``) en reconstruction **minmod**
+    (TVD -> densite > 0) avec ``step_cfl`` adaptatif : le rollup complet est atteint sans diverger
+    (WENO5 overshootait au bord d'anneau -> densite negative -> stall/NaN a ~38-68 %). Dump de
+    l'etat REEL (densite + phi) par ``sim.write(format="npz")`` aux fractions de snapshot. Renvoie
+    les frames de densite reelle pour le rendu schlieren. ``alpha/omega = 1`` => meme horloge de
+    derive, ``t_end`` et fractions inchanges. NB : minmod est plus diffusif que WENO5 (filaments
+    plus lisses) mais c'est le modele fidele, pas un proxy.
+    """
+    params = PaperParameters()
+    out = case_output_dir("hoffart_paper_figures")
+    npz_dir = os.path.join(out, "mode_%d" % l)
+    os.makedirs(npz_dir, exist_ok=True)
+    rho0 = paper_initial_density(n, l, params)
+    compiled = compile_model(params, "system-schur", out)
+    sim = build_real(compiled, rho0, params, limiter=limiter)
+
+    # masque radial (slate hors disque) -- meme convention que schlieren_rgba (rmask = r)
+    h = 2 * RW / n
+    xg = (np.arange(n) + 0.5) * h - RW
+    Xg, Yg = np.meshgrid(xg, xg, indexing="xy")
+    rmask = np.hypot(Xg, Yg)
+
+    t_end = TWO_PI * 10.0 if t_end is None else t_end
+    frame_targets = sorted(set(round(x, 6) for x in
+                               list(np.linspace(0.0, t_end, nframes)) + [f * t_end for f in SNAP_FRAC]))
+    snap_targets = [round(f * t_end, 6) for f in SNAP_FRAC]
+    fi = si = step = 0
+    frames, ftimes = [], []
+    while True:
+        t = float(sim.time())
+        if fi < len(frame_targets) and t >= frame_targets[fi] - 1e-9:
+            dens = np.asarray(sim.density("electrons"), float).reshape(n, n)
+            if not np.isfinite(dens).all():
+                break
+            while fi < len(frame_targets) and t >= frame_targets[fi] - 1e-9:
+                frames.append(dens.copy()); ftimes.append(t); fi += 1
+        while si < len(snap_targets) and t >= snap_targets[si] - 1e-9:
+            sim.write(os.path.join(npz_dir, "state"), format="npz", step=si)   # dump de l'etat REEL
+            si += 1
+        if t >= t_end:
+            break
+        sim.step_cfl(cfl)          # minmod garde rho > 0 -> CFL ne s'effondre pas (cf. ADC-62)
+        step += 1
+        if step > 200000:
+            break
+    return dict(l=l, n=n, t_end=t_end, rmask=rmask,
+                frames=frames, ftimes=np.array(ftimes))
+
+
 def make_snapshots(res, out):
     l, n, t_end, rmask, ft = res["l"], res["n"], res["t_end"], res["rmask"], res["ftimes"]
     fig, axes = plt.subplots(3, 3, figsize=(9, 9.6))
@@ -130,7 +224,7 @@ def make_snapshots(res, out):
             s.set_visible(False)
         lbl = "0.01" if abs(frac - 0.01) < 1e-9 else ("%d/8" % round(frac * 8) if frac < 1 else "1")
         ax.set_title(r"(%s) $t=%s\,t_f$" % ("abcdefghi"[k], lbl), fontsize=11, color="#222")
-    fig.suptitle(r"Mode $\ell=%d$ -- schlieren densite (derive ExB), style Hoffart et al. Fig 5.%d"
+    fig.suptitle(r"Mode $\ell=%d$ -- schlieren densite (modele complet system-schur), style Hoffart et al. Fig 5.%d"
                  % (l, FIG_NUM[l]), fontsize=12, y=0.995)
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     p = os.path.join(out, "snapshots_l%d.png" % l)
@@ -217,16 +311,17 @@ def main():
         del argv[k:k + 2]
     modes = [int(x) for x in argv] or [3, 4, 5]
     os.makedirs(out, exist_ok=True)
-    results = []
+    growth = []
     for l in modes:
         t0 = time.time()
-        r = run_mode(l)
-        results.append(r)
-        print("l=%d : %d frames, tf_sim=%.1f, %.0fs" % (l, len(r["frames"]), r["ts"][-1], time.time() - t0))
-        print("  ", make_snapshots(r, out))
-        print("  ", make_gif(r, out))
-    if len(results) == 3:
-        print("  ", make_growth(results, out))
+        rf = run_mode_real(l)        # VRAI modele system-schur : densite reelle + dump sim.write(npz)
+        print("l=%d : %d frames, tf_sim=%.1f, %.0fs (system-schur)"
+              % (l, len(rf["frames"]), rf["ftimes"][-1] if len(rf["ftimes"]) else 0.0, time.time() - t0))
+        print("  ", make_snapshots(rf, out))
+        print("  ", make_gif(rf, out))
+        growth.append(run_mode(l))   # diagnostic ExB reduit -> courbe des taux (panneau d)
+    if len(growth) == 3:
+        print("  ", make_growth(growth, out))
 
 
 if __name__ == "__main__":

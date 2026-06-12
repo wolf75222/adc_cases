@@ -28,7 +28,7 @@ figure 5.2 du papier. Ce README explique tout, de la compilation à cette animat
 8. [Les figures obtenues](#8-les-figures-obtenues)
 9. [Convergence](#9-convergence)
 10. [Performance et passage à l'échelle (local + ROMEO)](#10-performance-et-passage-à-léchelle-local--romeo)
-11. [Carte des fichiers](#11-carte-des-fichiers)
+11. [Structure du dossier](#11-structure-du-dossier)
 
 ## 1. Le résultat
 
@@ -181,7 +181,7 @@ m.check()
 À partir de ces appels, `model.compile(backend="production")` produit un `.so` C++ : le flux numérique,
 le solveur de Riemann, la dérivation des auxiliaires, tout est généré. On n'écrit aucune boucle. La
 fidélité de cette génération est vérifiée par `check_model.py`, qui compare le noyau compilé aux formules
-à la main sur 2×2 cellules et trouve un résidu exactement nul (`figures/oracle_residual.png`). C'est la
+à la main sur 2×2 cellules et trouve un résidu exactement nul. C'est la
 frontière nette du cas : la génération du modèle est prouvée bit-à-bit ; la reproduction physique se
 mesure ensuite par le run.
 
@@ -262,12 +262,13 @@ l'ajustement.
 Décomposition du déficit du mode 3 (`0.0312 → 0.772`, facteur 24.7) : fenêtre 3.20, puis `2pi = 6.28`,
 puis résidu de grille cart contre polaire 1.23. Le produit `3.20 × 6.28 × 1.23` vaut 24.7, le déficit
 observé. Seul le résidu de grille est physique, et il tend vers zéro avec la résolution (section 9).
-Détail dans `T2_NORMALIZATION_AUDIT.md` et `RESULTS_SYSTEM_SCHUR.md`.
+Détail dans [`docs/T2_NORMALIZATION_AUDIT.md`](docs/T2_NORMALIZATION_AUDIT.md) et [`docs/RESULTS_SYSTEM_SCHUR.md`](docs/RESULTS_SYSTEM_SCHUR.md).
 
 ## 8. Les figures obtenues
 
-Snapshots schlieren de la densité, palette du papier (disque blanc, extérieur ardoise, colormap Blues),
-aux fractions de temps `0.01, 1/8, ..., 7/8, t_f`. Le nombre de vortex égale le mode.
+Snapshots schlieren de la densité **du modèle complet `system-schur`** (n=96, reconstruction minmod),
+palette du papier (disque blanc, extérieur ardoise, colormap Blues), aux fractions de temps
+`0.01, 1/8, ..., 7/8, t_f`. Le nombre de vortex égale le mode.
 
 Mode l=3 (figure 5.1 du papier) : triangle, puis trois bras, puis trois vortex.
 
@@ -291,9 +292,14 @@ courbe suit la pente papier (tirets rouges) dans la fenêtre de fit mappée, pui
 
 ![Taux de croissance](figures/growth_rate.png)
 
-Les snapshots et les GIF sont la densité advectée par la dérive `E×B` réduite, qui partage le champ
-d'advection du modèle complet (`alpha/omega = 1`). Les taux quantitatifs du panneau (d) viennent du modèle
-complet `system-schur`. Le générateur est `diag/make_paper_figures.py`.
+Les snapshots et les GIF sont la densité **réelle** du modèle complet `system-schur`, avancé en
+reconstruction minmod (TVD) : WENO5 overshoote au saut top-hat de l'anneau, la densité passe négative
+et le run s'effondre vers t≈0.38 t_f (dt→0 ou NaN, cf. ADC-62/ADC-74) ; minmod garde `rho > 0` et
+atteint le rollup complet, au prix de filaments plus lissés. L'état brut (densité + phi) de chaque
+snapshot est dumpé en `.npz` réutilisable via `sim.write` (`out/hoffart_paper_figures/mode_*/`).
+Les courbes d'amplitude (a,b,c) du growth_rate utilisent la dérive `E×B` réduite (même champ
+d'advection, `alpha/omega = 1`) ; les taux du panneau (d) viennent du modèle complet `system-schur`.
+Le générateur est `diag/make_paper_figures.py`.
 
 ## 9. Convergence
 
@@ -346,24 +352,23 @@ des patchs AMR petits), peu parallélisable à ces tailles. Le même constat est
 ROMEO (`HERO_RESULTS.md`) : à ces tailles, le pas tourne mieux en CPU multi-cœur modéré qu'en
 saturant beaucoup de cœurs ou un GPU. Pour scaler fort, il faut des problèmes bien plus gros.
 
-## 11. Carte des fichiers
+## 11. Structure du dossier
 
-- `model.py` : le modèle Euler-Poisson magnétisé en DSL (commenté étape par étape), les paramètres, la
-  densité et la dérive initiales.
-- `run.py` : assemblage du System, mesure paper-faithful (fenêtres mappées, conversion `2pi/rhobar`),
-  sorties (amplitude, snapshots, GIF, table des taux, métadonnées).
-- `results.py` : émetteur d'enregistrements (CSV et JSON), helpers `paper_to_sim_time_window` et
-  `gamma_to_paper_units`, auto-test pur Python.
-- `check_model.py` : oracle analytique comparé bit-à-bit au modèle compilé.
-- `diag/petri_eigenvalue.py` : la valeur propre analytique de Davidson (cibles et origine du `2pi`).
-- `diag/diag_normalization_audit.py` : l'audit dimensionnel (échelles, candidats, décomposition de la
-  fenêtre).
-- `diag/convergence_reduced.py` : la convergence en résolution.
-- `diag/make_paper_figures.py` : le générateur des figures et GIF.
-- `diag/diag_polar_omega.py` : le chemin polaire réduit ExB, qui valide la normalisation `2pi/rhobar`.
-- `run_polar.py` : le modèle complet sur grille polaire (chemin séparé, qui diverge encore).
-- `RESULTS_SYSTEM_SCHUR.md` : la table des taux, l'audit, le code T3, la convergence, et le journal du
-  raisonnement.
-- `T2_NORMALIZATION_AUDIT.md` : l'audit dimensionnel détaillé.
-- `NORMALIZATION.md` : la normalisation `2pi/rhobar` du chemin polaire réduit.
-- `figures/provenance.json` : la provenance de chaque figure.
+```
+hoffart_euler_poisson_dsl/
+├── model.py        modèle Euler-Poisson magnétisé en DSL (commenté), paramètres, densité + dérive initiales
+├── run.py          CAS cartésien system-schur : assemblage, mesure paper-faithful (fenêtres mappées,
+│                   conversion 2π/rhobar), sorties (amplitude, snapshots, GIF, table des taux)
+├── run_polar.py    CAS polaire (anneau résolu) : diverge encore (cf. issue ADC-62)
+├── results.py      enregistrements CSV/JSON + helpers 2π (paper_to_sim_time_window, gamma_to_paper_units)
+├── check_model.py  oracle analytique comparé bit-à-bit au modèle compilé (validation, CI)
+├── tests/          garde-fous build-free : assemblage polaire [CI], signes, flag géométrie  → tests/README.md
+├── diag/           diagnostics : Petri, audit normalisation, convergence, figures           → diag/README.md
+├── docs/           notes d'audit : NORMALIZATION, T2 audit, RESULTS system-schur            → docs/README.md
+├── slurm/          campagnes ROMEO : geometry, polar                                        → slurm/README.md
+└── figures/        assets versionnés (snapshots, GIF, growth_rate, convergence, perf) + provenance.json
+```
+
+Chaque sous-dossier porte son propre `README.md` listant ses fichiers. Les modules Python du cœur
+(`model`, `results`, `run`, `run_polar`, `check_model`) restent à la racine : ils s'importent
+mutuellement en same-dir (`from model import …`), donc ne se déplacent pas en sous-dossier.

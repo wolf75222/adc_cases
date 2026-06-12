@@ -10,8 +10,8 @@ Rendre la mesure du modele complet HONNETE et PRE-ENREGISTREE :
    Aucune fenetre adaptative n'est introduite (cf. ``verify_paper_windows``) ;
    mais le fit doit se faire sur le temps de SIMULATION MAPPE (voir point 2).
 
-2. CORRECTION T3 (audit de normalisation, juin 2026 ; cf. ``T2_NORMALIZATION_AUDIT.md``,
-   ``RESULTS_SYSTEM_SCHUR.md`` section 8, workflow de verif adversariale 4 lentilles).
+2. CORRECTION T3 (audit de normalisation, juin 2026 ; cf. ``docs/T2_NORMALIZATION_AUDIT.md``,
+   ``docs/RESULTS_SYSTEM_SCHUR.md`` section 8, workflow de verif adversariale 4 lentilles).
    La PREMISSE PRECEDENTE de ce module -- "la pente brute du modele complet est
    DIRECTEMENT comparable a 0.772/0.911/0.683, SANS facteur 2 pi ; le 2 pi
    appartient UNIQUEMENT au chemin reduit" -- est INCORRECTE. Mesure :
@@ -90,7 +90,7 @@ def paper_to_sim_time_window(window_paper, rhobar=1.0):
     omega_d CYCLIQUE (T_d = 1 = un tour = 2 pi radians). La conversion est
     ``t_sim = (2 pi / rhobar) * t_paper`` (rhobar = rho_max = 1). Appliquer la fenetre
     papier BRUTE au temps sim tomberait dans le transitoire (l'artefact -95 % d'origine) ;
-    il faut fitter sur ``t_sim in [2 pi lo, 2 pi hi]``. Voir ``T2_NORMALIZATION_AUDIT.md``.
+    il faut fitter sur ``t_sim in [2 pi lo, 2 pi hi]``. Voir ``docs/T2_NORMALIZATION_AUDIT.md``.
     """
     scale = 2.0 * math.pi / rhobar
     lo, hi = window_paper
@@ -140,7 +140,7 @@ def verify_paper_windows(windows):
     ENDPOINTS ; l'horloge est enforced par ``run.py:fit_growth`` qui fitte sur le temps
     sim MAPPE ``paper_to_sim_time_window(window, rhobar)`` (= 2pi/rhobar * window). Fitter
     la fenetre papier BRUTE sur le temps sim (l'ancien comportement) tombait dans le
-    transitoire -- c'etait l'origine de l'artefact -95 % (cf. T2_NORMALIZATION_AUDIT.md).
+    transitoire -- c'etait l'origine de l'artefact -95 % (cf. docs/T2_NORMALIZATION_AUDIT.md).
     """
     got = {int(k): (float(v[0]), float(v[1])) for k, v in windows.items()}
     want = {k: (float(v[0]), float(v[1])) for k, v in PAPER_FIT_WINDOWS_VERBATIM.items()}

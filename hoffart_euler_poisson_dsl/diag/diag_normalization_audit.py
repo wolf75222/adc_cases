@@ -5,8 +5,8 @@ But (plan user T2)
 -----------------
 Expliquer le deficit -95 % du run ``system-schur`` (``gamma_raw ~ 0.032``, fenetres
 papier, ``alpha = omega = 1e12``) PUREMENT par des facteurs DIMENSIONNELS derives a
-l'avance -- pas ajustes apres coup. La conclusion (cf. ``../RESULTS_SYSTEM_SCHUR.md``
-sections 7ter / 8 et ``../NORMALIZATION.md``) : le deficit n'est PAS la geometrie
+l'avance -- pas ajustes apres coup. La conclusion (cf. ``../docs/RESULTS_SYSTEM_SCHUR.md``
+sections 7ter / 8 et ``../docs/NORMALIZATION.md``) : le deficit n'est PAS la geometrie
 cartesienne ; c'est (a) la FENETRE DE FIT et (b) le facteur de temps ``T_d = 2 pi``.
 
 Cle dimensionnelle (``../model.py``)

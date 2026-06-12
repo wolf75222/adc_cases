@@ -1,6 +1,6 @@
 {
-  "adc_cases_sha": "abd4791",
-  "adc_cpp_sha": "dec3f18",
+  "adc_cases_sha": "065b0b5 (+run_mode_real minmod, branche adc-73-hoffart-reorg)",
+  "adc_cpp_sha": "481a854",
   "case": "hoffart_euler_poisson_dsl",
   "category": "reproduction-candidate",
   "figures": {
@@ -31,40 +31,49 @@
       "what": "raw full-system-schur growth rate vs paper target (mesure pre-T3, superseded)"
     },
     "snapshots_l3.png": {
-      "what": "grille 3x3 schlieren de la densite, mode l=3 (style Hoffart et al. Fig 5.1)",
-      "engine": "derive ExB normalisee (Scalar+ExB(B0=1)+ChargeDensity(charge=1)), n=128, t_f=10*T_d",
-      "reading": "anneau -> triangle (3-fold) -> rollup 3 bras -> filamentation ; reproduit qualitativement Fig 5.1",
+      "what": "grille 3x3 schlieren de la densite REELLE du modele complet, mode l=3 (style Hoffart et al. Fig 5.1)",
+      "engine": "full-system-schur (model.py compile, FiniteVolume minmod + rusanov conservatif, Strang SSPRK3 + CondensedSchur theta=0.5), n=96, t_f=10*T_d",
+      "positivity": "minmod (TVD) au lieu de WENO5 : WENO5 overshoote au saut top-hat -> rho<0 -> dt=0/NaN a ~38% de t_f (ADC-62/ADC-74) ; minmod garde rho_min ~ +5e-7 jusqu'a t_f",
+      "raw_state": "out/hoffart_paper_figures/mode_3/state_00000{0..8}.npz (sim.write, densite+phi reels aux 9 fractions)",
+      "reading": "anneau -> triangle (3-fold) -> rollup 3 bras -> filamentation ; reproduit qualitativement Fig 5.1 (filaments plus lisses que WENO5, diffusivite minmod)",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues (style papier)",
-      "source": "diag/make_paper_figures.py 3",
-      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
+      "source": "diag/make_paper_figures.py 3 (run_mode_real)",
+      "resolution": "n=96"
     },
     "snapshots_l4.png": {
-      "what": "grille 3x3 schlieren de la densite, mode l=4 (style Hoffart et al. Fig 5.2)",
-      "engine": "derive ExB normalisee, n=128, t_f=10*T_d",
+      "what": "grille 3x3 schlieren de la densite REELLE du modele complet, mode l=4 (style Hoffart et al. Fig 5.2)",
+      "engine": "full-system-schur (minmod + rusanov, Strang + CondensedSchur), n=96, t_f=10*T_d",
+      "positivity": "minmod (cf. snapshots_l3.png) ; rho_min ~ +5e-7 jusqu'a t_f",
+      "raw_state": "out/hoffart_paper_figures/mode_4/state_00000{0..8}.npz",
       "reading": "anneau -> carre -> etoile 4 -> 4 vortex + filaments ; reproduit qualitativement Fig 5.2",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues",
-      "source": "diag/make_paper_figures.py 4",
-      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
+      "source": "diag/make_paper_figures.py 4 (run_mode_real)",
+      "resolution": "n=96"
     },
     "snapshots_l5.png": {
-      "what": "grille 3x3 schlieren de la densite, mode l=5 (style Hoffart et al. Fig 5.3)",
-      "engine": "derive ExB normalisee, n=128, t_f=10*T_d",
+      "what": "grille 3x3 schlieren de la densite REELLE du modele complet, mode l=5 (style Hoffart et al. Fig 5.3)",
+      "engine": "full-system-schur (minmod + rusanov, Strang + CondensedSchur), n=96, t_f=10*T_d",
+      "positivity": "minmod (cf. snapshots_l3.png) ; rho_min ~ +4e-7 jusqu'a t_f",
+      "raw_state": "out/hoffart_paper_figures/mode_5/state_00000{0..8}.npz",
       "reading": "anneau -> pentagone -> etoile 5 -> 5 vortex en couronne ; reproduit qualitativement Fig 5.3",
       "palette": "disque blanc, exterieur ardoise #3C4358, schlieren colormap Blues",
-      "source": "diag/make_paper_figures.py 5",
-      "resolution": "n=256 (mise a jour qualite ; etait n=128)"
+      "source": "diag/make_paper_figures.py 5 (run_mode_real)",
+      "resolution": "n=96"
     },
     "diocotron_l3.gif": {
-      "what": "animation du rollup diocotron l=3 (memes couleurs que Fig 5.1)",
-      "source": "diag/make_paper_figures.py 3"
+      "what": "animation du rollup diocotron l=3, densite reelle du modele complet (memes couleurs que Fig 5.1)",
+      "engine": "full-system-schur (minmod), n=96 -- cf. snapshots_l3.png",
+      "source": "diag/make_paper_figures.py 3 (run_mode_real)"
     },
     "diocotron_l4.gif": {
-      "what": "animation du rollup diocotron l=4 (memes couleurs que Fig 5.2)",
-      "source": "diag/make_paper_figures.py 4"
+      "what": "animation du rollup diocotron l=4, densite reelle du modele complet (memes couleurs que Fig 5.2)",
+      "engine": "full-system-schur (minmod), n=96 -- cf. snapshots_l4.png",
+      "source": "diag/make_paper_figures.py 4 (run_mode_real)"
     },
     "diocotron_l5.gif": {
-      "what": "animation du rollup diocotron l=5 (memes couleurs que Fig 5.3)",
-      "source": "diag/make_paper_figures.py 5"
+      "what": "animation du rollup diocotron l=5, densite reelle du modele complet (memes couleurs que Fig 5.3)",
+      "engine": "full-system-schur (minmod), n=96 -- cf. snapshots_l5.png",
+      "source": "diag/make_paper_figures.py 5 (run_mode_real)"
     },
     "growth_rate.png": {
       "what": "taux de croissance, style Hoffart et al. Fig 5.4 : (a,b,c) |c_l(t)|/|c_l(0)| semilog + fenetre MAPPEE + pente papier ; (d) gamma vs cible",

@@ -525,7 +525,7 @@ def write_summary(results, out, params, args):
             "model AND the reduced ExB (alpha/|Omega|=1/rho_max=1 -> same drift field); the prior "
             "'no 2pi for full' premise was incorrect. Fit windows are the paper windows MAPPED to "
             "sim time (t_sim=2pi/rhobar * t_paper). Residual after 2pi (~8-14%%) is cart ring-edge + "
-            "resolution + window roll-off = metrologie PARTIELLE. See T2_NORMALIZATION_AUDIT.md."
+            "resolution + window roll-off = metrologie PARTIELLE. See docs/T2_NORMALIZATION_AUDIT.md."
             % params.rho_max
         ),
         "adc_cpp_sha": cpp_sha,

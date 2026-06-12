@@ -183,7 +183,7 @@ needs = ["matplotlib"]
 desc = "Vise arXiv:2510.11808 sur GRILLE POLAIRE (anneau resolu) : modele complet Euler-Poisson isotherme magnetise + etage Schur condense polaire (#215), Poisson polaire direct, IsothermalFluxPolar (#209), mono-rang. Leve le verrou des bords d'anneau cartesiens (cf. adc_cpp/docs/HOFFART_GEOMETRY_VERDICT.md). Reproduction quantitative PAS encore etablie -> hors CI."
 
 [[case]]
-path = "hoffart_euler_poisson_dsl/test_polar_assembly.py"
+path = "hoffart_euler_poisson_dsl/tests/test_polar_assembly.py"
 category = "validation"
 ci = true
 needs = []

@@ -114,7 +114,7 @@ OMEGA_D = 1.0       # frequence diocotron cyclique du papier (lignes 313-317)
 PAPER = {3: 0.772, 4: 0.911, 5: 0.683}
 
 # Parties reelles analytiques |Re(omega)| en unite ExB-naturelle (rotation propre du mode)
-# et ratio invariant d'echelle Im/Re ; valeurs publiees dans ../NORMALIZATION.md /
+# et ratio invariant d'echelle Im/Re ; valeurs publiees dans ../docs/NORMALIZATION.md /
 # diag_polar_omega.py. Servent de controle croise independant de l'unite.
 RE_ANA = {3: 0.33144, 4: 0.43859, 5: 0.54747}
 RATIO_ANA = {3: 0.3708, 4: 0.3309, 5: 0.1998}

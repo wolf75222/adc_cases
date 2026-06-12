@@ -47,7 +47,7 @@ Cibles analytiques (eigenmode complexe, echelle papier 6:8:16, top-hat) :
     |Re(omega)|_ana             : l=3 -> 0.331, l=4 -> 0.439, l=5 -> 0.547
     ratio Im/Re analytique      : l=3 -> 0.371, l=4 -> 0.331, l=5 -> 0.200
 
-Conclusion attendue (cf. ../NORMALIZATION.md)
+Conclusion attendue (cf. ../docs/NORMALIZATION.md)
 ---------------------------------------------
 g_2pi reproduit le papier (l=4 exact a n=128 et n=192 ; l=3 +26% ; l=5 oscille
 selon la fenetre de fit, c'est de la sensibilite a la fenetre, pas un deficit

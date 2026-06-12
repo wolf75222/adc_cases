@@ -152,8 +152,9 @@ def _install_fake_adc():
 
 
 def _import_run_polar():
-    if HERE not in sys.path:
-        sys.path.insert(0, HERE)
+    case_root = os.path.dirname(HERE)   # tests/ -> la racine du cas (model.py, run*.py)
+    if case_root not in sys.path:
+        sys.path.insert(0, case_root)
     import importlib
     if "run_polar" in sys.modules:
         del sys.modules["run_polar"]
@@ -173,6 +174,8 @@ class _Args:
         self.cs2 = 0.0
         self.theta = 0.5
         self.strang = False
+        self.limiter = "weno5"  # defaut de l'argparse (--limiter)
+        self.ic = "equilibrium"  # defaut de l'argparse (--ic)
         # Defauts du chemin --frozen-equilibrium (option c).
         self.dt = 1.0e-3
         self.cfl = 0.0

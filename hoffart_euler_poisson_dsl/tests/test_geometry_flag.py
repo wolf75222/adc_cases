@@ -76,8 +76,9 @@ def _install_fake_adc():
 
 
 def _import_run():
-    if HERE not in sys.path:
-        sys.path.insert(0, HERE)
+    case_root = os.path.dirname(HERE)   # tests/ -> la racine du cas (model.py, run*.py)
+    if case_root not in sys.path:
+        sys.path.insert(0, case_root)
     # Make `from adc_cases.common.io import case_output_dir` importable without
     # the installed package (the case appends the repo root itself on ImportError).
     import importlib

@@ -44,8 +44,9 @@ def _install_fake_adc():
 
 
 def _import_model():
-    if HERE not in sys.path:
-        sys.path.insert(0, HERE)
+    case_root = os.path.dirname(HERE)   # tests/ -> la racine du cas (model.py, run*.py)
+    if case_root not in sys.path:
+        sys.path.insert(0, case_root)
     import importlib
     # Recharge le module si deja en cache avec un faux adc.
     if "model" in sys.modules:
