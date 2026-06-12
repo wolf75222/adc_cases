@@ -17,9 +17,15 @@ Flux physiques (M50, M41, M32, M23, M14, M05 reconstruits par la fermeture) :
     Fy = [M01 M11 M21 M31 M41 M02 M12 M22 M32 M03 M13 M23 M04 M14 M05]
 
 20 des 30 entrees sont des recopies directes de U (ordre <= 4) ; seules les 6 reconstructions
-d'ordre 5 portent la fermeture. Le pipeline M -> C -> S -> fermeture -> C5 -> M5 est emis en
-let-bindings `m.primitive(...)` : chaque intermediaire devient une variable locale C++ nommee,
-les formules aval ne referencent que des feuilles Var (codegen lineaire, pas de re-expansion).
+d'ordre 5 portent la fermeture.
+
+Depuis ADC-172, le pipeline M -> C -> S -> fermeture -> C5 -> M5 n'est PLUS transcrit a la
+main : il est GENERE par adc.moments (adc_cpp ADC-164), qui derive l'algebre binomiale en
+boucles sur l'AST de la DSL (let-bindings -> variables locales C++ nommees, codegen lineaire).
+Ne restent manuels ici que : la fermeture (`hyqmom_closure`), les blocs spectraux
+(`HYQMOM_BLOCKS`), la borne bring-up k*sqrt(C) et le cablage plasma (sources Lorentz via
+adc.moments.lorentz_sources, Poisson, omega_p). Equivalence a l'ancien modele manuel verifiee
+sur les goldens MATLAB (flux 7.7e-13, vitesses 8e-10 hors etat quasi-degenere) -- voir run.py.
 
 References : RIEMOM2D/{Flux_closure15_2D.m, M2CS4_15.m, M4toC4.m, closureS5.m, C5toM5.m} ;
 document maths main.pdf eq. 1.8-1.12 (Bryngelson, Fox & Laurent 2025, hal-05398171).
@@ -28,6 +34,7 @@ document maths main.pdf eq. 1.8-1.12 (Bryngelson, Fox & Laurent 2025, hal-053981
 import numpy as np
 
 from adc import dsl
+from adc import moments as gmom
 
 # Noms et exposants (p, q) de M_pq, dans l'ordre du vecteur d'etat.
 MOMENT_NAMES = ["M00", "M10", "M20", "M30", "M40", "M01", "M11", "M21", "M31",
@@ -37,6 +44,10 @@ MOMENT_PQ = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (0, 1), (1, 1), (2, 1), (3,
 
 # Indices (0-based) dans U de chaque moment, pour l'assemblage des flux.
 IDX = {name: k for k, name in enumerate(MOMENT_NAMES)}
+
+# Contrat de layout avec le generateur generique adc.moments (adc_cpp ADC-164) : son ordre
+# canonique (q externe, p interne) EST l'ordre du document maths / MATLAB. Verifie a l'import.
+assert MOMENT_NAMES == gmom.moment_names(4) and MOMENT_PQ == gmom.moment_indices(4)
 
 # Borne de vitesse bring-up : |u| + K_SPEED*sqrt(C). Les vraies valeurs propres (eigenvalues15_2D
 # flagsym=1, cf. golden/golden_vp.csv) s'etendent a u +- sqrt(6)*sqrt(C20) ~ +-2.449*sqrt(C20)
@@ -100,24 +111,12 @@ def moment_sources(U, ex, ey, qm, oc):
     references existent toujours) ; le terme magnetique CONSERVE l'ordre total (rotation dans
     l'espace des vitesses : la hierarchie d'ordre <= 4 est fermee sous B). @p U : dict nom ->
     Expr/valeur ; @p ex, ey : champ electrique (Expr aux ou valeurs) ; @return liste de 15
-    expressions dans l'ordre de MOMENT_NAMES (S[M00] = 0.0 : la masse n'a pas de source)."""
-    def M(a, b):
-        return U[MOMENT_NAMES[MOMENT_PQ.index((a, b))]]
+    expressions dans l'ordre de MOMENT_NAMES (S[M00] = 0.0 : la masse n'a pas de source).
 
-    out = []
-    for (p, q) in MOMENT_PQ:
-        terms = []
-        if p >= 1:
-            terms.append(qm * (float(p) * ex * M(p - 1, q)))
-            terms.append(oc * (float(p) * M(p - 1, q + 1)))
-        if q >= 1:
-            terms.append(qm * (float(q) * ey * M(p, q - 1)))
-            terms.append(-1.0 * oc * (float(q) * M(p + 1, q - 1)))
-        expr = None
-        for t in terms:
-            expr = t if expr is None else expr + t
-        out.append(0.0 if expr is None else expr)
-    return out
+    Adaptateur nom -> (p, q) au-dessus de la hierarchie generique adc.moments.lorentz_sources
+    (adc_cpp ADC-164, meme formule remontee dans le coeur car independante de la fermeture)."""
+    return gmom.lorentz_sources({pq: U[nm] for pq, nm in zip(MOMENT_PQ, MOMENT_NAMES)},
+                                ex, ey, qm, oc)
 
 
 def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
@@ -126,15 +125,23 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
                        omega_p=None, exact_speeds=False):
     """Construit le modele DSL 15 moments avec la fermeture @p closure.
 
+    Le corps est delegue au generateur generique adc.moments.build_moment_model (order=4) :
+    seule la fermeture, les blocs, la borne bring-up et le cablage plasma restent ici.
+
     @p robust : False (defaut) = mode bit_match, AUCUNE garde, fidele au MATLAB qui n'en a
     aucune (division par M00, sqrt(C20), sqrt(C02) inconditionnels) -- requis pour la
-    validation golden. True = planchers M00/C20/C02 (max lisse via |.|) dans les formules,
-    cote cas uniquement, jamais dans le coeur.
+    validation golden. True = planchers M00/C20/C02 (max lisse via |.|), cote cas uniquement,
+    jamais dans le coeur. Nuance vs l'ancien modele manuel : le generateur n'utilise les
+    planchers C20/C02 que la ou ils protegent (sqrt, divisions de standardisation), pas dans
+    les termes polynomiaux de la reconstruction d'ordre 5 -- identique sur etat sain (les
+    planchers y sont l'identite), differences uniquement pres de la degenerescence, ou les
+    deux variantes restent finies.
 
     @p with_sources : ajoute la source de la hierarchie (moment_sources) -- electrique via les
     canaux aux canoniques grad_x/grad_y (Ex = -d phi/dx, rempli par le Poisson du systeme ou
     nul sans champ) et magnetique via la constante @p omega_c (q B / m, cuite au codegen).
-    False (defaut) : modele STRICTEMENT identique a la validation golden ADC-82 (hash inchange).
+    False (defaut) : aucun bloc source emis -- partie flux strictement identique au modele
+    sans sources (valide par les goldens ADC-82).
 
     @p debye : longueur de Debye ADIMENSIONNEE lambda (None = pas de couplage Poisson). Emet
     elliptic_rhs((M00 - rho_background) / lambda^2) : ADC resout Delta(phi) = rhs SANS deflater
@@ -155,141 +162,50 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
     du chemin flagsym=1 du MATLAB) -- ouvre riemann='hll' fidele et REMPLACE la borne bring-up
     k*sqrt(C) par la verite spectrale pour Rusanov/CFL aussi (max_wave_speed sur les memes
     blocs). Exige adc_cpp >= ADC-87. False (defaut) : borne bring-up historique (eigenvalues
-    k*sqrt(C)), modele golden ADC-82 strictement inchange.
+    k*sqrt(C), formules identiques a l'ancien modele manuel, planchers compris en robust).
     @return adc.dsl.Model pret a compiler."""
-    m = dsl.Model(name)
-    cons = m.conservative_vars(*MOMENT_NAMES)
-    U = dict(zip(MOMENT_NAMES, cons))
-
-    def let(nm, expr):
-        return m.primitive(nm, expr)
-
-    def floor(nm, x, eps):
-        # max(x, eps) = ((x + eps) + |x - eps|) / 2 : plancher lisse, exprimable dans l'AST.
-        return let(nm, ((x + eps) + dsl.abs_(x - eps)) / 2.0)
-
-    # --- vitesses moyennes (et denominateurs proteges en mode robust) ---
-    M00 = floor("M00f", U["M00"], eps_m00) if robust else U["M00"]
-    ux = let("ux", U["M10"] / M00)
-    uy = let("uy", U["M01"] / M00)
-    ux2 = let("ux2", ux * ux)
-    uy2 = let("uy2", uy * uy)
-    ux3 = let("ux3", ux2 * ux)
-    uy3 = let("uy3", uy2 * uy)
-
-    # --- moments centres (M4toC4.m, reecrits en ux/uy : algebriquement identiques) ---
-    c20_raw = U["M20"] / M00 - ux2
-    c02_raw = U["M02"] / M00 - uy2
-    C20 = floor("C20", c20_raw, eps_c) if robust else let("C20", c20_raw)
-    C02 = floor("C02", c02_raw, eps_c) if robust else let("C02", c02_raw)
-    C11 = let("C11", U["M11"] / M00 - ux * uy)
-    C30 = let("C30", U["M30"] / M00 - 3.0 * ux * (U["M20"] / M00) + 2.0 * ux3)
-    C03 = let("C03", U["M03"] / M00 - 3.0 * uy * (U["M02"] / M00) + 2.0 * uy3)
-    C21 = let("C21", U["M21"] / M00 - uy * (U["M20"] / M00) - 2.0 * ux * (U["M11"] / M00)
-              + 2.0 * ux2 * uy)
-    C12 = let("C12", U["M12"] / M00 - ux * (U["M02"] / M00) - 2.0 * uy * (U["M11"] / M00)
-              + 2.0 * uy2 * ux)
-    C40 = let("C40", U["M40"] / M00 - 4.0 * ux * (U["M30"] / M00)
-              + 6.0 * ux2 * (U["M20"] / M00) - 3.0 * ux2 * ux2)
-    C04 = let("C04", U["M04"] / M00 - 4.0 * uy * (U["M03"] / M00)
-              + 6.0 * uy2 * (U["M02"] / M00) - 3.0 * uy2 * uy2)
-    C31 = let("C31", U["M31"] / M00 - uy * (U["M30"] / M00) - 3.0 * ux * (U["M21"] / M00)
-              + 3.0 * ux * uy * (U["M20"] / M00) + 3.0 * ux2 * (U["M11"] / M00)
-              - 3.0 * ux3 * uy)
-    C13 = let("C13", U["M13"] / M00 - ux * (U["M03"] / M00) - 3.0 * uy * (U["M12"] / M00)
-              + 3.0 * ux * uy * (U["M02"] / M00) + 3.0 * uy2 * (U["M11"] / M00)
-              - 3.0 * uy3 * ux)
-    C22 = let("C22", U["M22"] / M00 - 2.0 * ux * (U["M12"] / M00) - 2.0 * uy * (U["M21"] / M00)
-              + ux2 * (U["M02"] / M00) + uy2 * (U["M20"] / M00)
-              + 4.0 * ux * uy * (U["M11"] / M00) - 3.0 * ux2 * uy2)
-
-    # --- standardisation (M2CS4_15.m) : S_ij = C_ij / (C20^(i/2) C02^(j/2)) ---
-    sC20 = let("sC20", dsl.sqrt(C20))
-    sC02 = let("sC02", dsl.sqrt(C02))
-    S = {}
-    S["S11"] = let("S11", C11 / (sC20 * sC02))
-    S["S30"] = let("S30", C30 / (C20 * sC20))
-    S["S21"] = let("S21", C21 / (C20 * sC02))
-    S["S12"] = let("S12", C12 / (C02 * sC20))
-    S["S03"] = let("S03", C03 / (C02 * sC02))
-    S["S40"] = let("S40", C40 / (C20 * C20))
-    S["S31"] = let("S31", C31 / (C20 * sC20 * sC02))
-    S["S22"] = let("S22", C22 / (C20 * C02))
-    S["S13"] = let("S13", C13 / (sC20 * C02 * sC02))
-    S["S04"] = let("S04", C04 / (C02 * C02))
-
-    # --- fermeture (callable, contrat : S -> 6 moments standardises d'ordre 5) ---
-    S5 = closure(S)
-    S50 = let("S50", S5["S50"])
-    S41 = let("S41", S5["S41"])
-    S32 = let("S32", S5["S32"])
-    S23 = let("S23", S5["S23"])
-    S14 = let("S14", S5["S14"])
-    S05 = let("S05", S5["S05"])
-
-    # --- de-standardisation (Flux_closure15_2D.m) : C_ij = S_ij sC20^i sC02^j ---
-    C50 = let("C50", S50 * C20 * C20 * sC20)
-    C41 = let("C41", S41 * C20 * C20 * sC02)
-    C32 = let("C32", S32 * C20 * sC20 * C02)
-    C23 = let("C23", S23 * C20 * C02 * sC02)
-    C14 = let("C14", S14 * sC20 * C02 * C02)
-    C05 = let("C05", S05 * C02 * C02 * sC02)
-
-    # --- moments bruts d'ordre 5 (C5toM5.m, les 6 entrees d'ordre 5 uniquement ; les entrees
-    # d'ordre <= 4 du round-trip MATLAB sont algebriquement identiques a U : recopies directes) ---
-    M50 = let("M50", M00 * (ux3 * ux2 + C50 + 10.0 * C20 * ux3 + 10.0 * C30 * ux2
-                            + 5.0 * C40 * ux))
-    M41 = let("M41", M00 * (C41 + 4.0 * C11 * ux3 + 6.0 * C21 * ux2 + 4.0 * C31 * ux
-                            + C40 * uy + ux2 * ux2 * uy + 6.0 * C20 * ux2 * uy
-                            + 4.0 * C30 * ux * uy))
-    M32 = let("M32", M00 * (C32 + C02 * ux3 + 3.0 * C12 * ux2 + C30 * uy2 + 3.0 * C22 * ux
-                            + 2.0 * C31 * uy + ux3 * uy2 + 3.0 * C20 * uy2 * ux
-                            + 6.0 * C11 * ux2 * uy + 6.0 * C21 * ux * uy))
-    M23 = let("M23", M00 * (C23 + C03 * ux2 + C20 * uy3 + 3.0 * C21 * uy2 + 2.0 * C13 * ux
-                            + 3.0 * C22 * uy + ux2 * uy3 + 6.0 * C11 * uy2 * ux
-                            + 3.0 * C02 * ux2 * uy + 6.0 * C12 * ux * uy))
-    M14 = let("M14", M00 * (C14 + 4.0 * C11 * uy3 + 6.0 * C12 * uy2 + C04 * ux
-                            + 4.0 * C13 * uy + uy2 * uy2 * ux + 6.0 * C02 * uy2 * ux
-                            + 4.0 * C03 * ux * uy))
-    M05 = let("M05", M00 * (uy3 * uy2 + C05 + 10.0 * C02 * uy3 + 10.0 * C03 * uy2
-                            + 5.0 * C04 * uy))
-
-    # --- assemblage des flux : 20 recopies de U + 6 reconstructions (M41/M32/M23/M14 partages) ---
-    m.flux(
-        x=[U["M10"], U["M20"], U["M30"], U["M40"], M50,
-           U["M11"], U["M21"], U["M31"], M41,
-           U["M12"], U["M22"], M32,
-           U["M13"], M23,
-           M14],
-        y=[U["M01"], U["M11"], U["M21"], U["M31"], M41,
-           U["M02"], U["M12"], U["M22"], M32,
-           U["M03"], U["M13"], M23,
-           U["M04"], M14,
-           M05])
-
-    if exact_speeds:
-        # vitesses EXACTES : autodiff du flux + blocs du MATLAB flagsym=1 (HYQMOM_BLOCKS).
-        # PAS de m.eigenvalues : max_wave_speed derive des memes blocs (une seule verite).
-        m.wave_speeds_from_jacobian(blocks=HYQMOM_BLOCKS)
-    else:
-        # Borne de vitesse bring-up (Rusanov / CFL) : voir K_SPEED. NON-production.
-        k = m.param("k_speed", K_SPEED)
-        m.eigenvalues(x=[ux - k * sC20, ux + k * sC20],
-                      y=[uy - k * sC02, uy + k * sC02])
-
-    # Layout primitif identite (pas de reconstruction en variables primitives pour ce modele) ;
-    # to_conservative est l'identite correspondante.
-    m.primitive_vars(*cons)
-    m.conservative_from(list(cons))
-
+    src = None
     if with_sources:
-        gx = m.aux("grad_x")
-        gy = m.aux("grad_y")
-        qm = m.param("q_over_m", q_over_m)
-        oc = m.param("omega_c", omega_c)
-        m.source(moment_sources(U, -1.0 * gx, -1.0 * gy, qm, oc))  # E = -grad phi
-        if omega_p is not None:
-            m.source_frequency(omega_p + 0.0 * U["M00"])  # borne dt source (constante)
+        def src(m_, M_):
+            # canaux aux canoniques grad_x/grad_y (Ex = -d phi/dx) + constantes cuites.
+            gx = m_.aux("grad_x")
+            gy = m_.aux("grad_y")
+            qm = m_.param("q_over_m", q_over_m)
+            oc = m_.param("omega_c", omega_c)
+            return gmom.lorentz_sources(M_, -1.0 * gx, -1.0 * gy, qm, oc)  # E = -grad phi
+
+    m = gmom.build_moment_model(name, 4, closure,
+                                blocks=HYQMOM_BLOCKS if exact_speeds else None,
+                                exact_speeds=exact_speeds, robust=robust,
+                                eps_m00=eps_m00, eps_cov=eps_c, sources=src)
+
+    # Poignees par NOM vers les conservatives declarees par le generateur (les Var de la DSL
+    # s'identifient par nom a l'emission : aucune re-declaration).
+    U = {nm: dsl.Var(nm, "cons") for nm in MOMENT_NAMES}
+
+    if not exact_speeds:
+        # Borne bring-up historique k*sqrt(C) (voir K_SPEED ; NON-production) : formules
+        # inline strictement identiques au modele manuel d'origine (memes operations, memes
+        # planchers en mode robust) -- le CSE du codegen les fusionne avec celles du flux.
+        k = m.param("k_speed", K_SPEED)
+
+        def _floor(x, eps):
+            return ((x + eps) + dsl.abs_(x - eps)) / 2.0
+
+        M00b = _floor(U["M00"], eps_m00) if robust else U["M00"]
+        ux = U["M10"] / M00b
+        uy = U["M01"] / M00b
+        c20 = U["M20"] / M00b - ux * ux
+        c02 = U["M02"] / M00b - uy * uy
+        if robust:
+            c20 = _floor(c20, eps_c)
+            c02 = _floor(c02, eps_c)
+        sx = dsl.sqrt(c20)
+        sy = dsl.sqrt(c02)
+        m.eigenvalues(x=[ux - k * sx, ux + k * sx], y=[uy - k * sy, uy + k * sy])
+
+    if with_sources and omega_p is not None:
+        m.source_frequency(omega_p + 0.0 * U["M00"])  # borne dt source (constante)
     if debye is not None:
         inv_l2 = m.param("inv_debye2", 1.0 / float(debye) ** 2)
         rho_bg = m.param("rho_background", float(rho_background))

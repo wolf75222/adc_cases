@@ -8,7 +8,7 @@
 | Entrees | 10 etats figes `golden/golden_states.csv` (4 gaussiennes dont correlee et haut Mach ~ 20, 5 melanges discrets dont un quasi-degenere C20 ~ 1e-6, 1 gaussienne anisotrope C20/C02 = 100) ; aucun maillage : validation ponctuelle du flux. |
 | Sorties | aucun fichier produit (asserts) ; `.so` production et aot compiles dans `out/hyqmom15/`. |
 | Invariants garantis | (1) `eval_flux` == `Flux_closure15_2D.m` sur 10 etats x {Fx, Fy}, rtol 1e-12 + atol 1e-13 x echelle de l'etat (`run.py:89-101`) ; (2) les 6 entrees d'ordre 5 == moments bruts exacts d'Isserlis sur 4 gaussiennes, rtol 1e-12 (`run.py:104-118`) ; (3) les 20 recopies d'ordre <= 4 bit-identiques a U, `np.array_equal` (`run.py:121-130`) ; (4) `check_model` passe sur les 10 etats realisables, compilation AOT chronometree SANS assert mural (`run.py:132-150`) ; (5) contraste degenere C20 = 0 : flux `bit_match` divergent ET flux `robust` fini (`run.py:153-168`) ; (6) anti-derive goldens (`run.py:70-78`) + borne k*sqrt(C) confrontee aux vraies vitesses de `golden_vp.csv` : gaussiennes a sqrt(6)*sqrt(C) exactement, au moins un melange DEPASSE la borne (`run.py:170-202`). |
-| Prouve | la transcription DSL du pipeline de fermeture (M -> C -> S -> closureS5 -> C5 -> M5) est correcte au sens du code MATLAB de reference, execute reellement (Octave) et non re-transcrit ; la fermeture est exacte sur les gaussiennes ; le modele compile et se lie par les chemins production et aot. |
+| Prouve | le pipeline de fermeture (M -> C -> S -> closureS5 -> C5 -> M5), GENERE par `adc.moments` (adc_cpp ADC-164) depuis la seule fermeture, est correct au sens du code MATLAB de reference, execute reellement (Octave) et non re-transcrit ; la fermeture est exacte sur les gaussiennes ; le modele compile et se lie par les chemins production et aot ; l'equivalence a l'ancien modele transcrit a la main est etablie (flux 2.6e-13, borne bring-up et sources bit-exactes, ADC-172). |
 | Ne prouve pas | la stabilite d'une evolution temporelle (aucun pas de temps ici : drivers ADC-84/85) ; les vitesses d'onde HLL exactes (ADC-87/88 ; `golden_vp.csv` ne sert ici qu'a ENCADRER la borne bring-up, pas a valider un calcul de vitesses du modele) ; la SURETE de la borne bring-up `|u| + 3 sqrt(C)` hors gaussiennes : l'invariant (6) DEMONTRE qu'elle est depassee par des melanges realisables (pire ratio 3.29 sur le jeu, non borne pres de la frontiere de realisabilite) -- demarrage Rusanov uniquement, jamais production ; le mode `robust` au-dela de la finitude (les planchers n'existent pas dans le MATLAB) ; l'execution du `.so` dans un `System` (compilation et chargement seulement, pas de pas de temps) ; les chemins device GPU/Kokkos et MPI. |
 | Provenance | RIEMOM2D `0f2a196`, GNU Octave 11.3.0 (aarch64-darwin), adc_cpp `4bb7cec`, backends production + aot, macOS ; cout : ~10 s (compilations comprises). |
 
@@ -42,38 +42,44 @@ recopient une composante de U (justifie l'invariant (3)) ; les 6 moments d'ordre
 
 | Ligne | Couche | Ce qui se passe |
 |---|---|---|
-| `run.py:215` `build_moment_model()` | Python compose | construction du modele symbolique, fermeture choisie par callable |
-| `model.py:89-203` (48 `m.primitive(...)` + `m.flux(...)`) | expressions DSL compilees | le pipeline M -> C -> S -> closureS5 -> C5 -> M5 fige en C++ genere |
-| `m.compile(..., backend="aot")` (`run.py:136-150`) | brique compilee | flux evalue par cellule sans callback Python |
+| `run.py` `build_moment_model()` | Python compose | construction du modele symbolique, fermeture choisie par callable |
+| `adc.moments.build_moment_model(order=4, closure, ...)` | generateur (adc_cpp ADC-164) | le pipeline M -> C -> S -> closureS5 -> C5 -> M5 DERIVE en boucles sur l'AST (let-bindings -> locales C++ nommees) |
+| `m.compile(..., backend="aot")` (`run.py`) | brique compilee | flux evalue par cellule sans callback Python |
 
-## 3. Code : le pipeline de fermeture, fonction par fonction
+## 3. Code : qui fait quoi depuis l'adoption du generateur (ADC-172)
 
-Tout est dans [model.py](model.py) ; chaque etage est un let-binding `m.primitive(nom, expr)`,
-donc une variable locale nommee du C++ genere, et les formules aval ne referencent que des
-feuilles (codegen lineaire en la taille du pipeline, 48 primitives, construction < 0.01 s).
+Le pipeline n'est PLUS transcrit a la main : `build_moment_model` de [model.py](model.py) est
+un emballage de `adc.moments.build_moment_model(order=4, closure=hyqmom_closure,
+blocks=HYQMOM_BLOCKS, robust=, sources=)` (adc_cpp ADC-164). Le generateur derive l'algebre
+en boucles sur l'AST de la DSL -- memes etages qu'avant, chacun en let-bindings (variables
+locales nommees du C++ genere, codegen lineaire) :
 
-- `model.py:102-107` : vitesses moyennes `ux = M10/M00`, `uy = M01/M00` et leurs puissances.
-- `model.py:110-133` : les 12 moments centres C20..C04 (transcription de `M4toC4.m`, reecrits
-  en `ux`/`uy` ; algebriquement identiques, d'ou la tolerance d'arrondi rtol 1e-12 du golden et
-  non l'egalite bit).
-- `model.py:136-148` : standardisation `S_ij = C_ij / (C20^(i/2) C02^(j/2))` (`M2CS4_15.m`),
-  via `sC20 = sqrt(C20)` et des produits entiers (jamais de `pow` fractionnaire).
-- `model.py:61-78` `hyqmom_closure` : transcription LITTERALE de `closureS5.m` (forme
-  polynomiale). Attention de transcription : les variantes `Moments5.m` et `S5_2D.m` du depot
-  MATLAB different sur S32/S23 ; le chemin de flux de reference appelle `closureS5`, c'est elle
-  qui est transcrite et le golden (1) detecterait toute derive.
-- `model.py:160-165` : de-standardisation `C_ij = S_ij sC20^i sC02^j` (`Flux_closure15_2D.m`
-  lignes 55-62).
-- `model.py:169-186` : moments bruts d'ordre 5 (`C5toM5.m`, seules les 6 entrees d'ordre 5 ;
-  les entrees d'ordre <= 4 du round-trip MATLAB se simplifient exactement en les composantes
-  de U, assemblees comme recopies directes en `model.py:187-198`).
-- borne de vitesse bring-up `u +- 3 sqrt(C)` (`m.eigenvalues`, fin de `build_moment_model`) :
-  les vraies vitesses (eigenvalues15_2D, `golden_vp.csv`) valent EXACTEMENT `u +- sqrt(6) sqrt(C)`
-  sur une gaussienne (k = 3 couvre, marge ~22 %) mais des melanges asymetriques realisables
-  depassent k = 3 (pire ratio 3.29 sur le jeu golden) -- voir Ne prouve pas et l'invariant (6).
-- Mode `robust=True` (`model.py:96-98`) : plancher lisse `max(x, eps) = ((x+eps)+|x-eps|)/2`
-  sur M00, C20, C02. Hors MATLAB (qui ne protege rien : division par M00 et sqrt(C20)
-  inconditionnels, `closureS5.m` test p2p2 commente) ; smoke de finitude seulement.
+- vitesses moyennes `u = M10/M00`, `v = M01/M00` ; moments centres C20..C04 par transformation
+  binomiale (l'equivalent de `M4toC4.m`, derive et non transcrit -- algebriquement identique,
+  d'ou la tolerance d'arrondi rtol 1e-12 du golden et non l'egalite bit) ; standardisation
+  `S_ij = C_ij/(sx^i sy^j)` (`M2CS4_15.m`) via `sx = sqrt(C20)` et produits entiers ;
+  de-standardisation et moments bruts d'ordre 5 par binomiale inverse (`Flux_closure15_2D.m`
+  lignes 55-62 + `C5toM5.m`) ; les entrees d'ordre <= 4 du flux restent des recopies directes
+  de U.
+- RESTE MANUEL dans model.py, et seulement cela :
+  - `hyqmom_closure` : transcription LITTERALE de `closureS5.m` (forme polynomiale).
+    Attention : les variantes `Moments5.m` et `S5_2D.m` du depot MATLAB different sur S32/S23 ;
+    le chemin de flux de reference appelle `closureS5`, c'est elle qui est transcrite et le
+    golden (1) detecterait toute derive. C'est l'UNIQUE physique du modele : une autre
+    fermeture du meme contrat (S -> ordre 5 standardise) se branche par simple callable.
+  - `HYQMOM_BLOCKS` : partition spectrale du chemin production MATLAB (section 7).
+  - la borne bring-up `u +- 3 sqrt(C)` (`m.eigenvalues`, exprimee inline avec les MEMES
+    operations que l'ancien modele manuel -- valeurs bit-identiques) : les vraies vitesses
+    (`golden_vp.csv`) valent EXACTEMENT `u +- sqrt(6) sqrt(C)` sur une gaussienne (k = 3
+    couvre, marge ~22 %) mais des melanges asymetriques realisables depassent k = 3 (pire
+    ratio 3.29) -- voir Ne prouve pas et l'invariant (6).
+  - le cablage plasma : sources Lorentz (section 5), Poisson (section 6), omega_p.
+- Mode `robust=True` : plancher lisse `max(x, eps) = ((x+eps)+|x-eps|)/2` sur M00, C20, C02
+  (cote generateur). Hors MATLAB (qui ne protege rien : division par M00 et sqrt(C20)
+  inconditionnels, `closureS5.m` test p2p2 commente) ; smoke de finitude seulement. Nuance vs
+  l'ancien modele manuel : les planchers C20/C02 ne sont appliques que la ou ils protegent
+  (sqrt, divisions de standardisation), pas dans les termes polynomiaux de la reconstruction
+  d'ordre 5 -- identique sur etat sain, fini des deux cotes pres de la degenerescence.
 
 ## 4. Maths : les deux oracles independants
 
@@ -90,13 +96,13 @@ Oracle gaussien : pour une gaussienne 2D de covariance $[[C_{20}, C_{11}], [C_{1
 tout moment centre d'ordre impair est nul (Isserlis), donc les six $C$ d'ordre 5 sont nuls et
 les moments bruts $M_{pq}$ d'ordre 5 ont la forme fermee du binome
 $M_{pq} = \rho \sum_{ij} \binom{p}{i}\binom{q}{j} u_x^{p-i} u_y^{q-j} C_{ij}$
-(`model.py:238-254`, calcule sans le pipeline). La fermeture HyQMOM est exacte sur ce cas :
+(`model.py` `gaussian_raw_moment`, calcule sans le pipeline). La fermeture HyQMOM est exacte sur ce cas :
 avec $S_{30} = S_{21} = S_{12} = S_{03} = 0$, chaque formule de `closureS5` s'annule terme a
 terme, y compris pour $C_{11} \neq 0$ (etat correle n. 3). L'oracle verifie donc le pipeline
 complet de bout en bout sur une famille a 6 parametres, independamment du MATLAB.
 
 Realisabilite des etats de test : les melanges discrets $f = \sum_k w_k \delta(v - v_k)$
-(`model.py:257-266`) sont des distributions, leurs moments sont realisables par construction ;
+(`model.py` `mixture_state`) sont des distributions, leurs moments sont realisables par construction ;
 c'est ainsi qu'on obtient des etats fortement asymetriques (S30 != 0) et le quasi-degenere
 (trois points resserres a 1e-3 en vx : C20 ~ 1e-6, test de cancellation des sqrt).
 
@@ -105,10 +111,11 @@ c'est ainsi qu'on obtient des etats fortement asymetriques (S30 != 0) et le quas
 Second script du cas (manifeste separe, `validation`, CI). Trois apports :
 
 - Sources de la hierarchie (document maths eq. 1.2) generees PROGRAMMATIQUEMENT
-  (`model.py` `moment_sources` : boucle sur (p, q), terme electrique qm (p Ex M_{p-1,q} +
-  q Ey M_{p,q-1}), terme magnetique oc (p M_{p-1,q+1} - q M_{p+1,q-1})) et verifiees contre les
-  15 equations EXPLICITES 1.3-1.7 transcrites a la main (`run_crossing.py:55-75`, oracle : 20
-  tirages aleatoires, rtol 1e-14). S[M00] = 0 et conservation de M20 + M02 par B verifies.
+  (`adc.moments.lorentz_sources`, hierarchie generique en l'ordre remontee dans adc_cpp
+  (ADC-164) car independante de la fermeture ; `model.py` `moment_sources` = adaptateur
+  nom -> (p, q), bit-exact a l'ancienne boucle locale) et verifiees contre les 15 equations
+  EXPLICITES 1.3-1.7 transcrites a la main (`run_crossing.py`, oracle : 20 tirages
+  aleatoires, rtol 1e-14). S[M00] = 0 et conservation de M20 + M02 par B verifies.
 - Rotation de Larmor a travers le System COMPLET (`run_crossing.py:100-138`) : etat gaussien
   uniforme derivant, omega_c = 2, E = 0 -> M10/M01 suivent l'analytique cos/sin a 1e-3 apres
   1/8 de tour (source compilee dans la brique, ssprk2) ; M20 + M02 conserve a 1e-10.
@@ -201,8 +208,12 @@ l'ecart de schema en maillage/pas (un second golden a Np = 128 le permettrait).
 
 ## 9. Limites et suite
 
-La validation est ponctuelle (flux en un etat) : rien ici ne fait avancer un pas de temps, ne
-resout Poisson, ni ne calcule de vitesses d'onde HLL. Suite prevue (epic ADC-81) : sources et
-driver crossing (ADC-84), Poisson et diocotron (ADC-85), vitesses signees generiques sans
-primitive p (ADC-83), vitesses exactes par jacobienne autodiff + eig par blocs (ADC-87/88,
-`golden/golden_vp.csv` deja produit ici par `eigenvalues15_2D(M, 1)` chemin flagsym=1).
+La validation de run.py est ponctuelle (flux en un etat) ; l'evolution temporelle, Poisson et
+les vitesses HLL sont couverts par les sections 5-8. L'epic ADC-81 (82-89) est SOLDE : flux
+golden (82), HLL sans primitive p (83), sources + crossing (84), Poisson + diocotron (85),
+eig dense generique (86), vitesses exactes autodiff + blocs (87/88), bascule HLL fidele (89).
+Depuis ADC-172, le pipeline est genere par `adc.moments` (adc_cpp ADC-164) : ecrire un AUTRE
+systeme de moments 2D = fournir une fermeture (callable S -> ordre N+1 standardise) et, si
+besoin, une partition spectrale -- l'algebre, les sources Lorentz et les vitesses exactes
+viennent du generateur. Restent ouverts : taux de croissance diocotron vs golden MATLAB-HLL
+long (campagne dediee), projection de realisabilite `relaxation15` (Ma = 20), golden Np = 128.
