@@ -4,11 +4,11 @@ le chemin de production du MATLAB de reference (eigenvalues15_2D.m, flagsym = 1)
 
 Pourquoi ce cas
 ---------------
-Le verrou HLL de l'integration HyQMOM (epic ADC-81) : HLL exige smin/smax signees, obtenues
+Le verrou HLL de l'integration HyQMOM  : HLL exige smin/smax signees, obtenues
 dans le MATLAB par les valeurs propres de la jacobienne de flux symbolique (jacobian15.m,
 400 lignes generees) extraites PAR BLOCS. Ici, la meme verite sort de l'AUTODIFF du flux DSL
-declare (dsl.diff via m.wave_speeds_from_jacobian, adc_cpp ADC-87) + eig numerique par
-sous-blocs (adc::real_eig_minmax, ADC-86) : aucune jacobienne generee a la main, aucun
+declare (dsl.diff via m.wave_speeds_from_jacobian, adc_cpp ) + eig numerique par
+sous-blocs (adc::real_eig_minmax, ) : aucune jacobienne generee a la main, aucun
 SymPy -- le jacobien ne peut pas se desynchroniser du flux. Les partitions de blocs
 (model.HYQMOM_BLOCKS) sont le miroir exact du flagsym = 1 : en x les chaines contiguës
 1:5 / 6:9 / 13:15 (10:12 sciemment saute), en y les images par la symetrie x<->y -- listes
@@ -31,8 +31,8 @@ meme provenance que les goldens de flux)
       (run.py, invariant 6) : la faille de surete du bring-up est FERMEE par le chemin exact.
 
 Ne prouve pas : l'execution compilee de ce chemin dans un System (couverte par les tests
-adc_cpp de ADC-87 : eval_rhs HLL == reference numpy a 8e-15 sur jouet non lineaire) ; la
-bascule des drivers en riemann='hll' (ADC-89). Exige adc_cpp >= ADC-87.
+adc_cpp de : eval_rhs HLL == reference numpy a 8e-15 sur jouet non lineaire) ; la
+bascule des drivers en riemann='hll'. 
 """
 
 import os

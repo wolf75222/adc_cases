@@ -5,7 +5,7 @@
 %   golden_fx.csv, golden_fy.csv : flux physiques Flux_closure15_2D(M) par etat (N x 15) ;
 %   golden_vp.csv : [vpxmin vpxmax vpymin vpymax] de eigenvalues15_2D(M, 1) par etat (N x 4)
 %                   -- chemin flagsym=1 (jacobian15 symbolique + eig par blocs), celui de la
-%                   production MATLAB ; reference future d'ADC-88.
+%                   production MATLAB ; reference future d'.
 %
 % Usage (depuis hyqmom15/) :
 %   octave --no-gui --path /chemin/vers/RIEMOM2D golden_gen.m

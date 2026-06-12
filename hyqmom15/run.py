@@ -4,7 +4,7 @@ contre le code MATLAB de reference (RIEMOM2D).
 
 Pourquoi ce cas
 ---------------
-Premiere brique de l'integration HyQMOM (epic ADC-81) : le vecteur d'etat porte les 15 moments
+Premiere brique de l'integration HyQMOM  : le vecteur d'etat porte les 15 moments
 cartesiens M00..M04, le flux physique reconstruit localement les 6 moments d'ordre 5 manquants
 (M50, M41, M32, M23, M14, M05) par la fermeture HyQMOM (M -> C -> S -> fermeture -> C5 -> M5),
 le tout en expressions DSL compilees une fois (aucun callback Python par cellule). Le coeur
@@ -33,8 +33,8 @@ Validation (trois oracles independants du pipeline DSL)
       moins un melange asymetrique DEPASSE k*sqrt(C) -- le danger de la borne bring-up est
       DEMONTRE, pas seulement documente.
 
-Ne prouve pas : la stabilite d'une evolution temporelle (drivers = ADC-84/85), les vitesses
-d'onde exactes pour HLL (ADC-87/88 : golden_vp.csv ne sert ici qu'a encadrer la borne bring-up),
+Ne prouve pas : la stabilite d'une evolution temporelle (drivers = ), les vitesses
+d'onde exactes pour HLL,
 le mode robust au-dela de la finitude (gardes hors MATLAB, qui n'en a aucune).
 """
 
@@ -180,7 +180,7 @@ def check_speed_bound(m, states, vp):
     (a) Etats gaussiens : l'etendue vraie vaut EXACTEMENT u +- sqrt(6)*sqrt(C) (verifie a 1e-9)
         et k = 3 la couvre.
     (b) Le danger documente est DEMONTRE : au moins un melange asymetrique du jeu DEPASSE la
-        borne k*sqrt(C) -- la borne n'est pas production, le chemin exact (ADC-87/88) l'est."""
+        borne k*sqrt(C) -- la borne n'est pas production, le chemin exact l'est."""
     U = states.T
     over = []
     for i in range(states.shape[0]):

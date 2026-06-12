@@ -1,6 +1,6 @@
 % golden_hll_gen.m : mini-crossing HLL de REFERENCE, schema MATLAB fidele (Octave, RIEMOM2D).
 %
-% Produit le golden de fidelite HLL d'ADC-89 : croisement de jets a Ma = 2 (Np = 64, 20 pas,
+% Produit le golden de fidelite HLL d': croisement de jets a Ma = 2 (Np = 64, 20 pas,
 % sans relaxation), avance par le SCHEMA DU DEPOT DE REFERENCE -- vitesses par
 % eigenvalues15_2D(M, 1) (jacobienne symbolique + eig par blocs), flux par Flux_closure15_2D,
 % HLL de Davis par pas_HLL, split dimensionnel ADDITIF Mnp = Mnpx + Mnpy - M, Euler explicite.

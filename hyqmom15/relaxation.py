@@ -1,29 +1,19 @@
-"""Projection de realisabilite relaxation15 (RIEMOM2D) -- port Python verbatim (ADC-176).
+"""Projection de realisabilite relaxation15 (port de relaxation15.m,
+collision15_anisotropic.m et p2p2_2D.m).
 
-Transcription litterale de relaxation15.m + collision15_anisotropic.m + p2p2_2D.m :
-clamps des moments standardises (|s30| <= 4+Ma/2, hyperbolicite H2, |s11| < 1), elimination
-des valeurs propres de flux complexes (bloc d'ordre 3), puis relaxation vers la distribution
-cible Z1 = u+v / Z2 = u-v independants (collision15_anisotropic) quand la matrice de
-realisabilite p2p2 a une valeur propre < lamin. Reconstruction M <- C <- S par les
-transformations binomiales (algebriquement identiques a C4toM4.m, comme le flux : la
-tolerance golden est rtol 1e-12, pas l'egalite bit).
+Pipeline par cellule : clamps des moments standardises (|s30| <= 4 + Ma/2, hyperbolicite
+H2, |s11| < 1), suppression des valeurs propres de flux complexes (blocs d'ordre 3), puis
+relaxation vers une cible realisable (Z1 = u+v et Z2 = u-v independants) quand la matrice
+de realisabilite p2p2 a une valeur propre < lamin. Reconstruction M <- C <- S par les
+transformations binomiales ; les references sont les paires in/out produites par
+golden_relax_gen.m (Octave), tolerance 1e-12.
 
-Verite de reference : golden_relax_gen.m EXECUTE relaxation15.m sous Octave sur des etats
-qui couvrent chaque branche ; run_crossing.py compare ce port a ces paires in/out.
+Le test des valeurs propres complexes evalue le jacobien autodiff du modele aux etats
+standardises (seuil |Im| > 1e-9*max(1, |lambda|)). Les deux branches x et y appliquent la
+meme correction (s21 = s12 = 0, s22 >= 1/3) : seul compte « l'un des blocs est complexe ».
 
-Le test « valeurs propres complexes » : le MATLAB appelle jacobian15 sur l'etat STANDARDISE
-et teste isreal(eig(J(13:15,13:15))) en x ET y. Ici la jacobienne est celle du MODELE
-(autodiff du flux declare, m.flux_jacobian -- la meme matrice a l'arrondi pres, validee a
-1e-11 par golden_vp). Les DEUX branches MATLAB font la MEME action (s21=s12=0,
-s22=max(s22,1/3)) : le resultat ne depend que de « l'un des deux blocs est complexe »,
-donc d'aucune convention de swap x<->y. Seuil |Im| > 1e-9*max(1,|lambda|) : isreal() exact
-du MATLAB sur sa jacobienne fermee, transpose a une jacobienne identique a l'arrondi pres
-(les vecteurs golden sont choisis hors du fil du rasoir, cf. golden_relax_gen.m).
-
-Application en simulation : projection PAR CELLULE entre pas (System.get_state /
-set_state, round-trip bit-stable -- tests checkpoint), comme le MATLAB l'applique chaque
-pas (main_pb_2Dcrossing flagrelax=1). Cout Python accepte pour la validation (ADC-177 =
-chemin compile, backlog).
+En simulation, la projection s'applique par champ entre les pas (relax_field), comme le
+flagrelax = 1 du MATLAB. Boucle Python par cellule : validation et runs moderes.
 """
 
 import numpy as np

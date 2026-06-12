@@ -1,34 +1,16 @@
-"""Modele 2D a 15 moments avec fermeture HyQMOM, ecrit en formules (adc.dsl.Model).
+"""Modele 2D a 15 moments (fermeture HyQMOM), compose via le generateur adc.moments.
 
-Structure semi-generale decidee en reunion (11/06/2026) : un builder de modele de moments
-`build_moment_model(closure=...)` ou la fermeture est un callable Python qui recoit les moments
-standardises et retourne les 6 moments d'ordre 5 fermes. La fermeture HyQMOM (`hyqmom_closure`,
-transcription litterale de closureS5.m, forme polynomiale) est l'implementation fournie ; une
-autre fermeture du meme contrat s'y branche sans toucher ni au builder ni au coeur adc_cpp.
-
-Etat conservatif (ordre du document maths / MATLAB RIEMOM2D, 0-based) :
+Etat (ordre partage avec la reference MATLAB RIEMOM2D) :
 
     U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
-         0    1    2    3    4    5    6    7    8    9    10   11   12   13   14
 
-Flux physiques (M50, M41, M32, M23, M14, M05 reconstruits par la fermeture) :
+Flux : F_x[M_pq] = M_{p+1,q}, F_y[M_pq] = M_{p,q+1}. Les six moments d'ordre 5
+(M50, M41, M32, M23, M14, M05) sont reconstruits par la fermeture ; les 24 autres entrees
+recopient une composante de U. L'algebre M -> C -> S -> fermeture -> C5 -> M5 est generee
+par adc.moments ; ce fichier ne contient que la fermeture, la partition spectrale du
+jacobien, la borne de vitesse de demarrage et le cablage plasma (sources, Poisson).
 
-    Fx = [M10 M20 M30 M40 M50 M11 M21 M31 M41 M12 M22 M32 M13 M23 M14]
-    Fy = [M01 M11 M21 M31 M41 M02 M12 M22 M32 M03 M13 M23 M04 M14 M05]
-
-20 des 30 entrees sont des recopies directes de U (ordre <= 4) ; seules les 6 reconstructions
-d'ordre 5 portent la fermeture.
-
-Depuis ADC-172, le pipeline M -> C -> S -> fermeture -> C5 -> M5 n'est PLUS transcrit a la
-main : il est GENERE par adc.moments (adc_cpp ADC-164), qui derive l'algebre binomiale en
-boucles sur l'AST de la DSL (let-bindings -> variables locales C++ nommees, codegen lineaire).
-Ne restent manuels ici que : la fermeture (`hyqmom_closure`), les blocs spectraux
-(`HYQMOM_BLOCKS`), la borne bring-up k*sqrt(C) et le cablage plasma (sources Lorentz via
-adc.moments.lorentz_sources, Poisson, omega_p). Equivalence a l'ancien modele manuel verifiee
-sur les goldens MATLAB (flux 7.7e-13, vitesses 8e-10 hors etat quasi-degenere) -- voir run.py.
-
-References : RIEMOM2D/{Flux_closure15_2D.m, M2CS4_15.m, M4toC4.m, closureS5.m, C5toM5.m} ;
-document maths main.pdf eq. 1.8-1.12 (Bryngelson, Fox & Laurent 2025, hal-05398171).
+Reference mathematique : Bryngelson, Fox & Laurent 2025 (hal-05398171).
 """
 
 import numpy as np
@@ -45,33 +27,27 @@ MOMENT_PQ = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (0, 1), (1, 1), (2, 1), (3,
 # Indices (0-based) dans U de chaque moment, pour l'assemblage des flux.
 IDX = {name: k for k, name in enumerate(MOMENT_NAMES)}
 
-# Contrat de layout avec le generateur generique adc.moments (adc_cpp ADC-164) : son ordre
-# canonique (q externe, p interne) EST l'ordre du document maths / MATLAB. Verifie a l'import.
+# L'ordre canonique d'adc.moments (q externe, p interne) doit etre celui du vecteur d'etat
+# ci-dessus : verifie a l'import.
 assert MOMENT_NAMES == gmom.moment_names(4) and MOMENT_PQ == gmom.moment_indices(4)
 
-# Borne de vitesse bring-up : |u| + K_SPEED*sqrt(C). Les vraies valeurs propres (eigenvalues15_2D
-# flagsym=1, cf. golden/golden_vp.csv) s'etendent a u +- sqrt(6)*sqrt(C20) ~ +-2.449*sqrt(C20)
-# pour une gaussienne (ratio verifie EXACT sur les 4 etats gaussiens du jeu golden) : k = 3 les
-# couvre avec ~22 % de marge. MAIS des etats realisables asymetriques DEPASSENT k*sqrt(C) (ratio
-# jusqu'a 3.29 sur les melanges du jeu golden, non borne pres de la frontiere de realisabilite) :
-# run.py le DEMONTRE en consommant golden_vp.csv. Borne de demarrage Rusanov uniquement ; le
-# chemin production est la jacobienne exacte (ADC-87/ADC-88).
+# Borne de vitesse de demarrage : |u| + K_SPEED*sqrt(C). Une gaussienne atteint exactement
+# u +- sqrt(6)*sqrt(C20) (k = 3 couvre avec ~22 % de marge), mais des etats realisables
+# asymetriques DEPASSENT k*sqrt(C) sans borne pres de la frontiere de realisabilite (ratio
+# 3.29 sur le jeu golden). Demarrage Rusanov uniquement ; pour HLL, exact_speeds=True.
 K_SPEED = 3.0
 
-# Partitions de sous-blocs du jacobien de flux pour les vitesses HLL EXACTES
-# (m.wave_speeds_from_jacobian), miroir EXACT du chemin production du MATLAB
-# (eigenvalues15_2D.m flagsym=1 : eig par blocs 1:5 / 6:9 / 13:15 de Jx, le bloc 10:12 est
-# sciemment saute ; Jy y est obtenu en appelant jacobian15 avec les arguments x<->y permutes,
-# ce qui revient EXACTEMENT a prendre, sur le dFy/dU DIRECT, les chaines par exposant en x --
-# listes d'indices NON CONTIGUES ci-dessous ; la chaine sautee est [2, 7, 11]).
+# Partition du jacobien de flux pour les vitesses exactes par sous-blocs (la structure
+# par chaines d'exposants d'eigenvalues15_2D.m, flagsym=1). En y, les chaines ne sont pas
+# contigues : listes d'indices sur le dFy/dU direct (equivalent au swap d'arguments du
+# MATLAB) ; la chaine [2, 7, 11] ne porte pas d'extreme et n'est pas calculee.
 HYQMOM_BLOCKS = {
     "x": [[0, 1, 2, 3, 4], [5, 6, 7, 8], [12, 13, 14]],
     "y": [[0, 5, 9, 12, 14], [1, 6, 10, 13], [3, 8, 4]],
 }
 
-# Parametres (rho, ux, uy, C20, C11, C02) des etats gaussiens du jeu golden : SOURCE UNIQUE,
-# consommee par gen_states.py (generation des etats figes) ET run.py (oracle d'Isserlis +
-# verification anti-derive contre golden_states.csv).
+# Etats gaussiens du jeu golden (rho, ux, uy, C20, C11, C02) : consommes par gen_states.py
+# et par l'oracle d'Isserlis de run.py.
 GAUSSIAN_PARAMS = [
     (1.0, 0.0, 0.0, 1.0, 0.0, 1.0),     # repos isotrope
     (2.0, 0.5, -0.3, 1.0, 0.0, 2.0),    # derive anisotrope
@@ -81,11 +57,10 @@ GAUSSIAN_PARAMS = [
 
 
 def hyqmom_closure(S):
-    """Fermeture HyQMOM d'ordre 5 (closureS5.m, transcription litterale de la forme polynomiale ;
-    PAS les variantes Moments5.m / S5_2D.m qui different sur S32/S23).
+    """Fermeture HyQMOM d'ordre 5 (forme polynomiale de closureS5.m ; attention, les
+    variantes Moments5.m / S5_2D.m du depot MATLAB different sur S32/S23).
 
-    @p S : dict des moments standardises S11,S30,S21,S12,S03,S40,S31,S22,S13,S04 (Expr DSL ou
-    numpy : seules les operations arithmetiques sont utilisees). @return dict S50..S05."""
+    @p S : dict des moments standardises S11..S04 (Expr DSL ou numpy). @return dict S50..S05."""
     s11, s30, s21, s12, s03 = S["S11"], S["S30"], S["S21"], S["S12"], S["S03"]
     s40, s31, s22, s13, s04 = S["S40"], S["S31"], S["S22"], S["S13"], S["S04"]
     return {
@@ -101,20 +76,14 @@ def hyqmom_closure(S):
 
 
 def moment_sources(U, ex, ey, qm, oc):
-    """Table des 15 termes sources de la hierarchie de moments (document maths eq. 1.2),
-    generee PROGRAMMATIQUEMENT (les eq. explicites 1.3-1.7 du document servent d'oracle de
-    verification dans run_crossing.py, jamais de source de copie) :
+    """Les 15 termes sources de la hierarchie sous force de Lorentz :
 
         S[M_pq] = qm (p Ex M_{p-1,q} + q Ey M_{p,q-1}) + oc (p M_{p-1,q+1} - q M_{p+1,q-1})
 
-    avec qm = q/m, oc = Omega_c = qB/m. Le terme electrique ABAISSE l'ordre (les moments
-    references existent toujours) ; le terme magnetique CONSERVE l'ordre total (rotation dans
-    l'espace des vitesses : la hierarchie d'ordre <= 4 est fermee sous B). @p U : dict nom ->
-    Expr/valeur ; @p ex, ey : champ electrique (Expr aux ou valeurs) ; @return liste de 15
-    expressions dans l'ordre de MOMENT_NAMES (S[M00] = 0.0 : la masse n'a pas de source).
-
-    Adaptateur nom -> (p, q) au-dessus de la hierarchie generique adc.moments.lorentz_sources
-    (adc_cpp ADC-164, meme formule remontee dans le coeur car independante de la fermeture)."""
+    Le terme electrique abaisse l'ordre, le terme magnetique le conserve : la hierarchie
+    d'ordre <= 4 est fermee. Adaptateur nom -> (p, q) au-dessus de
+    adc.moments.lorentz_sources. @p U : dict nom -> Expr/valeur ; @return liste ordonnee
+    comme MOMENT_NAMES (S[M00] = 0)."""
     return gmom.lorentz_sources({pq: U[nm] for pq, nm in zip(MOMENT_PQ, MOMENT_NAMES)},
                                 ex, ey, qm, oc)
 
@@ -125,44 +94,30 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
                        omega_p=None, exact_speeds=False):
     """Construit le modele DSL 15 moments avec la fermeture @p closure.
 
-    Le corps est delegue au generateur generique adc.moments.build_moment_model (order=4) :
-    seule la fermeture, les blocs, la borne bring-up et le cablage plasma restent ici.
+    L'algebre des moments vient d'adc.moments.build_moment_model (order=4) ; ne restent ici
+    que la fermeture, la partition spectrale, la borne de demarrage et le cablage plasma.
 
-    @p robust : False (defaut) = mode bit_match, AUCUNE garde, fidele au MATLAB qui n'en a
-    aucune (division par M00, sqrt(C20), sqrt(C02) inconditionnels) -- requis pour la
-    validation golden. True = planchers M00/C20/C02 (max lisse via |.|), cote cas uniquement,
-    jamais dans le coeur. Nuance vs l'ancien modele manuel : le generateur n'utilise les
-    planchers C20/C02 que la ou ils protegent (sqrt, divisions de standardisation), pas dans
-    les termes polynomiaux de la reconstruction d'ordre 5 -- identique sur etat sain (les
-    planchers y sont l'identite), differences uniquement pres de la degenerescence, ou les
-    deux variantes restent finies.
+    @p robust : False (defaut) = aucune garde, comme le MATLAB (divisions par M00 et racines
+    inconditionnelles) -- requis pour comparer aux goldens. True = planchers lisses
+    max(x, eps) sur M00, C20, C02, appliques la ou ils protegent (racines, divisions de
+    standardisation).
 
-    @p with_sources : ajoute la source de la hierarchie (moment_sources) -- electrique via les
-    canaux aux canoniques grad_x/grad_y (Ex = -d phi/dx, rempli par le Poisson du systeme ou
-    nul sans champ) et magnetique via la constante @p omega_c (q B / m, cuite au codegen).
-    False (defaut) : aucun bloc source emis -- partie flux strictement identique au modele
-    sans sources (valide par les goldens ADC-82).
+    @p with_sources : ajoute la source de Lorentz (moment_sources) -- champ electrique lu
+    dans les canaux aux grad_x/grad_y (E = -grad phi, rempli par le Poisson du systeme),
+    champ magnetique par la constante @p omega_c (cuite a la compilation).
 
-    @p debye : longueur de Debye ADIMENSIONNEE lambda (None = pas de couplage Poisson). Emet
-    elliptic_rhs((M00 - rho_background) / lambda^2) : ADC resout Delta(phi) = rhs SANS deflater
-    la moyenne en periodique (un rhs a moyenne non nulle rend le systeme singulier : l'iteration
-    MG derive, verifie experimentalement -- damier de Nyquist + re-solve divergent). Le fond
-    NEUTRALISANT @p rho_background doit donc valoir la moyenne de M00 sur le domaine : la masse
-    etant conservee, c'est une CONSTANTE du scenario, strictement equivalente a la soustraction
-    de moyenne par pas du MATLAB poisson_fft. Le 'signe electron' du MATLAB est porte par
-    q_over_m = +1 dans la source avec E = -grad phi (electric_source_term.m). Verifie par
-    l'oracle sinusoidal analytique de run_diocotron.py (signe lu sur l'assert qui passe).
+    @p debye : longueur de Debye adimensionnee (None = pas de Poisson). Emet
+    elliptic_rhs((M00 - rho_background)/debye^2). En periodique, un second membre a moyenne
+    non nulle rend le solveur singulier : @p rho_background doit valoir la moyenne de M00 du
+    scenario (constante, la masse est conservee) -- l'equivalent de la soustraction de
+    moyenne de poisson_fft.m.
 
-    @p omega_p : frequence locale de la SOURCE (m.source_frequency) bornant le pas de temps
-    source (None = pas de borne) -- la 'deuxieme CFL' du MATLAB compute_dt, portee par la
-    frequence plasma omega_p = 1/lambda.
+    @p omega_p : frequence de la source, borne le pas de temps (la deuxieme CFL de
+    compute_dt.m). None = pas de borne.
 
-    @p exact_speeds : True = vitesses d'onde signees EXACTES par valeurs propres du jacobien de
-    flux (m.wave_speeds_from_jacobian : AUTODIFF du flux declare + blocs HYQMOM_BLOCKS, miroir
-    du chemin flagsym=1 du MATLAB) -- ouvre riemann='hll' fidele et REMPLACE la borne bring-up
-    k*sqrt(C) par la verite spectrale pour Rusanov/CFL aussi (max_wave_speed sur les memes
-    blocs). Exige adc_cpp >= ADC-87. False (defaut) : borne bring-up historique (eigenvalues
-    k*sqrt(C), formules identiques a l'ancien modele manuel, planchers compris en robust).
+    @p exact_speeds : True = vitesses d'onde signees par valeurs propres du jacobien de flux
+    (autodiff + sous-blocs HYQMOM_BLOCKS) -- requis pour riemann='hll' ; la meme verite
+    spectrale sert a la CFL. False (defaut) = borne de demarrage k*sqrt(C) (cf. K_SPEED).
     @return adc.dsl.Model pret a compiler."""
     src = None
     if with_sources:
