@@ -23,8 +23,8 @@ Verites de reference et perimetre :
      ~52 % (accumulation). Asserts a marges : projete >= -5 / < 30 %, nu <= -5 / > 35 % ;
      et l'etat re-projete final est realisable partout (>= -1e-6). + fini, M00 > 0, masse.
 
-Application par macro-pas via System.get_state/set_state (round-trip bit-stable, cf. tests
-checkpoint d'ADC-85). Chemin compile = ADC-177 (backlog).
+Application par macro-pas via System.get_state/set_state (round-trip bit-stable, couvert
+par les tests checkpoint).
 """
 
 import os

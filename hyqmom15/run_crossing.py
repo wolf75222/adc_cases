@@ -4,7 +4,7 @@
 
 Pourquoi ce cas
 ---------------
-Deuxieme brique de l'integration HyQMOM (epic ADC-81, suite de run.py qui validait le flux en
+Suite de run.py (qui valide le flux en
 statique) : les termes sources electrique/magnetique de la hierarchie (document maths eq. 1.2)
 sont generes programmatiquement (model.moment_sources) et le modele avance en temps dans un
 adc.System sur le scenario de reference du depot MATLAB (croisement de jets,
@@ -28,9 +28,9 @@ Validation
   (5) snapshot npz des 15 moments ecrit et relisible (System.write).
 
 Ne prouve pas : la fidelite quantitative au MATLAB du crossing (schema different : Rusanov +
-borne bring-up vs HLL exact + relaxation15 a Ma = 20 ; la comparaison fidele attend ADC-89
-avec les vitesses exactes ADC-87/88 et un golden HLL re-genere) ; le couplage Poisson (le champ
-E reste nul ici : ADC-85) ; toute convergence en maillage.
+borne bring-up vs HLL exact + relaxation15 a Ma = 20 ; la comparaison fidele attend 
+avec les vitesses exactes et un golden HLL re-genere) ; le couplage Poisson (le champ
+E reste nul ici : ) ; toute convergence en maillage.
 """
 
 import os
@@ -174,11 +174,11 @@ def check_crossing_smoke():
 
 
 def check_hll_fidelity():
-    """(6) fidelite HLL au schema MATLAB de reference (ADC-89) : golden_hll_state.csv est
+    """(6) fidelite HLL au schema MATLAB de reference : golden_hll_state.csv est
     produit par golden_hll_gen.m (Octave sur RIEMOM2D) avec le SCHEMA du depot -- vitesses
     eigenvalues15_2D(M, 1), flux Flux_closure15_2D, HLL de Davis pas_HLL, split dimensionnel
     ADDITIF + Euler explicite -- sur le crossing Ma = 2, Np = 64, 20 pas. adc rejoue la MEME
-    sequence de dt (golden_hll_dts.csv) avec le modele exact_speeds (memes vitesses, ADC-88) en
+    sequence de dt (golden_hll_dts.csv) avec le modele exact_speeds (memes vitesses, ) en
     riemann='hll' NON-splite ssprk2 : l'ecart residuel mesure la difference de SCHEMA seule.
     Verifie aussi que adc-HLL est PLUS PROCHE du golden HLL que adc-Rusanov (HLL moins
     diffusif : critere qualitatif de l'issue, rendu quantitatif)."""
@@ -217,7 +217,7 @@ def check_hll_fidelity():
         "adc-HLL (%.4f) devrait etre plus proche du golden HLL que adc-Rusanov (%.4f)"
         % (dist["hll"], dist["rusanov"]))
 
-    # replay en time='euler' (adc_cpp ADC-174) : le split dimensionnel ADDITIF + Euler du
+    # replay en time='euler' : le split dimensionnel ADDITIF + Euler du
     # MATLAB est ALGEBRIQUEMENT le Euler non-splite (Mx + My - M = M + dt(Lx + Ly)), donc en
     # rejouant les dt golden avec le meme flux/vitesses, l'ecart de SCHEMA disparait : il ne
     # reste que l'arrondi (et la convention degeneree |sL-sR| < 1e-10, de mesure nulle).

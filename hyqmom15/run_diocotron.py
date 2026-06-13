@@ -4,7 +4,7 @@ instabilite diocotron (anneau + perturbation azimutale), I/O cadences.
 
 Pourquoi ce cas
 ---------------
-Troisieme brique de l'integration HyQMOM (epic ADC-81) : le champ electrique cesse d'etre nul
+Troisieme brique de l'integration HyQMOM  : le champ electrique cesse d'etre nul
 (run_crossing) -- le Poisson du systeme est resolu sur M00 a chaque pas, E = -grad(phi) retro-
 agit sur les 15 moments via la source electrique. Scenario de reference :
 main_electrostatic_wave.m, section dicotron (anneau r0 = 0.35..r1 = 0.40, mode 4, omega_p = 25,
@@ -29,7 +29,7 @@ Validation
   (5) snapshots cadences : write npz tous les 5 pas (3 fichiers), 15 moments + phi presents.
 
 Ne prouve pas : le taux de croissance diocotron (le driver MATLAB de reference tourne en HLLC +
-relaxation15 ; la comparaison quantitative attend ADC-89 avec vitesses exactes ADC-87/88 et un
+relaxation15 ; la comparaison quantitative attend avec vitesses exactes et un
 golden HLL re-genere) ; la realisabilite long-terme sans relaxation15 ; r != 0.
 """
 
@@ -111,7 +111,7 @@ def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
     from adc_cases.common.native import adc_include
 
     # robust=False sur le chemin exact : fidele au MATLAB (aucune garde) ; les planchers du
-    # mode robust sont par ailleurs derivables depuis diff(Abs) (adc_cpp ADC-87) si besoin.
+    # mode robust sont par ailleurs derivables depuis diff(Abs) si besoin.
     m = build_moment_model(name="hyqmom15_vp" + ("_ex" if exact_speeds else ""),
                            robust=not exact_speeds, with_sources=True,
                            q_over_m=1.0, omega_c=0.0, debye=DEBYE, rho_background=rho_bg,
@@ -123,9 +123,9 @@ def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
     sim.add_equation(name, model=compiled,
                      spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
                      time=adc.Explicit())
-    # solver : "fft" par defaut (ADC-176 fidelite (a) : solveur DIRECT periodique, l'analogue
+    # solver : "fft" par defaut : solveur DIRECT periodique, l'analogue
     # de poisson_fft.m -- meme operateur discret que le MG, zero tolerance iterative) ;
-    # "fft_spectral" = symbole continu (adc_cpp ADC-175, l'EXACT poisson_fft.m) ;
+    # "fft_spectral" = symbole continu ;
     # "geometric_mg" disponible (cas non periodiques / comparaisons).
     sim.set_poisson(rhs="charge_density", solver=solver)
     return sim
@@ -229,8 +229,8 @@ def check_diocotron():
 
 
 def check_diocotron_hll_exact():
-    """(6) bascule ADC-89 : le diocotron complet (Poisson + source electrique) tourne en
-    riemann='hll' avec les vitesses EXACTES (exact_speeds, ADC-88) -- la cible fidele au MATLAB.
+    """(6) bascule : le diocotron complet (Poisson + source electrique) tourne en
+    riemann='hll' avec les vitesses EXACTES (exact_speeds, ) -- la cible fidele au MATLAB.
     Smoke : 10 pas stables, masse conservee, phi fini. Le taux de croissance quantitatif vs un
     golden MATLAB-HLL long est un suivi (campagne dediee : le run de reference dure des heures
     sous Octave)."""
@@ -254,7 +254,7 @@ def check_diocotron_hll_exact():
 
 
 def check_poisson_solvers():
-    """(7) fidelite Poisson (ADC-175/176) : le MEME oracle sinusoidal a travers les trois
+    """(7) fidelite Poisson : le MEME oracle sinusoidal a travers les trois
     solveurs. fft (stencil discret diagonalise) == geometric_mg au residu MG pres (meme
     operateur) et tous deux a O(h^2) du continu ; fft_spectral (symbole continu, l'exact
     poisson_fft.m de RIEMOM2D) atteint la solution continue a ~1e-12 : la MEME mesure
