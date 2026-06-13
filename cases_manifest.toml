@@ -148,6 +148,13 @@ needs = ["cxx"]
 desc = "HyQMOM 15 moments : vitesses HLL exactes (autodiff + eig par blocs) vs eigenvalues15_2D.m flagsym=1 (golden Octave)."
 
 [[case]]
+path = "hyqmom15/run_relaxation.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM 15 moments : projection de realisabilite relaxation15 (port vs Octave, 5 branches) + crossing Ma=20 HLL exact (contraste de realisabilite projete/nu)."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
