@@ -103,7 +103,7 @@ def diocotron_state(n):
 
 
 def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
-              solver="fft"):
+              solver="fft", backend="aot"):
     """System periodique + modele avec sources electriques et Poisson
     (Delta phi = (M00 - rho_bg)/lam^2, fond neutralisant = moyenne du scenario : un rhs
     periodique a moyenne non nulle rend le MG singulier), rusanov + borne bring-up."""
@@ -118,7 +118,7 @@ def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
                            omega_p=OMEGA_P, exact_speeds=exact_speeds)
     compiled = m.compile(os.path.join(case_output_dir("hyqmom15"),
                                       "hyqmom15_vp%s.so" % ("_ex" if exact_speeds else "")),
-                         adc_include(), backend="aot")
+                         adc_include(), backend=backend)
     sim = adc.System(n=n, L=1.0, periodic=True)
     sim.add_equation(name, model=compiled,
                      spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
