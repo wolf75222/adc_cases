@@ -12,3 +12,6 @@ out/
 *.png
 *.gif
 *.h5
+
+# fichiers de contexte local (jamais versionnes)
+CLAUDE.local.md
