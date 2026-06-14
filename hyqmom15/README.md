@@ -125,3 +125,32 @@ Ce que les drivers garantissent, chiffres en CI :
   fermée pour ce système.
 - La collision BGK du MATLAB (`collision15.m`) n'est pas portée.
 - Taux de croissance diocotron vs un golden MATLAB long : campagne dédiée, hors CI.
+
+## AMR
+
+Le même modèle se porte sur la hiérarchie adaptative `adc.AmrSystem` (raffinement sur M00,
+Poisson composite `geometric_mg`, reflux conservatif) en compilant le `.so` pour la façade
+AMR :
+
+```python
+compiled = m.compile(so_path, include_dir, backend="production", target="amr_system")
+sim = adc.AmrSystem(n=48, L=1.0, periodic=True, regrid_every=4)
+sim.add_equation("mom", compiled,
+                 spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+                 time=adc.Explicit())        # sur AMR : Euler avant + reflux (défaut)
+sim.set_refinement(threshold=0.5)            # tague l'anneau sur M00
+sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+sim.set_conservative_state("mom", U0)        # les 15 moments, prolongés aux patchs fins
+```
+
+À savoir : sur AMR, `adc.Explicit()` par défaut = Euler avant + reflux, le schéma le plus
+fidèle au MATLAB de référence (cf. le replay `time='euler'` de run_crossing) ; `ssprk3`
+n'existe que pour les blocs natifs `add_block`, le loader `.so` le rejette explicitement.
+`relaxation15` n'est pas disponible sur ce chemin : horizon court (smoke), les runs longs
+réalisables restent sur le `System` uniforme. Le driver `run_amr.py` valide la construction,
+la conservation de masse par niveau, la cohérence grossier/fin contre un `System` uniforme
+à la résolution fine, et les rejets propres :
+
+```bash
+python hyqmom15/run_amr.py
+```

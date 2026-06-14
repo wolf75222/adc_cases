@@ -155,6 +155,13 @@ needs = ["cxx"]
 desc = "HyQMOM 15 moments : projection de realisabilite relaxation15 (port vs Octave, 5 branches) + crossing Ma=20 HLL exact (contraste de realisabilite projete/nu)."
 
 [[case]]
+path = "hyqmom15/run_amr.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM 15 moments sur AmrSystem : smoke diocotron AMR (hll exact + MG composite, euler+reflux), coherence grossier/fin vs System uniforme fin, rejets aot/target/hll/ssprk3."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
