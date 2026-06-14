@@ -1,0 +1,26 @@
+name: Feature or case request
+description: Propose a new case, a facade change, or an improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tasks are tracked in Linear; this form is for external proposals, triaged into Linear.
+        Generic physics and the cell-by-cell compute belong in adc_cpp, not here.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / need
+      description: What scenario or capability is missing, and for whom.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

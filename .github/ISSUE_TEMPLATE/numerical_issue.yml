@@ -1,0 +1,53 @@
+name: Numerical issue
+description: A case result is wrong, drifts, or differs across backends.
+labels: ["bug", "numerical"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For numerical discrepancies in a case run. Give the numbers: a reviewer cannot tell a
+        normal difference from a real change without them.
+  - type: input
+    id: case
+    attributes:
+      label: Case
+      description: e.g. diocotron l=3, hoffart_euler_poisson_dsl.
+    validations:
+      required: true
+  - type: input
+    id: observed
+    attributes:
+      label: Observed quantity
+      description: e.g. growth rate Im(omega), conserved mass.
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: Expected value
+    validations:
+      required: true
+  - type: input
+    id: measured
+    attributes:
+      label: Measured value (and tolerance)
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - Kokkos Serial
+        - Kokkos OpenMP
+        - Kokkos Cuda (GPU)
+        - MPI (multi-rank)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction (command)
+      render: shell
+    validations:
+      required: true

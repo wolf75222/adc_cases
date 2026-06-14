@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/wolf75222/adc_cases/security/advisories/new
+    about: Do not open a public issue for a vulnerability. Report it privately.
+  - name: Solver core (adc_cpp)
+    url: https://github.com/wolf75222/adc_cpp/issues
+    about: Bugs in the generic solver, bindings or DSL belong in adc_cpp, not here.

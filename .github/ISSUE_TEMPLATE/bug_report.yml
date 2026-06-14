@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a defect in an adc_cases case or shared module.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tasks are tracked in Linear; this form is for external bug reports, triaged into Linear.
+        For a security vulnerability, do not open an issue: use private reporting.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: Clear description, expected versus observed.
+    validations:
+      required: true
+  - type: input
+    id: case
+    attributes:
+      label: Case
+      description: Which case folder (e.g. diocotron, euler_poisson, hoffart_euler_poisson_dsl).
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The command(s) that trigger it (e.g. python <case>/run.py ...).
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: adc_version
+    attributes:
+      label: adc module version / commit
+      description: adc.__version__, or the adc_cpp commit the module was built from.
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: On-node backend (of the adc module)
+      options:
+        - Kokkos Serial
+        - Kokkos OpenMP
+        - Kokkos Cuda (GPU)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / trace
+      render: shell
