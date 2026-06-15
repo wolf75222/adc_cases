@@ -1,159 +1,159 @@
-# T2 — audit de normalisation du chemin `system-schur`
+# T2: normalization audit of the `system-schur` path
 
-Ce document clôt la question ouverte par `RESULTS_SYSTEM_SCHUR.md` (sections 7ter / conclusion) :
-le déficit −95 % du run hoffart `system-schur` (`gamma_raw ≈ 0.032`, fenêtres papier,
-`alpha = omega = 1e12`) ne vient pas de la géométrie cartésienne ; il se décompose entièrement en
-facteurs dimensionnels dérivés *à l'avance* (pas ajustés après coup), mesurés par
+This document closes the question left open by `RESULTS_SYSTEM_SCHUR.md` (sections 7ter / conclusion):
+the -95% deficit of the hoffart `system-schur` run (`gamma_raw ~ 0.032`, paper windows,
+`alpha = omega = 1e12`) does not come from the Cartesian geometry; it decomposes entirely into
+dimensional factors derived *ahead of time* (not fitted after the fact), measured by
 `diag/diag_normalization_audit.py`.
 
-Résultat en une ligne : le déficit l=3 (×24.7 entre 0.0312 et 0.772) est le produit de trois facteurs :
+One-line result: the l=3 deficit (x24.7 between 0.0312 and 0.772) is the product of three factors:
 
-    déficit = (fenêtre 3.20×) × (T_d = 2 pi = 6.28×) × (résidu grille cart vs polaire 1.23×) = 24.7×
+    deficit = (window 3.20x) x (T_d = 2 pi = 6.28x) x (cart vs polar grid residual 1.23x) = 24.7x
 
-Les deux premiers sont de la métrologie/normalisation (récupérables) ; seul le troisième (~20 %) est
-une vraie différence physique de grille. Ce n'est donc pas de la métrologie pure (le 2 pi est réel mais un
-résidu ~20 % subsiste), ni une limitation géométrique fondamentale : la reproduction
-cartésienne est atteignable.
+The first two are metrology/normalization (recoverable); only the third (~20%) is
+a genuine physical grid difference. So this is not pure metrology (the 2 pi is real but a
+~20% residual remains), nor a fundamental geometric limitation: the Cartesian reproduction
+is reachable.
 
 ---
 
-## 1. La clé dimensionnelle : `alpha/omega = 1`, le `1e12` se simplifie
+## 1. The dimensional key: `alpha/omega = 1`, the `1e12` cancels
 
-`model.py` fixe (params papier, `rho_max = 1`) :
+`model.py` sets (paper params, `rho_max = 1`):
 
-    alpha = beta^2 / rho_max = 1e12          (charge du Poisson : -Delta phi = alpha rho)
-    omega = beta^2           = 1e12          (= |Omega| = omega_c, le champ B_z)
+    alpha = beta^2 / rho_max = 1e12          (Poisson charge: -Delta phi = alpha rho)
+    omega = beta^2           = 1e12          (= |Omega| = omega_c, the B_z field)
 
-La vitesse de dérive du run complet (`build_uniform` → `drift_velocity_from_potential`) est
-`v = grad(phi)/omega` avec `-Delta phi = alpha rho`. En posant `phi = alpha phi~` (donc
-`-Delta phi~ = rho`) :
+The drift velocity of the full run (`build_uniform` -> `drift_velocity_from_potential`) is
+`v = grad(phi)/omega` with `-Delta phi = alpha rho`. Setting `phi = alpha phi~` (so
+`-Delta phi~ = rho`):
 
     v = (alpha/omega) grad(phi~) ,   alpha/omega = 1/rho_max = 1
-    => v == grad(phi~) == EXACTEMENT la dérive ExB NORMALISEE (alpha = 1, B = 1).
+    => v == grad(phi~) == EXACTLY the NORMALIZED ExB drift (alpha = 1, B = 1).
 
-Le `1e12` de `alpha` et le `1e12` de `omega` se simplifient dans le transport. Le run complet
-(`alpha = omega = 1e12`) et le réduit ExB normalisé (`B0 = 1`, `charge = 1`, le chemin validé de
-`diag_polar_omega.py`) advectent `rho` avec le même champ de vitesse, dans les mêmes unités de
-temps de simulation. `gamma_raw` est donc directement comparable entre les deux, et la seule
-différence possible entre `0.032` (run complet) et `~0.10` (réduit cart, RESULTS §7ter) est la
-fenêtre de fit, pas une échelle physique.
+The `1e12` of `alpha` and the `1e12` of `omega` cancel in the transport. The full run
+(`alpha = omega = 1e12`) and the normalized reduced ExB (`B0 = 1`, `charge = 1`, the validated path of
+`diag_polar_omega.py`) advect `rho` with the same velocity field, in the same simulation-time
+units. So `gamma_raw` is directly comparable between the two, and the only possible
+difference between `0.032` (full run) and `~0.10` (reduced cart, RESULTS section 7ter) is the
+fit window, not a physical scale.
 
-> Confirmation croisée : le réduit ExB normalisé, fitté dans la fenêtre papier l=3 `[0.40,0.70]`
-> *appliquée en temps de simulation*, donne `gamma_raw = 0.0312`, à 3 % de la mesure du run complet
-> (RESULTS §1, n=128 : `0.0321`). L'équivalence full == réduit (RESULTS §7) est donc reconfirmée ici par
-> les nombres bruts eux-mêmes.
+> Cross-check: the normalized reduced ExB, fitted over the l=3 paper window `[0.40,0.70]`
+> *applied in simulation time*, gives `gamma_raw = 0.0312`, within 3% of the full-run measurement
+> (RESULTS section 1, n=128: `0.0321`). The full == reduced equivalence (RESULTS section 7) is thus reconfirmed here by
+> the raw numbers themselves.
 
-## 2. Les échelles diocotron
+## 2. The diocotron scales
 
-Avec `rho_max = 1` :
+With `rho_max = 1`:
 
-| grandeur | définition | valeur |
+| quantity | definition | value |
 |---|---|---|
-| `omega_c = \|Omega\|` | `beta^2` | `1e12` (cyclotron, échelle RAPIDE) |
-| `omega_d` | `rho_max * alpha / \|Omega\|` | **`1`** (diocotron/dérive, échelle LENTE) |
-| `T_d` | `2 pi / omega_d` | **`2 pi ≈ 6.283`** (période diocotron) |
-| `alpha/omega` | seule combinaison a-dimensionnée | **`1`** (`= 1/rho_max`) |
+| `omega_c = \|Omega\|` | `beta^2` | `1e12` (cyclotron, FAST scale) |
+| `omega_d` | `rho_max * alpha / \|Omega\|` | **`1`** (diocotron/drift, SLOW scale) |
+| `T_d` | `2 pi / omega_d` | **`2 pi ~ 6.283`** (diocotron period) |
+| `alpha/omega` | only dimensionless combination | **`1`** (`= 1/rho_max`) |
 
-`omega_d = rho_max (beta^2/rho_max) / beta^2 = 1` : le `beta^2` se simplifie, la dynamique lente vit en
-unités O(1). `T_d = 2 pi` est le facteur `2 pi` du dépôt (`NORMALIZATION.md`,
-`diag_polar_omega.py:35`) : c'est la période diocotron, pas un fudge.
+`omega_d = rho_max (beta^2/rho_max) / beta^2 = 1`: the `beta^2` cancels, the slow dynamics live in
+O(1) units. `T_d = 2 pi` is the `2 pi` factor of the deposition (`NORMALIZATION.md`,
+`diag_polar_omega.py:35`): it is the diocotron period, not a fudge.
 
-## 3. Les candidats de scaling s'effondrent tous sur `× 2 pi`
+## 3. The scaling candidates all collapse onto `x 2 pi`
 
-Les quatre candidats demandés (T2), appliqués au `gamma_raw` établi (l=4, fenêtre `[3,12]`,
-n=128, `gamma_raw = 0.1135`) :
+The four requested candidates (T2), applied to the established `gamma_raw` (l=4, window `[3,12]`,
+n=128, `gamma_raw = 0.1135`):
 
-| candidat | formule | justification dimensionnelle | valeur |
+| candidate | formula | dimensional justification | value |
 |---|---|---|---|
-| c1 | `gamma_raw * 2 pi` | conversion temps sim → temps papier via `T_d` | **0.7132** |
-| c2 | `gamma_raw * 2 pi * (alpha/omega)` | `alpha/omega = 1` → **identique à c1** | 0.7132 |
-| c3 | `gamma_raw / omega_d` | `omega_d = 1` → **no-op** | 0.1135 |
-| c4 | `gamma_raw * T_d` | `T_d = 2 pi` → **identique à c1** | 0.7132 |
-| — | cible papier l=4 | — | 0.9110 |
+| c1 | `gamma_raw * 2 pi` | sim-time -> paper-time conversion via `T_d` | **0.7132** |
+| c2 | `gamma_raw * 2 pi * (alpha/omega)` | `alpha/omega = 1` -> **identical to c1** | 0.7132 |
+| c3 | `gamma_raw / omega_d` | `omega_d = 1` -> **no-op** | 0.1135 |
+| c4 | `gamma_raw * T_d` | `T_d = 2 pi` -> **identical to c1** | 0.7132 |
+| -- | l=4 paper target | -- | 0.9110 |
 
-Conclusion §3 : tous les candidats dimensionnellement honnêtes s'effondrent sur `gamma_raw * 2 pi`
-(car `alpha/omega = 1`, `omega_d = 1`, `T_d = 2 pi`). Il n'existe aucun facteur ~3 supplémentaire au
-niveau dimensionnel. `c1` donne `0.713`, soit ~22 % sous le papier (0.911), exactement le résidu
-grille cart-vs-polaire de RESULTS §7ter (cart ×2π `0.72` vs polaire `0.90`). Le `× 2 pi` est donc le
-seul facteur de normalisation légitime, et il n'est pas le verrou : appliqué au `gamma_raw` établi
-il reproduit à ~20 %.
+Conclusion section 3: every dimensionally honest candidate collapses onto `gamma_raw * 2 pi`
+(because `alpha/omega = 1`, `omega_d = 1`, `T_d = 2 pi`). There is no extra ~3 factor at the
+dimensional level. `c1` gives `0.713`, i.e. ~22% below the paper (0.911), exactly the cart-vs-polar
+grid residual of RESULTS section 7ter (cart x2pi `0.72` vs polar `0.90`). The `x 2 pi` is therefore the
+only legitimate normalization factor, and it is not the lock: applied to the established `gamma_raw`
+it reproduces to ~20%.
 
-## 4. Le « résidu ~3× » est la fenêtre de fit (mesuré)
+## 4. The "~3x residual" is the fit window (measured)
 
-`run.py:fit_growth` masque le temps de simulation directement avec `PAPER_FIT_WINDOWS`
-(`[0.40,0.70]`, …). Mais `temps_papier = T_d × temps_sim` : la fenêtre papier appliquée en temps sim
-tombe dans le transitoire (taux encore en rampe, cf. RESULTS §3 : taux local 0.03→0.11 sur
-`t ∈ [0.5, 2.5]`), pas dans l'exponentielle établie. Mesure (`diag_normalization_audit.py`, n=128,
-même run, deux fenêtres) :
+`run.py:fit_growth` masks the simulation time directly with `PAPER_FIT_WINDOWS`
+(`[0.40,0.70]`, ...). But `paper_time = T_d x sim_time`: the paper window applied in sim time
+falls in the transient (rate still ramping, cf. RESULTS section 3: local rate 0.03->0.11 over
+`t in [0.5, 2.5]`), not in the established exponential. Measurement (`diag_normalization_audit.py`, n=128,
+same run, two windows):
 
-| l | fenêtre papier (sim) | `gamma_raw` (papier) | fenêtre établie `[3,12]` | `gamma_raw` (établi) | **ratio établi/papier** |
+| l | paper window (sim) | `gamma_raw` (paper) | established window `[3,12]` | `gamma_raw` (established) | **established/paper ratio** |
 |---|---|---|---|---|---|
 | 3 | `[0.40,0.70]` | **0.0312** | `[3.0,12.0]` | **0.0998** | **3.20** |
 | 4 | `[0.60,0.75]` | 0.0943 | `[3.0,12.0]` | 0.1135 | 1.20 |
 | 5 | `[1.15,1.35]` | 0.1056 | `[3.0,12.0]` | 0.1137 | 1.08 |
 
-Le ratio 3.20 (l=3) est le « résidu ~3× au-delà du 2 pi ». C'est un effet de fenêtre, pas une
-échelle manquante : la fenêtre papier l=3 est la plus précoce (`[0.40,0.70]`), donc la plus enfoncée
-dans le transitoire → facteur le plus grand. Pour l=4 / l=5 les fenêtres papier sont plus tardives
-(`[0.60,0.75]`, `[1.15,1.35]`) → le facteur fenêtre tombe à 1.20 / 1.08. C'est pourquoi le déficit
-était maximal en l=3 (−95.5 %) et moindre en l=5 (−83 %).
+The 3.20 ratio (l=3) is the "~3x residual beyond the 2 pi". It is a window effect, not a
+missing scale: the l=3 paper window is the earliest (`[0.40,0.70]`), so the most deeply
+buried in the transient -> the largest factor. For l=4 / l=5 the paper windows are later
+(`[0.60,0.75]`, `[1.15,1.35]`) -> the window factor drops to 1.20 / 1.08. This is why the deficit
+was maximal at l=3 (-95.5%) and smaller at l=5 (-83%).
 
-## 5. Décomposition complète du déficit (l=3) : elle ferme exactement
+## 5. Full deficit decomposition (l=3): it closes exactly
 
-| facteur | de → vers | valeur | nature |
+| factor | from -> to | value | nature |
 |---|---|---|---|
-| fenêtre de fit | `gamma_raw` papier `0.0312` → établi `0.0998` | **3.20×** | métrologie (run.py fitte le transitoire) |
-| `T_d = 2 pi` | `0.0998` → `0.627` | **6.28×** | métrologie (période diocotron) |
-| grille cart vs polaire | `0.627` → papier `0.772` | **1.23× (~20 %)** | physique (seul résidu NON métrologique) |
-| **produit** | `0.0312` → `0.772` | **24.7×** | == déficit −95.5 % observé |
+| fit window | `gamma_raw` paper `0.0312` -> established `0.0998` | **3.20x** | metrology (run.py fits the transient) |
+| `T_d = 2 pi` | `0.0998` -> `0.627` | **6.28x** | metrology (diocotron period) |
+| cart vs polar grid | `0.627` -> paper `0.772` | **1.23x (~20%)** | physics (only NON-metrological residual) |
+| **product** | `0.0312` -> `0.772` | **24.7x** | == observed -95.5% deficit |
 
-`3.20 × 6.28 × 1.23 = 24.7` : la décomposition ferme exactement le déficit l=3 mesuré
+`3.20 x 6.28 x 1.23 = 24.7`: the decomposition closes the measured l=3 deficit exactly
 (`0.772 / 0.0312 = 24.7`).
 
-## 6. Verdict T2
+## 6. T2 verdict
 
-- Le déficit ne vient pas de la géométrie cartésienne. Le `T_d = 2 pi` et le facteur fenêtre sont de la
-  normalisation/métrologie récupérable (≈ 20× des ~24.7×). Reproduction cartésienne atteignable.
-- Ce n'est pas de la métrologie pure non plus : après les deux facteurs `2 pi` (temps + fenêtre),
-  il reste un résidu ~20 % (grille cart `0.72` vs polaire `0.90` ×2π) qui est une vraie différence
-  physique de discrétisation azimutale, pas un facteur cosmétique.
-- Aucun facteur dimensionnel ~3 n'existe : `alpha/omega = 1`, `omega_d = 1`, `T_d = 2 pi`, tous les
-  candidats s'effondrent sur `× 2 pi`. Le « résidu 3× » était la fenêtre de fit, maintenant
-  quantifié (ratio 3.20 pour l=3, §4).
+- The deficit does not come from the Cartesian geometry. The `T_d = 2 pi` and the window factor are
+  recoverable normalization/metrology (~20x of the ~24.7x). Cartesian reproduction is reachable.
+- It is not pure metrology either: after the two `2 pi` factors (time + window),
+  a ~20% residual remains (cart grid `0.72` vs polar `0.90` x2pi) which is a genuine physical
+  difference of azimuthal discretization, not a cosmetic factor.
+- No ~3 dimensional factor exists: `alpha/omega = 1`, `omega_d = 1`, `T_d = 2 pi`, all the
+  candidates collapse onto `x 2 pi`. The "3x residual" was the fit window, now
+  quantified (ratio 3.20 for l=3, section 4).
 
-### Implication actionnable pour `run.py` → **FAIT (T3)**
-La mesure du chemin `system-schur` fittait la fenêtre papier en temps de simulation, donc dans le
-transitoire. T3 (juin 2026) corrige ceci dans le code : `run.py:fit_growth` fitte désormais la
-fenêtre papier mappée (`fenêtre_sim = 2 pi/rhobar × fenêtre_papier`) et `results.py` reporte les
-deux `gamma_raw_sim` et `gamma_paper_units = gamma_raw_sim × 2 pi/rhobar` (le brut est conservé pour la
-reproductibilité). Helpers : `paper_to_sim_time_window`, `gamma_to_paper_units`.
+### Actionable implication for `run.py` -> **DONE (T3)**
+The `system-schur` path measurement fitted the paper window in simulation time, hence in the
+transient. T3 (June 2026) fixes this in the code: `run.py:fit_growth` now fits the
+mapped paper window (`sim_window = 2 pi/rhobar x paper_window`) and `results.py` reports
+both `gamma_raw_sim` and `gamma_paper_units = gamma_raw_sim x 2 pi/rhobar` (the raw value is kept for
+reproducibility). Helpers: `paper_to_sim_time_window`, `gamma_to_paper_units`.
 
-### 7. Vérification directe sur le full system-schur (pas le proxy réduit)
-Les §4-5 utilisent le réduit ExB comme proxy (justifié par `α/ω=1`). T3 mesure le vrai full
-system-schur (Strang ssprk3 + CondensedSchur, drift-seedé) avec les fenêtres mappées (n=96,
-t_end=10) :
+### 7. Direct verification on the full system-schur (not the reduced proxy)
+Sections 4-5 use the reduced ExB as a proxy (justified by `alpha/omega=1`). T3 measures the actual full
+system-schur (Strang ssprk3 + CondensedSchur, drift-seeded) with the mapped windows (n=96,
+t_end=10):
 
-| l | fenêtre sim mappée | `gamma_raw_sim` | `gamma_paper_units` (×2π) | papier | erreur |
+| l | mapped sim window | `gamma_raw_sim` | `gamma_paper_units` (x2pi) | paper | error |
 |---|---|---|---|---|---|
-| 3 | [2.513,4.398] | 0.1117 | **0.702** | 0.772 | **−9.1 %** |
-| 4 | [3.770,4.712] | 0.1423 | **0.894** | 0.911 | **−1.9 %** |
-| 5 | [7.226,8.482] | 0.1087 | **0.683** | 0.683 | **+0.04 %** |
+| 3 | [2.513,4.398] | 0.1117 | **0.702** | 0.772 | **-9.1%** |
+| 4 | [3.770,4.712] | 0.1423 | **0.894** | 0.911 | **-1.9%** |
+| 5 | [7.226,8.482] | 0.1087 | **0.683** | 0.683 | **+0.04%** |
 
-Le full reproduit le papier à −9 / −2 / +0 % avec les fenêtres mappées (mieux que la fenêtre établie
-`[3,9]` : l=5 passe de +13 % à +0.04 %, sa fenêtre tardive captant la même phase que le papier). Le full
-suit le réduit à ~2 % en fenêtre établie (le proxy était valide). Caveats (revue adversariale) : le
-2 π est exact/mode-indépendant (Petri <0.5 %) ; le résidu ~0-9 % est grille/résolution(n=96)/roll-off de
-fenêtre (pas de plateau scale-free, lissage WENO5 ≠ saturation) ; l=5 est sensible à la fenêtre
-(±27-29 %), donc son +0.04 % est en partie fortuit, mener avec l=3/l=4. Détail : `RESULTS_SYSTEM_SCHUR.md`
+The full reproduces the paper to -9 / -2 / +0% with the mapped windows (better than the established window
+`[3,9]`: l=5 goes from +13% to +0.04%, its late window capturing the same phase as the paper). The full
+tracks the reduced to ~2% in the established window (the proxy was valid). Caveats (adversarial review): the
+2 pi is exact/mode-independent (Petri <0.5%); the ~0-9% residual is grid/resolution(n=96)/window roll-off
+(no scale-free plateau, WENO5 smoothing != saturation); l=5 is sensitive to the window
+(+/-27-29%), so its +0.04% is partly fortuitous, lead with l=3/l=4. Detail: `RESULTS_SYSTEM_SCHUR.md`
 section 9.
 
-## Reproduire
+## Reproduce
 
 ```bash
 PYTHONPATH=<adc_cpp>/build-master/python \
     python hoffart_euler_poisson_dsl/diag/diag_normalization_audit.py 128
 ```
 
-Sortie : les échelles dimensionnelles, le tableau fenêtre-papier vs établie par mode (le ratio est le
-facteur fenêtre) et l'effondrement des 4 candidats sur `× 2 pi`. Voir aussi `NORMALIZATION.md` (chemin
-polaire validé) et `RESULTS_SYSTEM_SCHUR.md` §7ter (renversement géométrie).
+Output: the dimensional scales, the paper-window vs established table per mode (the ratio is the
+window factor) and the collapse of the 4 candidates onto `x 2 pi`. See also `NORMALIZATION.md` (validated
+polar path) and `RESULTS_SYSTEM_SCHUR.md` section 7ter (geometry reversal).

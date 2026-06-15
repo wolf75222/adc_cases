@@ -1,129 +1,127 @@
 # hoffart_euler_poisson_dsl
 
-Tutoriel complet, de l'installation au run, pour reproduire le cas test diocotron magnétique de
+A complete tutorial, from install to run, that reproduces the magnetic diocotron test case of
 Hoffart, Maier, Shadid, Tomas, *Structure-preserving finite element approximations of the magnetic
-Euler-Poisson equations* (arXiv:2510.11808, section 5.3), avec le cœur volumes finis `adc_cpp` piloté en
-Python par `adc_cases`.
+Euler-Poisson equations* (arXiv:2510.11808, section 5.3), with the `adc_cpp` finite-volume core driven
+in Python by `adc_cases`.
 
-Le modèle Euler-Poisson isotherme magnétisé complet (continuité, quantité de mouvement avec force de
-Lorentz, Poisson) est écrit une seule fois en DSL symbolique, compilé en C++, puis avancé par un
-splitting de Strang (SSPRK3 + étage source à complément de Schur). Mesuré dans les bonnes unités, le
-chemin volumes finis cartésien reproduit les taux de croissance du papier à moins de 10 %, et converge
-vers eux quand on raffine la grille.
+You write the full isothermal magnetized Euler-Poisson model (continuity, momentum with the Lorentz
+force, Poisson) once in the symbolic DSL, compile it to C++, then advance it with a Strang splitting
+(SSPRK3 + a Schur-complement source stage). Measured in the right units, the Cartesian finite-volume path
+reproduces the paper's growth rates to within 10 %, and converges to them as you refine the grid.
 
-![Animation du rollup diocotron l=4](figures/diocotron_l4.gif)
+![Animation of the l=4 diocotron rollup](figures/diocotron_l4.gif)
 
-L'anneau d'électrons perturbé au mode 4 se déforme en carré, puis s'enroule en quatre vortex, comme la
-figure 5.2 du papier. Ce README explique tout, de la compilation à cette animation.
+The electron ring perturbed at mode 4 deforms into a square, then rolls up into four vortices, like
+figure 5.2 of the paper. This README explains everything, from compilation to this animation.
 
-## Sommaire
+## Contents
 
-1. [Le résultat](#1-le-résultat)
+1. [The result](#1-the-result)
 2. [Installation](#2-installation)
 3. [Quickstart](#3-quickstart)
-4. [La physique](#4-la-physique)
-5. [Le modèle dans le DSL](#5-le-modèle-dans-le-dsl)
-6. [Le run](#6-le-run)
-7. [La mesure et la leçon du facteur 2π](#7-la-mesure-et-la-leçon-du-facteur-2π)
-8. [Les figures obtenues](#8-les-figures-obtenues)
+4. [The physics](#4-the-physics)
+5. [The model in the DSL](#5-the-model-in-the-dsl)
+6. [The run](#6-the-run)
+7. [Measurement and the lesson of the 2pi factor](#7-measurement-and-the-lesson-of-the-2pi-factor)
+8. [The figures you get](#8-the-figures-you-get)
 9. [Convergence](#9-convergence)
-10. [Performance et passage à l'échelle (local + ROMEO)](#10-performance-et-passage-à-léchelle-local--romeo)
-11. [Structure du dossier](#11-structure-du-dossier)
+10. [Performance and scaling (local + ROMEO)](#10-performance-and-scaling-local--romeo)
+11. [Folder structure](#11-folder-structure)
 
-## 1. Le résultat
+## 1. The result
 
-Taux de croissance du modèle complet `system-schur` (n=96, fenêtres papier mappées en temps de
-simulation, conversion `gamma_paper = gamma_raw_sim * 2pi/rhobar`) :
+Growth rates of the full `system-schur` model (n=96, paper windows mapped into simulation time,
+conversion `gamma_paper = gamma_raw_sim * 2pi/rhobar`):
 
-| mode l | gamma_raw_sim | gamma_paper (×2π) | cible papier | erreur |
+| mode l | gamma_raw_sim | gamma_paper (x2pi) | paper target | error |
 |---|---|---|---|---|
-| 3 | 0.1117 | 0.702 | 0.772 | −9.1 % |
-| 4 | 0.1423 | 0.894 | 0.911 | −1.9 % |
+| 3 | 0.1117 | 0.702 | 0.772 | -9.1 % |
+| 4 | 0.1423 | 0.894 | 0.911 | -1.9 % |
 | 5 | 0.1087 | 0.683 | 0.683 | +0.04 % |
 
-L'erreur décroît avec la résolution : à n=256 les trois modes tombent sous 1 % (section 9). Le « déficit
-−95 % » des versions antérieures de ce cas était un artefact de métrologie, expliqué en section 7.
+The error shrinks with resolution: at n=256 all three modes drop below 1 % (section 9). The "-95 %
+deficit" of earlier versions of this case was a metrology artifact, explained in section 7.
 
 ## 2. Installation
 
-Le cas a besoin du module Python `adc`, fourni par le dépôt `adc_cpp`. Prérequis : un compilateur C++20,
-CMake, Ninja, Python 3.12 avec NumPy, et un **Kokkos installé** (`adc_cpp` est Kokkos-only : un Kokkos
-`Serial` suffit pour un poste CPU). Matplotlib et Pillow sont optionnels (figures et GIF).
+The case needs the `adc` Python module, provided by the `adc_cpp` repository. Prerequisites: a C++20
+compiler, CMake, Ninja, Python 3.12 with NumPy, and an **installed Kokkos** (`adc_cpp` is Kokkos-only: a
+`Serial` Kokkos is enough for a CPU workstation). Matplotlib and Pillow are optional (figures and GIF).
 
 ```bash
-# 1. construire le module adc (depuis le dépôt adc_cpp) -- Kokkos-only : Kokkos requis (-DKokkos_ROOT)
+# 1. build the adc module (from the adc_cpp repo) -- Kokkos-only: Kokkos required (-DKokkos_ROOT)
 cd adc_cpp
 cmake -B build -G Ninja \
       -DADC_BUILD_PYTHON=ON -DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release \
       -DPYTHON_EXECUTABLE=$(which python3)
 ninja -C build _adc
 
-# 2. rendre adc importable
+# 2. make adc importable
 export PYTHONPATH=$PWD/build/python
 
-# 3. vérifier l'import
+# 3. check the import
 python -c "import adc; print('adc OK')"
 ```
 
-Note : `run.py` compile le modèle DSL en C++ à la volée, ce qui demande les en-têtes d'`adc_cpp`. Si la
-compilation ne les trouve pas, pointer `ADC_INCLUDE=<adc_cpp>/include`. Le chemin polaire réduit
-(briques `Scalar`, `ExB`, `ChargeDensity`) ne compile rien et tourne contre n'importe quel build.
+Note: `run.py` compiles the DSL model to C++ on the fly, which needs the `adc_cpp` headers. If the
+compilation does not find them, point `ADC_INCLUDE=<adc_cpp>/include`. The reduced polar path (`Scalar`,
+`ExB`, `ChargeDensity` bricks) compiles nothing and runs against any build.
 
 ## 3. Quickstart
 
 ```bash
 cd adc_cases/hoffart_euler_poisson_dsl
 
-# a) oracle analytique, sans simulation : le modèle compilé == les formules à la main,
-#    et la valeur propre analytique reproduit les cibles du papier
+# a) analytic oracle, no simulation: the compiled model == the hand formulas,
+#    and the analytic eigenvalue reproduces the paper targets
 python check_model.py
 python diag/petri_eigenvalue.py
 
-# b) la table des taux (modèle complet, mesure paper-faithful).
-#    t-end >= 8.5 car la fenêtre mappée du mode 5 est [7.23, 8.48]
+# b) the rate table (full model, paper-faithful measurement).
+#    t-end >= 8.5 because the mapped window of mode 5 is [7.23, 8.48]
 python run.py --engine system-schur --n 96 --t-end 10 --modes 3 4 5 --dt 2e-3 --no-gif
 
-# c) l'audit de normalisation et la convergence en résolution
+# c) the normalization audit and the resolution convergence
 python diag/diag_normalization_audit.py 128
 python diag/convergence_reduced.py
 
-# d) les figures et les GIF de la section 8
+# d) the figures and GIFs of section 8
 python diag/make_paper_figures.py 3 4 5 --out figures
 ```
 
-La sortie b) écrit `growth_rates.csv` avec les colonnes `mode, gamma_raw_sim, gamma_paper_units,
+Output b) writes `growth_rates.csv` with the columns `mode, gamma_raw_sim, gamma_paper_units,
 gamma_paper, relative_error_percent`.
 
-## 4. La physique
+## 4. The physics
 
-Une colonne d'électrons non neutre, dans un champ magnétique axial uniforme, tourne sous l'effet de sa
-propre dérive `E×B`. Quand la densité a une forme d'anneau (creuse au centre), les deux bords portent des
-sauts de densité de signes opposés. Ces deux interfaces se couplent par le champ électrique perturbé et
-s'amplifient mutuellement : c'est le mécanisme de Kelvin-Helmholtz appliqué à la rotation `E×B`, appelé
-ici instabilité diocotron. Le mode azimutal `l` croît exponentiellement, puis l'anneau se replie en `l`
-vortex (les animations de la section 8 le montrent).
+A non-neutral electron column, in a uniform axial magnetic field, rotates under its own `ExB` drift. When
+the density has a ring shape (hollow at the center), the two edges carry density jumps of opposite signs.
+These two interfaces couple through the perturbed electric field and amplify each other: this is the
+Kelvin-Helmholtz mechanism applied to `ExB` rotation, called here the diocotron instability. The azimuthal
+mode `l` grows exponentially, then the ring folds into `l` vortices (the animations in section 8 show it).
 
-Le papier travaille dans la limite de dérive magnétique : le champ est si fort que les échelles de temps
-cyclotron et plasma sont des ordres de grandeur plus rapides que la dérive lente. Le schéma doit franchir
-ces échelles rapides sans les résoudre, ce que permet l'étage source implicite (section 6).
+The paper works in the magnetic drift limit: the field is so strong that the cyclotron and plasma time
+scales are orders of magnitude faster than the slow drift. The scheme must step over these fast scales
+without resolving them, which the implicit source stage allows (section 6).
 
-Le système, avec `Omega = omega e_z` donc `m × Omega = (omega m_y, -omega m_x)` :
+The system, with `Omega = omega e_z` so `m x Omega = (omega m_y, -omega m_x)`:
 
 ```
 d_t rho + div(m)                          = 0
-d_t m   + div(m m^T/rho + p I)            = -rho grad(phi) + m × Omega
+d_t m   + div(m m^T/rho + p I)            = -rho grad(phi) + m x Omega
 -Delta phi = alpha rho,   p = theta rho
 ```
 
-## 5. Le modèle dans le DSL
+## 5. The model in the DSL
 
-C'est l'intérêt central d'`adc` : on écrit la physique une seule fois, en symboles, et le DSL en dérive
-le solveur de Riemann et génère le noyau C++. Voici `model.py` (variante `schur`), bloc par bloc.
+This is the central point of `adc`: you write the physics once, in symbols, and the DSL derives the
+Riemann solver and generates the C++ kernel. Here is `model.py` (the `schur` variant), block by block.
 
-D'abord les paramètres du papier. Une propriété mérite l'attention : `alpha/omega = 1/rho_max = 1`. Les
-deux `1e12` se simplifient dans la dérive `v = grad(phi)/omega`, si bien que le champ qui advecte la
-densité ne dépend pas de `beta`. Le modèle complet advecte donc la densité avec le même champ qu'une
-dérive `E×B` normalisée. La section 7 s'appuie sur ce fait.
+First the paper parameters. One property deserves attention: `alpha/omega = 1/rho_max = 1`. The two
+`1e12` cancel in the drift `v = grad(phi)/omega`, so the field that advects the density does not depend on
+`beta`. The full model therefore advects the density with the same field as a normalized `ExB` drift.
+Section 7 builds on this fact.
 
 ```python
 @dataclass(frozen=True)
@@ -138,10 +136,10 @@ class PaperParameters:
     def omega(self): return self.beta * self.beta                  # = 1e12, champ B_z (= |Omega|)
 ```
 
-Le modèle lui-même se lit comme un énoncé de TP. On déclare les inconnues conservatives, on définit les
-primitives à partir d'elles, on écrit le flux d'Euler composante par composante, on donne les valeurs
-propres au solveur de Riemann, on déclare les champs auxiliaires que Poisson remplit, on écrit la source
-(force électrique plus Lorentz), puis la loi de Gauss.
+The model itself reads like a lab-exercise statement. You declare the conservative unknowns, define the
+primitives from them, write the Euler flux component by component, give the eigenvalues to the Riemann
+solver, declare the auxiliary fields that Poisson fills, write the source (electric force plus Lorentz),
+then Gauss's law.
 
 ```python
 m = dsl.Model("hoffart_magnetic_euler_poisson_schur")
@@ -178,21 +176,20 @@ m.elliptic_rhs(-alpha * rho)
 m.check()
 ```
 
-À partir de ces appels, `model.compile(backend="production")` produit un `.so` C++ : le flux numérique,
-le solveur de Riemann, la dérivation des auxiliaires, tout est généré. On n'écrit aucune boucle. La
-fidélité de cette génération est vérifiée par `check_model.py`, qui compare le noyau compilé aux formules
-à la main sur 2×2 cellules et trouve un résidu exactement nul. C'est la
-frontière nette du cas : la génération du modèle est prouvée bit-à-bit ; la reproduction physique se
-mesure ensuite par le run.
+From these calls, `model.compile(backend="production")` produces a C++ `.so`: the numerical flux, the
+Riemann solver, the auxiliary derivation, all of it is generated. You write no loop. The fidelity of this
+generation is checked by `check_model.py`, which compares the compiled kernel to the hand formulas on 2x2
+cells and finds an exactly zero residual. This is the case's clean boundary: the model generation is
+proven bit for bit; physical reproduction is then measured by the run.
 
-Le code de `model.py` porte ces explications en commentaires, étape par étape (les huit blocs ci-dessus).
-La densité initiale (équation 35, anneau perturbé `rho_max(1 - delta + delta sin(l theta))`) et la dérive
-`E×B` initiale `v0 = -(grad phi0 × Omega)/|Omega|^2` sont dans `paper_initial_density` et
+The code of `model.py` carries these explanations as comments, step by step (the eight blocks above). The
+initial density (equation 35, the perturbed ring `rho_max(1 - delta + delta sin(l theta))`) and the
+initial `ExB` drift `v0 = -(grad phi0 x Omega)/|Omega|^2` are in `paper_initial_density` and
 `drift_velocity_from_potential`.
 
-## 6. Le run
+## 6. The run
 
-`run.py:build_uniform` assemble le chemin de référence. Chaque ligne a un rôle.
+`run.py:build_uniform` assembles the reference path. Each line has a role.
 
 ```python
 def build_uniform(compiled, rho, params, geometry="square"):
@@ -212,37 +209,38 @@ def build_uniform(compiled, rho, params, geometry="square"):
     return sim
 ```
 
-- Grille carrée de côté `L = 2R = 32`, bords non périodiques. Le disque du papier est approché par la
-  paroi circulaire de Poisson de rayon `R`.
-- Volumes finis WENO5-Z, flux de Rusanov, variables conservatives, intégrés en SSPRK3.
-- Le splitting de Strang fait demi-transport, source pleine, demi-transport (ordre 2, comme le papier).
+- Square grid of side `L = 2R = 32`, non-periodic edges. The paper's disk is approximated by the circular
+  Poisson wall of radius `R`.
+- WENO5-Z finite volumes, Rusanov flux, conservative variables, integrated in SSPRK3.
+- The Strang splitting does half-transport, full source, half-transport (order 2, like the paper).
 
-L'étage source `adc.CondensedSchur(theta=0.5, alpha=...)` avance la source implicitement, ce qui franchit
-les échelles cyclotron et plasma sans les résoudre. La force de Lorentz s'inverse par un éliminateur 2×2
+The source stage `adc.CondensedSchur(theta=0.5, alpha=...)` advances the source implicitly, which steps
+over the cyclotron and plasma scales without resolving them. The Lorentz force is inverted by a 2x2
+eliminator
 
 ```
 B^-1 = 1/(1+w^2) [[1, w], [-w, 1]],   w = theta dt B_z,
 ```
 
-et l'opérateur elliptique condensé est `A = I + c rho B^-1` avec `c = theta^2 dt^2 alpha`. On résout `A`
-pour `phi^{n+theta}` (BiCGStab préconditionné multigrille), puis on reconstruit la quantité de mouvement
-`v^{n+theta} = B^-1 (v^n - theta dt grad phi^{n+theta})`.
+and the condensed elliptic operator is `A = I + c rho B^-1` with `c = theta^2 dt^2 alpha`. You solve `A`
+for `phi^{n+theta}` (multigrid-preconditioned BiCGStab), then reconstruct the momentum `v^{n+theta} = B^-1
+(v^n - theta dt grad phi^{n+theta})`.
 
-## 7. La mesure et la leçon du facteur 2π
+## 7. Measurement and the lesson of the 2pi factor
 
-Le solveur produisait le bon résultat depuis le début. La comparaison au papier était fausse sur deux
-points, tous deux le même facteur `2pi`.
+The solver produced the right result from the start. The comparison to the paper was wrong on two points,
+both the same `2pi` factor.
 
-Origine du `2pi`. La théorie linéaire de Davidson (référence [13] du papier) donne les cibles
-`gamma_3 = 0.772`, `gamma_4 = 0.911`, `gamma_5 = 0.683` à partir d'un problème aux valeurs propres 2×2 sur
-les deux bords de l'anneau. Le papier exprime la fréquence diocotron `omega_d = 1` en cyclique (un tour
-par période), mais la dispersion manipule une fréquence angulaire (un tour vaut `2pi` radians). Le `2pi`
-est cette conversion. `diag/petri_eigenvalue.py` le vérifie : avec `Wd = 2pi omega_d` il reproduit les
-trois cibles à moins de 0.5 %, et avec `Wd = omega_d = 1` il rend exactement les cibles divisées par `2pi`.
+Origin of the `2pi`. Davidson's linear theory (reference [13] of the paper) gives the targets `gamma_3 =
+0.772`, `gamma_4 = 0.911`, `gamma_5 = 0.683` from a 2x2 eigenvalue problem on the two edges of the ring.
+The paper expresses the diocotron frequency `omega_d = 1` in cyclic form (one turn per period), but the
+dispersion relation works with an angular frequency (one turn is `2pi` radians). The `2pi` is this
+conversion. `diag/petri_eigenvalue.py` checks it: with `Wd = 2pi omega_d` it reproduces the three targets
+to within 0.5 %, and with `Wd = omega_d = 1` it returns exactly the targets divided by `2pi`.
 
-Le solveur numérique tourne dans l'horloge `E×B` naturelle, donc `gamma_paper = gamma_raw_sim *
-2pi/rhobar` (rhobar = rho_max = 1). C'est ce que fait `gamma_to_paper_units`. Et comme `alpha/omega = 1`
-(section 5), ce facteur s'applique au modèle complet comme au transport réduit.
+The numerical solver runs in the natural `ExB` clock, so `gamma_paper = gamma_raw_sim * 2pi/rhobar`
+(rhobar = rho_max = 1). This is what `gamma_to_paper_units` does. And since `alpha/omega = 1` (section 5),
+this factor applies to the full model just as to the reduced transport.
 
 ```python
 def paper_to_sim_time_window(window_paper, rhobar=1.0):
@@ -253,106 +251,103 @@ def gamma_to_paper_units(gamma_raw_sim, rhobar=1.0):
     return gamma_raw_sim * (2.0 * math.pi / rhobar)
 ```
 
-La deuxième erreur était la fenêtre de fit. Les fenêtres du papier sont en temps papier, mais étaient
-appliquées au temps de simulation. La fenêtre `[0.40, 0.70]` du mode 3 correspond à `t_sim ∈ [2.51, 4.40]`,
-pas à `[0.40, 0.70]` ; appliquée telle quelle, elle mesure le transitoire, où le taux n'a pas encore
-atteint sa valeur exponentielle. `fit_growth` mappe donc la fenêtre par `paper_to_sim_time_window` avant
-l'ajustement.
+The second error was the fit window. The paper's windows are in paper time, but were applied to simulation
+time. Mode 3's window `[0.40, 0.70]` corresponds to `t_sim in [2.51, 4.40]`, not to `[0.40, 0.70]`;
+applied as is, it measures the transient, where the rate has not yet reached its exponential value.
+`fit_growth` therefore maps the window with `paper_to_sim_time_window` before the fit.
 
-Décomposition du déficit du mode 3 (`0.0312 → 0.772`, facteur 24.7) : fenêtre 3.20, puis `2pi = 6.28`,
-puis résidu de grille cart contre polaire 1.23. Le produit `3.20 × 6.28 × 1.23` vaut 24.7, le déficit
-observé. Seul le résidu de grille est physique, et il tend vers zéro avec la résolution (section 9).
-Détail dans [`docs/T2_NORMALIZATION_AUDIT.md`](docs/T2_NORMALIZATION_AUDIT.md) et [`docs/RESULTS_SYSTEM_SCHUR.md`](docs/RESULTS_SYSTEM_SCHUR.md).
+Breakdown of mode 3's deficit (`0.0312 -> 0.772`, factor 24.7): window 3.20, then `2pi = 6.28`, then a
+Cartesian-versus-polar grid residual of 1.23. The product `3.20 x 6.28 x 1.23` equals 24.7, the observed
+deficit. Only the grid residual is physical, and it tends to zero with resolution (section 9). Details in
+[`docs/T2_NORMALIZATION_AUDIT.md`](docs/T2_NORMALIZATION_AUDIT.md) and
+[`docs/RESULTS_SYSTEM_SCHUR.md`](docs/RESULTS_SYSTEM_SCHUR.md).
 
-## 8. Les figures obtenues
+## 8. The figures you get
 
-Snapshots schlieren de la densité **du modèle complet `system-schur`** (n=96, reconstruction minmod),
-palette du papier (disque blanc, extérieur ardoise, colormap Blues), aux fractions de temps
-`0.01, 1/8, ..., 7/8, t_f`. Le nombre de vortex égale le mode.
+Schlieren snapshots of the density **of the full `system-schur` model** (n=96, minmod reconstruction),
+paper palette (white disk, slate exterior, Blues colormap), at the time fractions `0.01, 1/8, ..., 7/8,
+t_f`. The number of vortices equals the mode.
 
-Mode l=3 (figure 5.1 du papier) : triangle, puis trois bras, puis trois vortex.
+Mode l=3 (figure 5.1 of the paper): triangle, then three arms, then three vortices.
 
 ![Snapshots l=3](figures/snapshots_l3.png)
 
-Mode l=4 (figure 5.2) : carré, puis quatre vortex.
+Mode l=4 (figure 5.2): square, then four vortices.
 
 ![Snapshots l=4](figures/snapshots_l4.png)
 
-Mode l=5 (figure 5.3) : pentagone, étoile à cinq branches, puis cinq vortex en couronne.
+Mode l=5 (figure 5.3): pentagon, five-pointed star, then five vortices in a crown.
 
 ![Snapshots l=5](figures/snapshots_l5.png)
 
-Animations correspondantes : `figures/diocotron_l3.gif`, `figures/diocotron_l4.gif` (en tête de page),
-`figures/diocotron_l5.gif`. Elles montrent la rotation de l'anneau, la croissance du mode, puis le
-repliement en vortex et l'étirement des filaments.
+Matching animations: `figures/diocotron_l3.gif`, `figures/diocotron_l4.gif` (at the top of the page),
+`figures/diocotron_l5.gif`. They show the ring rotating, the mode growing, then the fold into vortices and
+the stretching of the filaments.
 
-Taux de croissance, style figure 5.4. Panneaux (a,b,c) : amplitude `|c_l(t)|/|c_l(0)|` en échelle log, la
-courbe suit la pente papier (tirets rouges) dans la fenêtre de fit mappée, puis sature. Panneau (d) :
-`gamma_l` contre le mode, pour le papier, le modèle complet et la dérive ExB réduite.
+Growth rates, figure 5.4 style. Panels (a,b,c): amplitude `|c_l(t)|/|c_l(0)|` on a log scale, the curve
+follows the paper slope (red dashes) within the mapped fit window, then saturates. Panel (d): `gamma_l`
+against the mode, for the paper, the full model, and the reduced ExB drift.
 
-![Taux de croissance](figures/growth_rate.png)
+![Growth rates](figures/growth_rate.png)
 
-Les snapshots et les GIF sont la densité **réelle** du modèle complet `system-schur`, avancé en
-reconstruction minmod (TVD) : WENO5 overshoote au saut top-hat de l'anneau, la densité passe négative
-et le run s'effondre vers t≈0.38 t_f (dt→0 ou NaN, cf. ADC-62/ADC-74) ; minmod garde `rho > 0` et
-atteint le rollup complet, au prix de filaments plus lissés. L'état brut (densité + phi) de chaque
-snapshot est dumpé en `.npz` réutilisable via `sim.write` (`out/hoffart_paper_figures/mode_*/`).
-Les courbes d'amplitude (a,b,c) du growth_rate utilisent la dérive `E×B` réduite (même champ
-d'advection, `alpha/omega = 1`) ; les taux du panneau (d) viennent du modèle complet `system-schur`.
-Le générateur est `diag/make_paper_figures.py`.
+The snapshots and GIFs are the **actual** density of the full `system-schur` model, advanced in minmod
+(TVD) reconstruction: WENO5 overshoots at the ring's top-hat jump, the density goes negative and the run
+collapses around t~0.38 t_f (dt->0 or NaN, see ADC-62/ADC-74); minmod keeps `rho > 0` and reaches the full
+rollup, at the cost of more smeared filaments. The raw state (density + phi) of each snapshot is dumped as
+a reusable `.npz` via `sim.write` (`out/hoffart_paper_figures/mode_*/`). The amplitude curves (a,b,c) of
+growth_rate use the reduced `ExB` drift (same advection field, `alpha/omega = 1`); the rates of panel (d)
+come from the full `system-schur` model. The generator is `diag/make_paper_figures.py`.
 
 ## 9. Convergence
 
-L'erreur relative au papier tend vers zéro quand la grille se raffine. Le résidu de basse résolution
-était la discrétisation cartésienne du bord d'anneau, pas un verrou.
+The relative error to the paper tends to zero as the grid refines. The low-resolution residual was the
+Cartesian discretization of the ring edge, not a lock.
 
 ![Convergence](figures/convergence.png)
 
 | n | l=3 | l=4 | l=5 |
 |---|---|---|---|
-| 64 | −13.7 % | −13.8 % | −0.1 % |
-| 128 | −3.8 % | −4.7 % | +0.6 % |
-| 256 | −0.6 % | +0.2 % | −0.7 % |
+| 64 | -13.7 % | -13.8 % | -0.1 % |
+| 128 | -3.8 % | -4.7 % | +0.6 % |
+| 256 | -0.6 % | +0.2 % | -0.7 % |
 
-À n=256 les trois modes reproduisent le papier à moins de 1 %.
+At n=256 all three modes reproduce the paper to within 1 %.
 
-## 10. Performance et passage à l'échelle (local + ROMEO)
+## 10. Performance and scaling (local + ROMEO)
 
-### Coût local (1 cœur)
+### Local cost (1 core)
 
-Le build local de référence est séquentiel (Kokkos Serial), donc un seul thread même sur une machine
-8 cœurs ; le multi-thread passe par une install Kokkos OpenMP. Pour le modèle complet `system-schur`
-avec le solve Krylov de Schur, dt=2e-3, t_end=10
-(5000 pas), par mode, sur Apple Silicon arm64 :
+The reference local build is sequential (Kokkos Serial), so a single thread even on an 8-core machine;
+multi-threading goes through a Kokkos OpenMP install. For the full `system-schur` model with the Schur
+Krylov solve, dt=2e-3, t_end=10 (5000 steps), per mode, on Apple Silicon arm64:
 
-| n | wall (1 cœur) | gamma_paper (l=3) | erreur |
+| n | wall (1 core) | gamma_paper (l=3) | error |
 |---|---|---|---|
-| 96 | 120 s | 0.702 | −9.1 % |
-| 128 | 246 s | 0.729 | −5.6 % |
-| 192 | 490 s | 0.746 | −3.4 % |
+| 96 | 120 s | 0.702 | -9.1 % |
+| 128 | 246 s | 0.729 | -5.6 % |
+| 192 | 490 s | 0.746 | -3.4 % |
 
-![Coût et convergence local](figures/perf_local.png)
+![Local cost and convergence](figures/perf_local.png)
 
-### ROMEO : passage à l'échelle en threads
+### ROMEO: thread scaling
 
-Sur ROMEO (URCA, partition x64cpu, AMD EPYC 9654, OpenMP, compte r250127), un AMR 3 niveaux du
-diocotron (build g++ direct `-fopenmp`, header-only) mesuré à résolution 512, 60 pas, de 1 à 96
-threads sur un nœud :
+On ROMEO (URCA, x64cpu partition, AMD EPYC 9654, OpenMP, account r250127), a 3-level AMR diocotron (direct
+g++ build `-fopenmp`, header-only) measured at resolution 512, 60 steps, from 1 to 96 threads on one node:
 
 | threads | 1 | 6 | 12 | 24 | 48 | 96 |
 |---|---|---|---|---|---|---|
 | wall (s) | 10.9 | 7.4 | 7.0 | 6.6 | 6.8 | 7.4 |
 | speedup | 1.0 | 1.5 | 1.6 | 1.6 | 1.6 | 1.5 |
 
-![Scaling threads ROMEO](figures/romeo_scaling.png)
+![ROMEO thread scaling](figures/romeo_scaling.png)
 
-Le speedup sature vers 1.6× à 24 threads puis se dégrade. Ce n'est pas un défaut de mise en
-œuvre : le pas diocotron est dominé par des noyaux à petit grain (Poisson multigrille + flux sur
-des patchs AMR petits), peu parallélisable à ces tailles. Le même constat est dans le journal
-ROMEO (`HERO_RESULTS.md`) : à ces tailles, le pas tourne mieux en CPU multi-cœur modéré qu'en
-saturant beaucoup de cœurs ou un GPU. Pour scaler fort, il faut des problèmes bien plus gros.
+The speedup saturates around 1.6x at 24 threads, then degrades. This is not an implementation flaw: the
+diocotron step is dominated by fine-grained kernels (multigrid Poisson + flux on small AMR patches),
+hardly parallelizable at these sizes. The same finding is in the ROMEO log (`HERO_RESULTS.md`): at these
+sizes, the step runs better on moderate multi-core CPU than by saturating many cores or a GPU. To scale
+hard, you need much larger problems.
 
-## 11. Structure du dossier
+## 11. Folder structure
 
 ```
 hoffart_euler_poisson_dsl/
@@ -369,6 +364,6 @@ hoffart_euler_poisson_dsl/
 └── figures/        assets versionnés (snapshots, GIF, growth_rate, convergence, perf) + provenance.json
 ```
 
-Chaque sous-dossier porte son propre `README.md` listant ses fichiers. Les modules Python du cœur
-(`model`, `results`, `run`, `run_polar`, `check_model`) restent à la racine : ils s'importent
-mutuellement en same-dir (`from model import …`), donc ne se déplacent pas en sous-dossier.
+Each subfolder carries its own `README.md` listing its files. The core Python modules (`model`, `results`,
+`run`, `run_polar`, `check_model`) stay at the root: they import each other same-dir (`from model import
+...`), so they do not move into a subfolder.

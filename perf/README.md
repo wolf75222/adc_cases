@@ -1,71 +1,71 @@
-# `perf/` - campagne de mesure de performance
+# `perf/` - performance measurement campaign
 
-Deux axes, mesures uniquement en delta depuis `origin/master` des deux dépôts (`adc_cpp`,
-`adc_cases`). Le cas physique est le **cas sûr** : Euler compressible pur, périodique, bulle de
-pression lisse de faible amplitude (`rho > 0`, `p > 0` garantis), transport pur. Source de vérité
-du cas : [`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) ; pendant C++ :
-`adc_cpp/bench/frontend_cpp.cpp` (namespace `safecase`). La **validation** du cas (équivalence
-des fronts + invariants, sans mesure) est le cas registré [`safe_euler_periodic/`](../safe_euler_periodic).
+Two axes, measured only as a delta from `origin/master` of both repositories (`adc_cpp`,
+`adc_cases`). The physics case is the **safe case**: pure compressible Euler, periodic, a smooth
+low-amplitude pressure bubble (`rho > 0`, `p > 0` guaranteed), pure transport. Source of truth for
+the case: [`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py); C++ counterpart:
+`adc_cpp/bench/frontend_cpp.cpp` (namespace `safecase`). The case **validation** (front equivalence
+plus invariants, without measurement) is the registered case [`safe_euler_periodic/`](../safe_euler_periodic).
 
-## Axe 1 - fronts : C++ direct vs Python briques vs Python DSL
+## Axis 1 - fronts: C++ direct vs Python bricks vs Python DSL
 
-`frontend_compare.py` joue la **même** physique avec les **mêmes** réglages numériques
-(minmod / rusanov / reconstruction conservative / SSPRK2 / `dt` FIXE) sur trois fronts ; le seul
-écart mesuré est le coût du front, à calcul identique.
+`frontend_compare.py` runs the **same** physics with the **same** numerical settings
+(minmod / rusanov / conservative reconstruction / SSPRK2 / FIXED `dt`) across three fronts; the only
+difference measured is the cost of the front itself, at identical computation.
 
-- **C++ direct** : binaire `adc_cpp/bench/frontend_cpp` (sous-processus).
-- **Python briques** : `adc.System` + `add_block(models.euler)` + `step(dt)`.
-- **Python DSL** : `adc.dsl.Model(...).compile(backend="production")` + `add_equation` + `step(dt)`.
+- **C++ direct**: the `adc_cpp/bench/frontend_cpp` binary (subprocess).
+- **Python bricks**: `adc.System` + `add_block(models.euler)` + `step(dt)`.
+- **Python DSL**: `adc.dsl.Model(...).compile(backend="production")` + `add_equation` + `step(dt)`.
 
-Méthodologie **cold-cache** : chaque front Python tourne dans un **sous-processus frais** (import
-`adc` réellement froid, cache DSL maîtrisé). Le DSL est mesuré **froid** (`so_dir` vide → compilation
-`g++`) puis **chaud** (même `so_dir` → cache touché). Chronométrage par étage : `import` /
+**Cold-cache** methodology: each Python front runs in a **fresh subprocess** (the `adc` import is
+genuinely cold, the DSL cache is controlled). The DSL is measured **cold** (empty `so_dir` -> `g++`
+compilation) then **hot** (same `so_dir` -> cache hit). Per-stage timing: `import` /
 `model_build` / `dsl_compile` / `addblock` / `state_init` / `first_step` / `warmup` / `run_loop` /
-`diag` ; plus la boucle chaude (`median/p10/p90/cv`), `advance(dt,nsteps)` (un appel Python, isole
-le crossing par pas) et, si Poisson actif, `solve_fields` isolé.
+`diag`; plus the hot loop (`median/p10/p90/cv`), `advance(dt,nsteps)` (a single Python call, isolates
+the per-step crossing), and, when Poisson is active, `solve_fields` in isolation.
 
 ```bash
-# depuis adc_cases, avec le build sur le PYTHONPATH
+# from adc_cases, with the build on PYTHONPATH
 PYTHONPATH=<adc_cpp>/build-master/python:. python3 perf/frontend_compare.py \
     --n 256 --steps 50 --warmup 5 --poisson off \
     --cpp-bin <adc_cpp>/build-bench-serie/bin/frontend_cpp
-python3 perf/plot_frontend.py   # figures dans out/safe_euler_periodic/figures/
+python3 perf/plot_frontend.py   # figures in out/safe_euler_periodic/figures/
 ```
 
-`--poisson off` (défaut) = transport pur, signal frontend propre. `--poisson on` = solve elliptique
-**inerte** (charge=0) à chaque pas, régime MG-dominé (idiome `two_euler`). Les deux modes restent
-symétriques sur les trois fronts.
+`--poisson off` (default) = pure transport, a clean frontend signal. `--poisson on` = an **inert**
+elliptic solve (charge=0) at every step, an MG-dominated regime (the `two_euler` idiom). Both modes
+stay symmetric across the three fronts.
 
-**Asymétrie de granularité (assumée).** `System` n'a aucun timer interne : le front C++ donne le
-détail 7-phases (poisson/aux/halos/transport/réduction/fence/alloc, via la machinerie de
-`profile_step`), les fronts Python ne donnent que `total + solve_fields`. La comparaison croisée
-reste valide sur le **temps total cold-cache** et le **hot ms/pas**.
+**Granularity asymmetry (assumed).** `System` has no internal timer: the C++ front gives the
+7-phase breakdown (poisson/aux/halos/transport/reduction/fence/alloc, via the `profile_step`
+machinery), the Python fronts give only `total + solve_fields`. The cross-comparison stays valid on
+the **cold-cache total time** and the **hot ms/step**.
 
-## Axe 2 - scaling CPU/GPU/MPI
+## Axis 2 - CPU/GPU/MPI scaling
 
-Piloté côté `adc_cpp/bench/scaling_step.cpp` via `bench/run_scaling.sh` (multi-box, vrais halos
-MPI). Charges : `transport` (4096²), `poisson` (1024²), `amr` (non câblé dans ce binaire → ligne de
-diagnostic explicite). Le JSONL produit (un par point du balayage) est tracé par
-`plot_frontend.py --scaling <fichier.jsonl>` (strong speedup/efficacité, weak efficacité, débit).
+Driven on the `adc_cpp/bench/scaling_step.cpp` side via `bench/run_scaling.sh` (multi-box, real MPI
+halos). Workloads: `transport` (4096^2), `poisson` (1024^2), `amr` (not wired into this binary -> an
+explicit diagnostic line). The JSONL produced (one per sweep point) is plotted by
+`plot_frontend.py --scaling <file.jsonl>` (strong speedup/efficiency, weak efficiency, throughput).
 
 ## Local vs cluster
 
-- **Mac (série)** : validation/plomberie SEULEMENT - vérifie le câblage des API, la compilation DSL
-  `production`, l'identité numérique, les invariants, le schéma JSONL, les figures. Les temps série
-  sont étiquetés `machine=<mac>, backend=serial` et **exclus** de toute affirmation de scaling.
-- **ROMEO (GH200/MPI/OpenMP)** : SEULE source de chiffres de scaling valides (CV<5%, cells/s,
-  p10/p90, ratios). `bench/run_frontend.sh` et `bench/run_scaling.sh` portent les recettes de build
-  par backend.
+- **Mac (serial)**: validation/plumbing ONLY - checks the API wiring, the `production` DSL
+  compilation, numerical identity, the invariants, the JSONL schema, the figures. Serial timings are
+  labeled `machine=<mac>, backend=serial` and **excluded** from any scaling claim.
+- **ROMEO (GH200/MPI/OpenMP)**: the ONLY source of valid scaling numbers (CV<5%, cells/s,
+  p10/p90, ratios). `bench/run_frontend.sh` and `bench/run_scaling.sh` carry the per-backend build
+  recipes.
 
-## Schéma JSONL (`adc_perf_v1`)
+## JSONL schema (`adc_perf_v1`)
 
-Chaque ligne porte : `adc_cpp_sha`/`adc_cpp_branch`/`adc_cases_sha`/`adc_cases_branch`, `backend`,
-`machine`, `ranks`/`threads`/`gpus`, `nx`/`ny`/`boxes`/`max_grid`, `workload` + réglages numériques,
+Each line carries: `adc_cpp_sha`/`adc_cpp_branch`/`adc_cases_sha`/`adc_cases_branch`, `backend`,
+`machine`, `ranks`/`threads`/`gpus`, `nx`/`ny`/`boxes`/`max_grid`, `workload` + numerical settings,
 `stages{...}`, `total_cold_user_s`, `hot_ms_per_step{median,p10,p90,cv}`, `advance_ms_per_step`,
 `phases_ms_per_step{...}`, `cells_per_s`, `invariants{mass,rho_min,p_min,nan}`.
 
-## Acceptation
+## Acceptance
 
-Un résultat n'est publiable que si : invariants OK, pas de NaN, `cv < 5 %`, réglages numériques
-identiques entre fronts, SHA exacts dans le JSON, et **aucun graphe ne mélange master et PR**
-(`plot_frontend.py` refuse de tracer deux `(adc_cpp_sha, adc_cpp_branch)` dans une même figure).
+A result is publishable only if: invariants OK, no NaN, `cv < 5 %`, numerical settings identical
+across fronts, exact SHAs in the JSON, and **no graph mixes master and a PR**
+(`plot_frontend.py` refuses to plot two `(adc_cpp_sha, adc_cpp_branch)` in the same figure).

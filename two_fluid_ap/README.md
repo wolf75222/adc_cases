@@ -1,102 +1,102 @@
-# two_fluid_ap : bi-fluide isotherme raide, asymptotic-preserving
+# two_fluid_ap: stiff isothermal two-fluid, asymptotic-preserving
 
-Un plasma a deux fluides (electrons + ions) couples au champ electrique de Poisson est integre
-par un schema IMEX dont le terme raide (la relaxation a la quasi-neutralite, d'echelle la frequence
-plasma $\omega_{pe}$) est traite implicitement. La propriete testee est l'asymptotic-preserving
-(AP) : le pas stable ne s'effondre pas quand la raideur $s=\Delta t\,\omega_{pe}$ croit, alors qu'un
-schema explicite est limite a $s\lesssim 1$ et explose au-dela. L'integrateur AP a quitte le coeur
-`adc_cpp` (ce n'est pas une brique composable `adc.System`) : c'est un scenario C++ sur mesure
-(`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`), compile a la volee via `ctypes`. Ce n'est pas une
-reproduction d'un resultat publie.
+A two-fluid plasma (electrons + ions) coupled to the electric field of Poisson is integrated
+by an IMEX scheme whose stiff term (the relaxation to quasi-neutrality, set by the plasma
+frequency $\omega_{pe}$) is treated implicitly. The property under test is asymptotic-preserving
+(AP): the stable step does not collapse as the stiffness $s=\Delta t\,\omega_{pe}$ grows, whereas an
+explicit scheme is limited to $s\lesssim 1$ and blows up beyond. The AP integrator has left the
+`adc_cpp` core (it is not a composable `adc.System` block): it is a bespoke C++ scenario
+(`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`), compiled on the fly via `ctypes`. It is not a
+reproduction of a published result.
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `two_fluid_ap/run.py`, `ci = true`, `needs = ["cxx"]`) |
-| Entrees | grille $64^2$, $L=2\pi$, periodique ; CI $n_e=1+\epsilon\cos(kx+ky)$, $k=2\pi/L$, $\epsilon=10^{-3}$, $n_i=1$, $m_s=0$ ; isotherme $c_e^2=1$, $c_i^2=0.04$ ; $z_e=-1$, $z_i=+1$, $n_0=1$. Run 1 raide : $\omega_{pe}=10^3$, $\omega_{pi}=20$, $\Delta t=5\times10^{-3}$, 200 pas, $s=\Delta t\,\omega_{pe}=5$. Run 2 magnetise : $\omega_{ce}=4$, $\omega_{ci}=0.2$, $\Delta t=10^{-2}$, 100 pas |
-| Sorties | diagnostics imprimes (`max_dev`, `max_charge`, `mass_e`), ligne finale `OK two_fluid_ap` ; 2 figures + `figures/provenance.json` (via `make_figures.py`) ; lib JIT dans `out/two_fluid_ap/build/` |
-| Invariants garantis | les `assert` de `run.py` : finitude (`np.isfinite`, run 1+2) ; `max_dev < 0.1` et `max_charge < 0.1` (run 1, `run.py:199-200`) ; `mass_rel < 1e-7` (run 1+2, `run.py:202`, `run.py:235`) |
-| Prouve | a $s=5$ (run 1), schema AP fini et borne : $\max\lvert n_e-1\rvert=5.325\times10^{-7}$, $\max\lvert n_i-n_e\rvert=6.698\times10^{-11}$, masse $e$ conservee a $2.276\times10^{-14}$ relatif ; run 2 magnetise masse $e$ a $1.665\times10^{-14}$. Prediction AP falsifiable (figure 1) : la deviation AP plateaute a $5.41\times10^{-7}$ pour $s\in[1,50]$, tandis que l'explicite est fini pour $s\le1.0$ et NaN des $s\ge1.2$ |
-| Ne prouve pas | pas une reproduction publiee : aucun nombre confronte a un article. Les `assert` de `run.py` testent des bornes ($<0.1$, $<10^{-7}$), pas l'ordre AP : le contraste AP/explicite est mesure par `make_figures.py`, pas asserte. `mass_e=4096` est une somme sans poids $dx^2$ (proxy de conservation relative, pas une masse physique). Le diagnostic C++ `tfap_max_dev` est non fiable sur un champ explose (`fmax` sur NaN rend $0.0$, section 6) : l'explosion explicite est detectee cote Python par `np.isfinite`. Regime quasi-lineaire ($\epsilon=10^{-3}$, schema spatial bas ordre, fond $n_0=1$ constant) ; backend valide = CPU serie seul (portabilite GPU non exercee ici) |
-| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, scenario C++ JIT `TwoFluidAP2D<GeometricMG>` (Apple clang 21, C++20), CPU serie, $64^2$ ; run.py ~3.6 s (cache a jour) / ~5.5 s (1ere compilation) ; `figures/provenance.json` |
+| Category (manifest) | `validation` (`cases_manifest.toml`, `two_fluid_ap/run.py`, `ci = true`, `needs = ["cxx"]`) |
+| Inputs | $64^2$ grid, $L=2\pi$, periodic; IC $n_e=1+\epsilon\cos(kx+ky)$, $k=2\pi/L$, $\epsilon=10^{-3}$, $n_i=1$, $m_s=0$; isothermal $c_e^2=1$, $c_i^2=0.04$; $z_e=-1$, $z_i=+1$, $n_0=1$. Run 1 stiff: $\omega_{pe}=10^3$, $\omega_{pi}=20$, $\Delta t=5\times10^{-3}$, 200 steps, $s=\Delta t\,\omega_{pe}=5$. Run 2 magnetized: $\omega_{ce}=4$, $\omega_{ci}=0.2$, $\Delta t=10^{-2}$, 100 steps |
+| Outputs | printed diagnostics (`max_dev`, `max_charge`, `mass_e`), final line `OK two_fluid_ap`; 2 figures + `figures/provenance.json` (via `make_figures.py`); JIT lib in `out/two_fluid_ap/build/` |
+| Guaranteed invariants | the `assert`s in `run.py`: finiteness (`np.isfinite`, run 1+2); `max_dev < 0.1` and `max_charge < 0.1` (run 1, `run.py:199-200`); `mass_rel < 1e-7` (run 1+2, `run.py:202`, `run.py:235`) |
+| Proves | at $s=5$ (run 1), the AP scheme is finite and bounded: $\max\lvert n_e-1\rvert=5.325\times10^{-7}$, $\max\lvert n_i-n_e\rvert=6.698\times10^{-11}$, electron mass conserved to $2.276\times10^{-14}$ relative; magnetized run 2 electron mass to $1.665\times10^{-14}$. Falsifiable AP prediction (figure 1): the AP deviation plateaus at $5.41\times10^{-7}$ for $s\in[1,50]$, while the explicit scheme is finite for $s\le1.0$ and NaN from $s\ge1.2$ |
+| Does not prove | not a published reproduction: no number is confronted with a paper. The `assert`s in `run.py` test bounds ($<0.1$, $<10^{-7}$), not the AP order: the AP/explicit contrast is measured by `make_figures.py`, not asserted. `mass_e=4096` is a sum without the $dx^2$ weight (a proxy for relative conservation, not a physical mass). The C++ diagnostic `tfap_max_dev` is unreliable on a blown-up field (`fmax` over NaN returns $0.0$, section 6): the explicit blow-up is detected on the Python side by `np.isfinite`. Quasi-linear regime ($\epsilon=10^{-3}$, low-order spatial scheme, constant $n_0=1$ background); validated backend = serial CPU only (GPU portability not exercised here) |
+| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, JIT C++ scenario `TwoFluidAP2D<GeometricMG>` (Apple clang 21, C++20), serial CPU, $64^2$; run.py ~3.6 s (cache up to date) / ~5.5 s (first compilation); `figures/provenance.json` |
 
-A la fin tu sauras : ce qu'est la raideur d'un plasma et pourquoi un schema explicite y est limite a
-$\Delta t\,\omega_{pe}\lesssim1$ (mecanisme), comment la reformulation AP de l'elliptique leve cette
-borne (la derivation $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$), quelle est la prediction
-falsifiable (deviation bornee quand $s\to\infty$, explicite NaN), et pourquoi le solveur vit dans
-`adc_cases` au lieu du coeur `adc_cpp`.
+By the end you will know: what plasma stiffness is and why an explicit scheme is limited to
+$\Delta t\,\omega_{pe}\lesssim1$ (mechanism), how the AP reformulation of the elliptic lifts this
+bound (the derivation $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$), what the falsifiable
+prediction is (bounded deviation as $s\to\infty$, explicit NaN), and why the solver lives in
+`adc_cases` instead of the `adc_cpp` core.
 
 ---
 
-## 1. Le mecanisme physique : la raideur du plasma (justifie Prouve : AP borne)
+## 1. The physical mechanism: plasma stiffness (justifies Proves: AP bounded)
 
-Deux fluides isothermes charges, electrons (densite $n_e$, charge $z_e=-1$) et ions ($n_i$,
-$z_i=+1$), partagent un champ electrique auto-consistant. Trois ingredients enchaines, dont le
-dernier est la source de raideur :
+Two charged isothermal fluids, electrons (density $n_e$, charge $z_e=-1$) and ions ($n_i$,
+$z_i=+1$), share a self-consistent electric field. Three chained ingredients, the last being the
+source of stiffness:
 
-1. **Transport isotherme.** Chaque espece advecte sa densite et sa quantite de mouvement
-   $m_s=(m_{s,x},m_{s,y})$ avec une pression $p_s=c_s^2 n_s$ (pas d'equation d'energie) :
+1. **Isothermal transport.** Each species advects its density and momentum
+   $m_s=(m_{s,x},m_{s,y})$ with a pressure $p_s=c_s^2 n_s$ (no energy equation):
    $\partial_t n_s+\nabla\cdot m_s=0$, $\partial_t m_s+\nabla\cdot(m_s\otimes m_s/n_s+c_s^2 n_s I)=z_s n_s E$.
-2. **Champ propre.** L'ecart de densite cree $\phi$ par Poisson, $\nabla^2\phi=n_e-n_i$, et
-   $E=-\nabla\phi$. Une separation de charge $n_e\ne n_i$ engendre un champ qui rappelle les
-   especes l'une vers l'autre.
-3. **Relaxation raide a la quasi-neutralite.** Ce rappel oscille a la frequence plasma
-   $\omega_{pe}=\sqrt{4\pi n_0 e^2/m_e}$ (ici $\omega_{pe}$ est un parametre direct). Plus le plasma
-   est dense, plus $\omega_{pe}$ est grand, plus la relaxation est rapide devant l'echelle
-   d'interet (le transport, d'echelle $c_s/L$). C'est une echelle de temps raide : un schema
-   explicite doit la resoudre, donc $\Delta t\,\omega_{pe}\lesssim1$, meme si la physique lente ne
-   l'exige pas.
+2. **Self-field.** The density gap creates $\phi$ through Poisson, $\nabla^2\phi=n_e-n_i$, and
+   $E=-\nabla\phi$. A charge separation $n_e\ne n_i$ generates a field that pulls the species
+   back toward each other.
+3. **Stiff relaxation to quasi-neutrality.** This pull oscillates at the plasma frequency
+   $\omega_{pe}=\sqrt{4\pi n_0 e^2/m_e}$ (here $\omega_{pe}$ is a direct parameter). The denser
+   the plasma, the larger $\omega_{pe}$, the faster the relaxation relative to the scale of
+   interest (the transport, of scale $c_s/L$). It is a stiff time scale: an explicit scheme must
+   resolve it, hence $\Delta t\,\omega_{pe}\lesssim1$, even though the slow physics does not
+   require it.
 
-La propriete AP consiste a traiter le canal raide (2)-(3) implicitement, de sorte que le pas
-$\Delta t$ soit fixe par le transport lent (1) et non par $\omega_{pe}$. Dans la limite
-asymptotique $s=\Delta t\,\omega_{pe}\to\infty$ (plasma infiniment raide, ou pas de temps grand), le
-schema doit rester stable et converger vers la solution quasi-neutre $n_e\approx n_i$. C'est
-ce que la figure 1 mesure.
+The AP property consists of treating the stiff channel (2)-(3) implicitly, so that the step
+$\Delta t$ is set by the slow transport (1) and not by $\omega_{pe}$. In the asymptotic limit
+$s=\Delta t\,\omega_{pe}\to\infty$ (infinitely stiff plasma, or large time step), the scheme must
+stay stable and converge to the quasi-neutral solution $n_e\approx n_i$. This is what figure 1
+measures.
 
-Ce modele est le bi-fluide isotherme electrostatique. Le couplage magnetique (rotation cyclotron,
-run 2) est ajoute en option ; la version magnetisee non raide assemblee par composition vit dans
-[`magnetic_isothermal_dsl`](../magnetic_isothermal_dsl/). Ce cas-ci ne couvre pas un champ $B$
-auto-consistant : $B_z$ est uniforme et impose.
-
----
-
-## 2. Les equations et qui les calcule (justifie : la physique est figee en C++, hors coeur)
-
-Etat conservatif par espece, 3 composantes : $U_s=(n_s,m_{s,x},m_{s,y})$.
-
-| Bloc | Equation | Kernel C++ (`two_fluid_ap.hpp`) |
-|---|---|---|
-| Transport (quantite de mvt) | $\partial_t m_s+\nabla\cdot(m_s\otimes m_s/n_s+c_s^2 n_s I)=0$ (predicteur) | `tfap_mstar` (Rusanov scinde, `:44-74`) |
-| Transport (continuite) | $\partial_t n_s+\nabla\cdot m_s=0$ | `tfap_div_update` centre (`:77-86`) |
-| Elliptique AP | $\nabla^2\phi=(n_e^*-n_i^*)/(1+\beta_0)$, $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$ | RHS `:258-266` + `ell.solve()` |
-| Force (terme raide) | $m_s^{n+1}=m_s^*+\Delta t\,z_s\,\omega_{ps}^2\,E$ (implicite) | `tfap_lorentz` (`:162-170`) |
-| Force magnetisee | push de Boris (demi-E, rotation $B$, demi-E) | `tfap_boris` (`:179-193`) |
-
-Ce cas n'appelle aucun scenario du coeur : la physique deux-fluides AP est ecrite ici, et
-n'emprunte au coeur que des briques generiques (maillage, elliptique, parallele). Table 3 couches
-"qui calcule quoi", chaque ligne pinnee a une ligne reelle :
-
-| Ligne | Couche | Ce qui se passe |
-|---|---|---|
-| `TwoFluidAP(lib, n=.., omega_pe=.., stabilize=True)` (`run.py:173`, `:212`) | Python pilote | choix des parametres physiques + du flag AP ; lit l'etat via `ctypes` |
-| `TwoFluidAP2D<GeometricMG>` instancie par `Solver` (`_two_fluid_ap.cpp:32-43`) | scenario C++ fige | l'integrateur AP complet : split IMEX, Poisson reformule, Boris. C'est le `.cpp` compile JIT |
-| `for_each_cell(dom, [=] ADC_HD(i,j){...})` (`two_fluid_ap.hpp`, chaque kernel) | noyau par cellule (device-clean) | le calcul reel : flux Rusanov, divergence, push, sans callback Python dans le hot path |
-
-La couche du milieu n'est pas une brique nommee `models.two_fluid_ap` : le solveur a quitte le coeur
-parce que sa stabilisation couple $\Delta t$ dans l'elliptique (section 4), ce que la composition
-`adc.System` bloc-a-bloc ne sait pas exprimer. La justification est en tete de `two_fluid_ap.hpp:5-9`
-et `run.py:5-12` (`TwoFluidAP` "remplace l'ancien echappatoire interne `adc._adc._TwoFluidAP` retire
-du coeur").
+This model is the electrostatic isothermal two-fluid. The magnetic coupling (cyclotron rotation,
+run 2) is added as an option; the non-stiff magnetized version assembled by composition lives in
+[`magnetic_isothermal_dsl`](../magnetic_isothermal_dsl/). This case does not cover a self-consistent
+$B$ field: $B_z$ is uniform and imposed.
 
 ---
 
-## 3. Pourquoi le solveur est compile a la volee (justifie : ancrage reel, hors-coeur)
+## 2. The equations and who computes them (justifies: the physics is frozen in C++, out of the core)
 
-`run.py` ne charge aucun binding C++ du cas : il compile `_two_fluid_ap.cpp` en `.dylib`/`.so` et la
-charge par `ctypes`, exactement comme le JIT du DSL.
+Conservative state per species, 3 components: $U_s=(n_s,m_{s,x},m_{s,y})$.
 
-Build et chargement, `_build_lib` (`run.py:69-78`) :
+| Block | Equation | C++ kernel (`two_fluid_ap.hpp`) |
+|---|---|---|
+| Transport (momentum) | $\partial_t m_s+\nabla\cdot(m_s\otimes m_s/n_s+c_s^2 n_s I)=0$ (predictor) | `tfap_mstar` (split Rusanov, `:44-74`) |
+| Transport (continuity) | $\partial_t n_s+\nabla\cdot m_s=0$ | `tfap_div_update` centered (`:77-86`) |
+| AP elliptic | $\nabla^2\phi=(n_e^*-n_i^*)/(1+\beta_0)$, $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$ | RHS `:258-266` + `ell.solve()` |
+| Force (stiff term) | $m_s^{n+1}=m_s^*+\Delta t\,z_s\,\omega_{ps}^2\,E$ (implicit) | `tfap_lorentz` (`:162-170`) |
+| Magnetized force | Boris push (half-E, $B$ rotation, half-E) | `tfap_boris` (`:179-193`) |
+
+This case calls no core scenario: the AP two-fluid physics is written here, and borrows from the
+core only generic bricks (mesh, elliptic, parallel). A 3-layer "who computes what" table, each row
+pinned to a real line:
+
+| Line | Layer | What happens |
+|---|---|---|
+| `TwoFluidAP(lib, n=.., omega_pe=.., stabilize=True)` (`run.py:173`, `:212`) | Python driver | choice of physical parameters + AP flag; reads the state via `ctypes` |
+| `TwoFluidAP2D<GeometricMG>` instantiated by `Solver` (`_two_fluid_ap.cpp:32-43`) | frozen C++ scenario | the full AP integrator: IMEX split, reformulated Poisson, Boris. This is the JIT-compiled `.cpp` |
+| `for_each_cell(dom, [=] ADC_HD(i,j){...})` (`two_fluid_ap.hpp`, each kernel) | per-cell kernel (device-clean) | the real computation: Rusanov flux, divergence, push, with no Python callback in the hot path |
+
+The middle layer is not a brick named `models.two_fluid_ap`: the solver left the core because its
+stabilization couples $\Delta t$ into the elliptic (section 4), which block-by-block
+`adc.System` composition cannot express. The justification is at the top of `two_fluid_ap.hpp:5-9`
+and `run.py:5-12` (`TwoFluidAP` "replaces the old internal escape hatch `adc._adc._TwoFluidAP`
+removed from the core").
+
+---
+
+## 3. Why the solver is compiled on the fly (justifies: real anchoring, out of the core)
+
+`run.py` loads no C++ binding for the case: it compiles `_two_fluid_ap.cpp` to a `.dylib`/`.so` and
+loads it via `ctypes`, exactly like the DSL JIT.
+
+Build and load, `_build_lib` (`run.py:69-78`):
 
 ```python
 sources = [os.path.join(HERE, "_two_fluid_ap.cpp"), os.path.join(HERE, "two_fluid_ap.hpp")]
@@ -104,53 +104,53 @@ lib_path = native.build_shared("two_fluid_ap", sources)        # cache hors sour
 return native.load_symbols(lib_path, TFAP_SYMBOLS)             # 12 symboles tfap_* verifies
 ```
 
-- `native.build_shared` (`common/native.py:104-144`) compile avec `-shared -fPIC -std=c++20 -O2 -I
-  <adc_cpp/include>` et met la lib dans `out/two_fluid_ap/build/` (jamais a cote du `.cpp`,
-  conforme a la note du manifeste). La lib est indexee par une cle d'ABI = hash du compilateur,
-  des flags, des sources, et de la signature de l'arbre d'en-tetes du coeur : si un `.hpp` du
-  coeur change, la cle change et la lib est recompilee. On ne recharge jamais une lib perimee.
-- `native.load_symbols` (`common/native.py:147-164`) verifie que les 12 symboles `tfap_*`
-  (`run.py:61-65`) existent : un symbole manquant leve une `RuntimeError` explicite au chargement,
-  pas un `AttributeError` opaque au premier appel.
+- `native.build_shared` (`common/native.py:104-144`) compiles with `-shared -fPIC -std=c++20 -O2 -I
+  <adc_cpp/include>` and places the lib in `out/two_fluid_ap/build/` (never next to the `.cpp`,
+  matching the manifest note). The lib is indexed by an ABI key = hash of the compiler, the flags,
+  the sources, and the signature of the core header tree: if a core `.hpp` changes, the key changes
+  and the lib is recompiled. A stale lib is never reloaded.
+- `native.load_symbols` (`common/native.py:147-164`) checks that the 12 `tfap_*` symbols
+  (`run.py:61-65`) exist: a missing symbol raises an explicit `RuntimeError` at load time, not an
+  opaque `AttributeError` on the first call.
 
-L'ABI C est minimale : `tfap_create(n, L, cse2, csi2, omega_pe, omega_pi, stabilize, eps,
-upwind_continuity, omega_ce, omega_ci)` -> handle opaque, puis `tfap_step`/`tfap_advance` et les
-diagnostics (`_two_fluid_ap.cpp:78-115`). Le flag `stabilize` (4e argument du `Solver`,
-`_two_fluid_ap.cpp:36-38`) est le commutateur AP : `true`=$\beta_0$ actif, `false`=explicite. C'est
-lui que `make_figures.py` bascule pour le contraste de la section 7.
+The C ABI is minimal: `tfap_create(n, L, cse2, csi2, omega_pe, omega_pi, stabilize, eps,
+upwind_continuity, omega_ce, omega_ci)` -> opaque handle, then `tfap_step`/`tfap_advance` and the
+diagnostics (`_two_fluid_ap.cpp:78-115`). The `stabilize` flag (4th argument of `Solver`,
+`_two_fluid_ap.cpp:36-38`) is the AP switch: `true`=$\beta_0$ active, `false`=explicit. It is the
+one `make_figures.py` toggles for the contrast in section 7.
 
 ---
 
-## 4. Maths : la reformulation AP de l'elliptique (justifie Prouve : pas stable non effondre)
+## 4. Math: the AP reformulation of the elliptic (justifies Proves: stable step does not collapse)
 
-### 4.1 D'ou vient la borne explicite
+### 4.1 Where the explicit bound comes from
 
-Le canal raide est la boucle force-charge : la force $z_s n_s E$ avec $E=-\nabla\phi$ et
-$\nabla^2\phi=n_e-n_i$. Linearise autour de $n_0=1$, une separation de charge
-$\delta n=n_e-n_i$ oscille comme un oscillateur harmonique de pulsation
-$\omega_p^2=\omega_{pe}^2+\omega_{pi}^2$ (les deux especes rappellent en parallele). Un schema
-explicite sur un oscillateur de pulsation $\omega_p$ est stable si $\Delta t\,\omega_p\lesssim1$ :
-au-dela, l'amplitude croit a chaque pas et diverge. Comme $\omega_{pe}\gg\omega_{pi}$ ici
-($10^3$ vs $20$), la borne est essentiellement $s=\Delta t\,\omega_{pe}\lesssim1$. La figure 1 la
-mesure : l'explicite est fini jusqu'a $s=1.0$ et NaN des $s=1.2$.
+The stiff channel is the force-charge loop: the force $z_s n_s E$ with $E=-\nabla\phi$ and
+$\nabla^2\phi=n_e-n_i$. Linearized around $n_0=1$, a charge separation
+$\delta n=n_e-n_i$ oscillates like a harmonic oscillator of angular frequency
+$\omega_p^2=\omega_{pe}^2+\omega_{pi}^2$ (the two species pull back in parallel). An explicit
+scheme on an oscillator of angular frequency $\omega_p$ is stable if $\Delta t\,\omega_p\lesssim1$:
+beyond that, the amplitude grows at each step and diverges. Since $\omega_{pe}\gg\omega_{pi}$ here
+($10^3$ vs $20$), the bound is essentially $s=\Delta t\,\omega_{pe}\lesssim1$. Figure 1 measures it:
+the explicit scheme is finite up to $s=1.0$ and NaN from $s=1.2$.
 
-### 4.2 Le truc AP : absorber le terme raide dans le Poisson
+### 4.2 The AP trick: absorb the stiff term into Poisson
 
-Au lieu de resoudre $\nabla^2\phi=n_e^*-n_i^*$ puis d'appliquer la force explicitement (ce qui
-re-introduit la borne), on rend la force implicite. Schematiquement, pour le predicteur de densite
-apres le push implicite,
+Instead of solving $\nabla^2\phi=n_e^*-n_i^*$ then applying the force explicitly (which
+re-introduces the bound), you make the force implicit. Schematically, for the density predictor
+after the implicit push,
 
 $$n_s^{n+1}=n_s^*-\Delta t\,\nabla\cdot m_s^{n+1},\qquad m_s^{n+1}=m_s^*+\Delta t\,z_s\,\omega_{ps}^2\,E,\qquad E=-\nabla\phi.$$
 
-En reportant le push dans la divergence et en utilisant $\nabla\cdot(n_s\nabla\phi)\approx n_0\nabla^2\phi$
-($n_0=1$), la contrainte $\nabla^2\phi=n_e^{n+1}-n_i^{n+1}$ devient, apres regroupement des termes en
-$\nabla^2\phi$ :
+Carrying the push into the divergence and using $\nabla\cdot(n_s\nabla\phi)\approx n_0\nabla^2\phi$
+($n_0=1$), the constraint $\nabla^2\phi=n_e^{n+1}-n_i^{n+1}$ becomes, after grouping the terms in
+$\nabla^2\phi$:
 
 $$\big(1+\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)\big)\,\nabla^2\phi=n_e^*-n_i^*\quad\Longrightarrow\quad\boxed{\nabla^2\phi=\dfrac{n_e^*-n_i^*}{1+\beta_0}},\quad\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2).$$
 
-Le pas de temps $\Delta t$ apparait dans le membre de droite de l'elliptique : c'est exactement
-ce que la composition `adc.System` ne sait pas exprimer (un bloc ne connait pas $\Delta t$ a
-l'assemblage du Poisson), d'ou le solveur sur mesure. Chaque symbole pointe sa ligne :
+The time step $\Delta t$ appears in the right-hand side of the elliptic: this is exactly
+what `adc.System` composition cannot express (a block does not know $\Delta t$ when the
+Poisson is assembled), hence the bespoke solver. Each symbol points to its line:
 
 ```cpp
 const Real beta0 = stabilize ? dt * dt * (ce + ci) : Real(0);   // ce=wpe^2, ci=wpi^2 (hpp:258)
@@ -158,56 +158,56 @@ const Real inv = Real(1) / (Real(1) + beta0);                   // facteur AP (h
 r(i, j, 0) = (ne(i, j, 0) - ni(i, j, 0)) * inv;                 // RHS Poisson reformule (hpp:264)
 ```
 
-- `ce`, `ci` sont $\omega_{pe}^2$, $\omega_{pi}^2$, caches dans le solveur (`two_fluid_ap.hpp:201`,
-  `:215-216`). A $s=5$ : $\beta_0=\Delta t^2\omega_{pe}^2\approx(5\times10^{-3}\cdot10^3)^2=25$, donc
-  $1/(1+\beta_0)\approx 0.038$ : le RHS de charge est divise par 26, ce qui borne la reponse.
-- `stabilize` decide $\beta_0$ vs $0$. A $\beta_0=0$ on retombe sur le Poisson nu + force explicite :
-  c'est le schema explicite de la figure 1.
+- `ce`, `ci` are $\omega_{pe}^2$, $\omega_{pi}^2$, cached in the solver (`two_fluid_ap.hpp:201`,
+  `:215-216`). At $s=5$: $\beta_0=\Delta t^2\omega_{pe}^2\approx(5\times10^{-3}\cdot10^3)^2=25$, so
+  $1/(1+\beta_0)\approx 0.038$: the charge RHS is divided by 26, which bounds the response.
+- `stabilize` selects $\beta_0$ vs $0$. At $\beta_0=0$ you fall back on the bare Poisson + explicit
+  force: this is the explicit scheme of figure 1.
 
-### 4.3 Ce que l'AP preserve, et ce que la figure teste
+### 4.3 What the AP preserves, and what the figure tests
 
-Dans la limite $s\to\infty$, $\beta_0\to\infty$ et $1/(1+\beta_0)\to0$ : le RHS de Poisson est
-ecrase, le champ ne sur-reagit plus, et le systeme relaxe vers la solution quasi-neutre
-$n_e\approx n_i\approx n_0$ au lieu d'osciller. La prediction falsifiable est donc : la deviation
-$\max\lvert n_e-1\rvert$ doit rester bornee (et meme plateauer) quand $s\to\infty$, alors qu'un
-schema explicite diverge des $s\gtrsim1$. Ce qu'une mesure differente trahirait : une deviation AP qui
-croit avec $s$ signalerait une stabilisation incorrecte ($\beta_0$ mal forme, ou le push non
-reellement implicite) ; un explicite qui survit a $s\gg1$ signalerait que le canal raide n'est
-pas active (couplage $\omega_{ps}^2$ nul). On mesure (section 7) un plateau AP a $5.41\times10^{-7}$
-et un explicite NaN des $s=1.2$ : la propriete AP tient.
+In the limit $s\to\infty$, $\beta_0\to\infty$ and $1/(1+\beta_0)\to0$: the Poisson RHS is
+crushed, the field no longer over-reacts, and the system relaxes toward the quasi-neutral solution
+$n_e\approx n_i\approx n_0$ instead of oscillating. The falsifiable prediction is therefore: the
+deviation $\max\lvert n_e-1\rvert$ must stay bounded (and even plateau) as $s\to\infty$, whereas an
+explicit scheme diverges from $s\gtrsim1$. What a different measurement would betray: an AP
+deviation that grows with $s$ would signal an incorrect stabilization ($\beta_0$ ill-formed, or the
+push not actually implicit); an explicit scheme that survives $s\gg1$ would signal that the stiff
+channel is not active ($\omega_{ps}^2$ coupling zero). We measure (section 7) an AP plateau at
+$5.41\times10^{-7}$ and an explicit NaN from $s=1.2$: the AP property holds.
 
 ---
 
-## 5. Code du scenario, kernel par kernel (justifie : ancrage reel)
+## 5. Scenario code, kernel by kernel (justifies: real anchoring)
 
-Un pas `TwoFluidAP2D::step(dt, stabilize)` (`two_fluid_ap.hpp:239-290`) est un split IMEX. Ordre reel :
+One `TwoFluidAP2D::step(dt, stabilize)` step (`two_fluid_ap.hpp:239-290`) is an IMEX split. Real order:
 
-1. **Ghosts periodiques** : `fill_boundary(e/ion, dom, per)` (`:245-246`).
-2. **Predicteur quantite de mvt** `m*` (`tfap_mstar`, `:247-248`) : flux d'Euler isotherme par Rusanov
-   (local Lax-Friedrichs) dimensionnellement scinde, vitesse d'onde $a=\lvert u\rvert+c_s$,
-   $F_{xx}=m_x^2/n+c^2 n$, $F_{yy}=m_y^2/n+c^2 n$. Lit $n,m_x,m_y$ avec 1 ghost.
-3. **Predicteur densite** `n*` (`tfap_div_update`, `:254-257`) : $n-\Delta t\,\nabla\cdot m^*$,
-   divergence centree ordre 2 (defaut `upwind_continuity=false`, le seul utilise par `run.py`).
-4. **Poisson AP** : RHS $(n_e^*-n_i^*)/(1+\beta_0)$ (`:258-266`) puis `ell.solve()` (`:267`).
-5. **Champ** $E=-\nabla\phi$ (`tfap_efield`, `:269`).
-6. **Push implicite (terme raide)** : non magnetise `tfap_lorentz` $m^{n+1}=m^*+\Delta t\,z\,\omega_{ps}^2 E$
-   (`:274-275`) ; magnetise push de Boris symetrique `tfap_boris` (`:271-272`).
-7. **Correcteur densite** $n^{n+1}=n-\Delta t\,\nabla\cdot m^{n+1}$ (`:285-286`) + recopie de
-   $(m_x,m_y)$ dans l'etat (`copy_mom`, `:288-289`).
+1. **Periodic ghosts**: `fill_boundary(e/ion, dom, per)` (`:245-246`).
+2. **Momentum predictor** `m*` (`tfap_mstar`, `:247-248`): dimensionally split isothermal Euler flux
+   by Rusanov (local Lax-Friedrichs), wave speed $a=\lvert u\rvert+c_s$,
+   $F_{xx}=m_x^2/n+c^2 n$, $F_{yy}=m_y^2/n+c^2 n$. Reads $n,m_x,m_y$ with 1 ghost.
+3. **Density predictor** `n*` (`tfap_div_update`, `:254-257`): $n-\Delta t\,\nabla\cdot m^*$,
+   centered order-2 divergence (default `upwind_continuity=false`, the only one used by `run.py`).
+4. **AP Poisson**: RHS $(n_e^*-n_i^*)/(1+\beta_0)$ (`:258-266`) then `ell.solve()` (`:267`).
+5. **Field** $E=-\nabla\phi$ (`tfap_efield`, `:269`).
+6. **Implicit push (stiff term)**: non-magnetized `tfap_lorentz` $m^{n+1}=m^*+\Delta t\,z\,\omega_{ps}^2 E$
+   (`:274-275`); magnetized symmetric Boris push `tfap_boris` (`:271-272`).
+7. **Density corrector** $n^{n+1}=n-\Delta t\,\nabla\cdot m^{n+1}$ (`:285-286`) + copy of
+   $(m_x,m_y)$ into the state (`copy_mom`, `:288-289`).
 
-Le push de Boris (`tfap_boris`, `:179-193`) est exact pour la rotation : demi-impulsion electrique,
-rotation $B$ complete d'angle $\theta=z\,\omega_c\,\Delta t$, seconde demi-impulsion. Il reproduit
-exactement la derive $E\times B$ et conserve $\lvert m\rvert$ sous $B$ seul, sans croissance
-seculaire ; quand $\omega_c=0$ il se reduit a `tfap_lorentz` (commentaire `:174-178`). C'est ce qui
-rend le run 2 stable sans limite $\omega_c\,\Delta t$.
+The Boris push (`tfap_boris`, `:179-193`) is exact for rotation: half electric impulse, full $B$
+rotation of angle $\theta=z\,\omega_c\,\Delta t$, second half impulse. It reproduces the $E\times B$
+drift exactly and conserves $\lvert m\rvert$ under $B$ alone, with no secular growth; when
+$\omega_c=0$ it reduces to `tfap_lorentz` (comment `:174-178`). This is what makes run 2 stable
+without an $\omega_c\,\Delta t$ limit.
 
-Device-clean : tous les kernels passent par `for_each_cell` avec lambdas `ADC_HD`, $\lvert
-x\rvert$/max/minmod via ternaires (`tfap::ab/mx2/mm2`, `:35-39` : `std::fabs`/`std::fmax` ne sont pas
-device-safe), $\cos$/$\sin$/$\sqrt$ calcules cote hote pour les champs uniformes. La facade compile
-donc telle quelle pour GPU si on passe les flags adequats ; ce cas ne fixe aucun flag de backend
-(CPU serie ici).
+Device-clean: all kernels go through `for_each_cell` with `ADC_HD` lambdas, $\lvert
+x\rvert$/max/minmod via ternaries (`tfap::ab/mx2/mm2`, `:35-39`: `std::fabs`/`std::fmax` are not
+device-safe), $\cos$/$\sin$/$\sqrt$ computed on the host for the uniform fields. The compile facade
+therefore builds as-is for GPU if you pass the right flags; this case sets no backend flag (serial
+CPU here).
 
-**Conditions initiales** `TwoFluidAP2D::init(eps)` (`two_fluid_ap.hpp:227-237`), boucle hote :
+**Initial conditions** `TwoFluidAP2D::init(eps)` (`two_fluid_ap.hpp:227-237`), host loop:
 
 ```cpp
 const Real k = 2 * pi / L;                                          // mode 1 diagonal (hpp:231)
@@ -215,94 +215,95 @@ ae(i, j, 0) = Real(1) + eps * std::cos(k * x_cell(i) + k * y_cell(j));  // n_e =
 ai(i, j, 0) = Real(1);                                              // n_i = 1 (fond uniforme)
 ```
 
-- La perturbation ne porte que sur $n_e$ ; la charge nette initiale $n_i-n_e=-\epsilon\cos(\cdot)$
-  est d'ordre $\epsilon=10^{-3}$. C'est cette separation de charge que la dynamique raide relaxe.
-  $m_s=0$ (repos). Le pilote `TwoFluidAP` passe le defaut `eps=1e-3` (`run.py:115`).
+- The perturbation acts only on $n_e$; the initial net charge $n_i-n_e=-\epsilon\cos(\cdot)$
+  is of order $\epsilon=10^{-3}$. It is this charge separation that the stiff dynamics relaxes.
+  $m_s=0$ (at rest). The `TwoFluidAP` driver passes the default `eps=1e-3` (`run.py:115`).
 
 ---
 
-## 6. Diagnostics et leur fiabilite (justifie Ne prouve pas : proxys)
+## 6. Diagnostics and their reliability (justifies Does not prove: proxies)
 
-Les diagnostics C++ (`_two_fluid_ap.cpp`) :
+The C++ diagnostics (`_two_fluid_ap.cpp`):
 
-- `tfap_mass_e/i` = `adc::sum(.., 0)` : somme de $n$ sur les cellules, sans poids $dx^2$. Vaut
-  $4096=64\times64\times1$ (fond 1, perturbation $\cos$ de moyenne nulle). C'est un proxy de
-  conservation relative, pas une masse physique calibree.
+- `tfap_mass_e/i` = `adc::sum(.., 0)`: sum of $n$ over the cells, without the $dx^2$ weight. Equals
+  $4096=64\times64\times1$ (background 1, $\cos$ perturbation of zero mean). It is a proxy for
+  relative conservation, not a calibrated physical mass.
 - `tfap_max_charge` = $\max\lvert n_i-n_e\rvert$, `tfap_max_dev` = $\max\lvert n_e-1\rvert$
-  (`:54-73`), precedes de `device_fence()` (barriere host/device, memoire unifiee GPU).
+  (`:54-73`), preceded by `device_fence()` (host/device barrier, GPU unified memory).
 
-Piege important (justifie la clause Ne prouve pas) : `tfap_max_dev` fait `std::fmax` sur le champ
-et propage mal les NaN. Verifie : pour le schema explicite a $s=5$ (champ entierement NaN, 4096
-cellules), `tfap_max_dev()` rend `0.0` et `tfap_max_charge()` rend `0.0`. Un `0.0` du
-diagnostic C++ ne prouve donc pas que le schema est stable. `make_figures.py` ne s'y fie pas : il lit
-le champ via `density_e()`/`density_i()` cote Python et teste `np.isfinite` (`make_figures.py`,
-`_field_diag`). C'est cette lecture cote champ, insensible au NaN, qui distingue "borne" de "explose".
+Important pitfall (justifies the Does not prove clause): `tfap_max_dev` does `std::fmax` over the
+field and propagates NaN poorly. Verified: for the explicit scheme at $s=5$ (field entirely NaN,
+4096 cells), `tfap_max_dev()` returns `0.0` and `tfap_max_charge()` returns `0.0`. A `0.0` from the
+C++ diagnostic therefore does not prove the scheme is stable. `make_figures.py` does not rely on it:
+it reads the field via `density_e()`/`density_i()` on the Python side and tests `np.isfinite`
+(`make_figures.py`, `_field_diag`). It is this field-side read, immune to NaN, that distinguishes
+"bounded" from "blown up".
 
-Les `assert` de `run.py` ne sont pas pieges parce qu'ils ne testent que le schema AP
-(`stabilize=True`, jamais NaN) : `np.isfinite(...)` (`run.py:195-197`), `max_dev<0.1` et
-`max_charge<0.1` (`run.py:199-200`), `mass_rel<1e-7` (`run.py:202`). Ce sont des bornes larges, pas
-un test de l'ordre AP.
-
----
-
-## 7. Figures (generees par `make_figures.py`, dans `figures/`)
-
-Generees par `python make_figures.py` (meme solveur JIT que `run.py`), versionnees avec
-`figures/provenance.json`. Commande exacte en section 9.
-
-### `ap_vs_explicit.png` : la propriete AP
-
-![max|n_e-1| vs raideur s : AP plateaute, explicite NaN des s>=1.2](figures/ap_vs_explicit.png)
-
-A $\Delta t=5\times10^{-3}$ et horizon 200 pas fixes, on balaie $s=\Delta t\,\omega_{pe}$ en variant
-$\omega_{pe}$ (avec $\omega_{pi}=0.02\,\omega_{pe}$, ratio du run 1), pour le schema AP
-(`stabilize=True`) et explicite (`stabilize=False`).
-
-- **Prouve** (mesure cote champ, `np.isfinite`) : la deviation AP (bleu) reste bornee sur tout le
-  balayage et plateaute a $5.41\times10^{-7}$ pour $s\in[1,50]$ (valeurs : $s=5\to5.325\times10^{-7}$,
-  $s=10\to5.390\times10^{-7}$, $s=50\to5.414\times10^{-7}$). Le schema explicite (rouge) suit l'AP
-  tant que $s\le1.0$ ($s=1.0\to5.416\times10^{-7}$) puis devient NaN des $s=1.2$ (croix rouges) :
-  la borne explicite $s=\Delta t\,\omega_{pe}\approx1$ (trait gris) est exactement celle predite en
-  4.1. C'est la propriete asymptotic-preserving : le pas stable ne s'effondre pas quand $s\to\infty$.
-- **Suggéré (non assere)** : la deviation AP decroit puis plateaute quand $s$ croit (de
-  $5.9\times10^{-4}$ a $s=0.05$ vers $5.4\times10^{-7}$) : la limite quasi-neutre est de mieux en
-  mieux approchee a forte raideur. C'est coherent avec l'AP (la stabilisation ecrase le RHS de
-  charge), mais aucun assert ne teste la monotonie ni la valeur du plateau.
-- **Non montré** : aucun `assert` de `run.py` ne teste ce contraste (les asserts ne touchent que le
-  schema AP). La figure ne montre pas pourquoi l'explicite diverge (croissance pas-a-pas de
-  l'oscillation de charge) : on observe l'etat NaN final, pas la trajectoire de l'instabilite.
-
-### `final_state.png` : l'etat quasi-neutre des deux fluides
-
-![n_e, n_i, charge nette n_i-n_e a s=5 : bandes diagonales, charge ~6e-11](figures/final_state.png)
-
-Etat final du run raide de reference ($s=5$, AP, 200 pas).
-
-- **Prouve / mesure** : $n_e$ et $n_i$ valent tous deux $1+5.3\times10^{-7}\cos(kx+ky)$ (bandes
-  diagonales, suivant la CI) : le plasma est quasi-neutre, les deux especes ont relaxe vers le
-  meme profil malgre $s=5$ (un explicite aurait deja NaN). La charge nette $n_i-n_e$ est d'ordre
-  $6.7\times10^{-11}$ : trois ordres sous la deviation, et bien sous la separation de charge
-  initiale $\epsilon=10^{-3}$. La quasi-neutralite est imposee, pas supposee.
-- **Suggéré** : la charge nette porte une texture en damier d'echelle grille (au niveau
-  $\sim6\times10^{-11}$) : c'est le bruit dispersif de la continuite centree (dissipation nulle)
-  a amplitude residuelle, plausible a l'oeil mais non quantifie par un assert.
-- **Non montré** : a $\epsilon=10^{-3}$ et schema bas ordre, aucune dynamique non lineaire ni
-  separation de charge macroscopique. La carte ne dit rien du schema explicite (qui n'a pas d'etat
-  final fini a $s=5$).
+The `assert`s in `run.py` are not caught out because they test only the AP scheme
+(`stabilize=True`, never NaN): `np.isfinite(...)` (`run.py:195-197`), `max_dev<0.1` and
+`max_charge<0.1` (`run.py:199-200`), `mass_rel<1e-7` (`run.py:202`). These are loose bounds, not
+a test of the AP order.
 
 ---
 
-## 8. Les tolerances, justifiees par un ordre de grandeur (justifie 8 de la checklist)
+## 7. Figures (generated by `make_figures.py`, in `figures/`)
 
-| Tolerance | Valeur | Pourquoi cette valeur |
+Generated by `python make_figures.py` (same JIT solver as `run.py`), versioned with
+`figures/provenance.json`. Exact command in section 9.
+
+### `ap_vs_explicit.png`: the AP property
+
+![max|n_e-1| vs stiffness s: AP plateaus, explicit NaN from s>=1.2](figures/ap_vs_explicit.png)
+
+At $\Delta t=5\times10^{-3}$ and a fixed 200-step horizon, you sweep $s=\Delta t\,\omega_{pe}$ by
+varying $\omega_{pe}$ (with $\omega_{pi}=0.02\,\omega_{pe}$, the run 1 ratio), for the AP scheme
+(`stabilize=True`) and the explicit scheme (`stabilize=False`).
+
+- **Proves** (measured field-side, `np.isfinite`): the AP deviation (blue) stays bounded over the
+  whole sweep and plateaus at $5.41\times10^{-7}$ for $s\in[1,50]$ (values: $s=5\to5.325\times10^{-7}$,
+  $s=10\to5.390\times10^{-7}$, $s=50\to5.414\times10^{-7}$). The explicit scheme (red) follows the AP
+  as long as $s\le1.0$ ($s=1.0\to5.416\times10^{-7}$) then becomes NaN from $s=1.2$ (red crosses):
+  the explicit bound $s=\Delta t\,\omega_{pe}\approx1$ (gray line) is exactly the one predicted in
+  4.1. This is the asymptotic-preserving property: the stable step does not collapse as $s\to\infty$.
+- **Suggested (not asserted)**: the AP deviation decreases then plateaus as $s$ grows (from
+  $5.9\times10^{-4}$ at $s=0.05$ to $5.4\times10^{-7}$): the quasi-neutral limit is better and
+  better approached at strong stiffness. This is consistent with the AP (the stabilization crushes
+  the charge RHS), but no assert tests the monotonicity nor the plateau value.
+- **Not shown**: no `assert` in `run.py` tests this contrast (the asserts touch only the
+  AP scheme). The figure does not show why the explicit scheme diverges (step-by-step growth of
+  the charge oscillation): you observe the final NaN state, not the trajectory of the instability.
+
+### `final_state.png`: the quasi-neutral state of the two fluids
+
+![n_e, n_i, net charge n_i-n_e at s=5: diagonal bands, charge ~6e-11](figures/final_state.png)
+
+Final state of the reference stiff run ($s=5$, AP, 200 steps).
+
+- **Proves / measured**: $n_e$ and $n_i$ both equal $1+5.3\times10^{-7}\cos(kx+ky)$ (diagonal
+  bands, following the IC): the plasma is quasi-neutral, both species have relaxed to the
+  same profile despite $s=5$ (an explicit scheme would already be NaN). The net charge $n_i-n_e$ is
+  of order $6.7\times10^{-11}$: three orders below the deviation, and well below the initial charge
+  separation $\epsilon=10^{-3}$. Quasi-neutrality is enforced, not assumed.
+- **Suggested**: the net charge carries a grid-scale checkerboard texture (at the level
+  $\sim6\times10^{-11}$): this is the dispersive noise of the centered continuity (zero dissipation)
+  at residual amplitude, plausible by eye but not quantified by an assert.
+- **Not shown**: at $\epsilon=10^{-3}$ and a low-order scheme, no nonlinear dynamics nor
+  macroscopic charge separation. The map says nothing about the explicit scheme (which has no
+  finite final state at $s=5$).
+
+---
+
+## 8. The tolerances, justified by an order of magnitude (justifies item 8 of the checklist)
+
+| Tolerance | Value | Why this value |
 |---|---|---|
-| `max_dev < 0.1`, `max_charge < 0.1` (`run.py:199-200`) | $0.1$ | Borne large de quasi-neutralite : la perturbation initiale est $\epsilon=10^{-3}$ et la deviation AP mesuree est $5.3\times10^{-7}$, soit ~5 ordres sous $0.1$. La tolerance rejette une explosion (deviation $O(1)$ ou NaN) sans rejeter le signal physique ; elle n'est pas un test de l'ordre AP |
-| `mass_rel < 1e-7` (`run.py:202`, `:235`) | $10^{-7}$ | Le schema est conservatif en masse (continuite en divergence) : la seule derive est l'arithmetique flottante. Mesure : $2.276\times10^{-14}$ (run 1) / $1.665\times10^{-14}$ (run 2), ~7 ordres sous la tolerance, au niveau du bruit IEEE754 sur une somme de 4096 termes |
-| `np.isfinite(...)` (`run.py:195-197`, `:232-233`) | (booleen) | Garde-fou minimal : un grand pas qui explose donne NaN/Inf. C'est le seul test cote `run.py` qui detecterait directement une perte de stabilite AP (mais seul le schema AP est exerce ici, jamais l'explicite) |
+| `max_dev < 0.1`, `max_charge < 0.1` (`run.py:199-200`) | $0.1$ | Loose quasi-neutrality bound: the initial perturbation is $\epsilon=10^{-3}$ and the measured AP deviation is $5.3\times10^{-7}$, about 5 orders below $0.1$. The tolerance rejects a blow-up (deviation $O(1)$ or NaN) without rejecting the physical signal; it is not a test of the AP order |
+| `mass_rel < 1e-7` (`run.py:202`, `:235`) | $10^{-7}$ | The scheme is mass-conservative (continuity in divergence form): the only drift is floating-point arithmetic. Measured: $2.276\times10^{-14}$ (run 1) / $1.665\times10^{-14}$ (run 2), about 7 orders below the tolerance, at the IEEE754 noise level on a sum of 4096 terms |
+| `np.isfinite(...)` (`run.py:195-197`, `:232-233`) | (boolean) | Minimal guard: a large step that blows up gives NaN/Inf. It is the only `run.py`-side test that would directly detect a loss of AP stability (but only the AP scheme is exercised here, never the explicit one) |
 
 ---
 
-## 9. Reproduire (justifie 14 de la checklist : commande + cout mesure)
+## 9. Reproduce (justifies item 14 of the checklist: command + measured cost)
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/two_fluid_ap
@@ -312,13 +313,13 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json
 ```
 
-Prerequis : `numpy` (et `matplotlib` pour les figures, hors `needs` du cas), un compilateur
-C++20 (`needs=["cxx"]` : le concept `EllipticSolver` et `static_assert` l'exigent), et les
-en-tetes du coeur `adc_cpp/include/` localises par `native.adc_include()` (via `$ADC_INCLUDE`, sinon
-depuis le paquet `adc`, sinon `../adc_cpp/include`). Le module `adc` n'est utilise que pour localiser
-les en-tetes ; le calcul AP ne passe pas par les bindings pybind11.
+Prerequisites: `numpy` (and `matplotlib` for the figures, outside the case's `needs`), a C++20
+compiler (`needs=["cxx"]`: the `EllipticSolver` concept and `static_assert` require it), and the
+core headers `adc_cpp/include/` located by `native.adc_include()` (via `$ADC_INCLUDE`, otherwise
+from the `adc` package, otherwise `../adc_cpp/include`). The `adc` module is used only to locate
+the headers; the AP computation does not go through the pybind11 bindings.
 
-Sortie attendue de `run.py` (capturee, macOS arm64, Apple clang 21) :
+Expected output of `run.py` (captured, macOS arm64, Apple clang 21):
 
 ```
 [run 1 - raide, non magnetise]
@@ -332,22 +333,22 @@ Sortie attendue de `run.py` (capturee, macOS arm64, Apple clang 21) :
 OK two_fluid_ap
 ```
 
-Cout : ~3.6 s temps mur (cache de build a jour), ~5.5 s au premier appel (compilation de la
-`.dylib` incluse). La recompilation n'est declenchee que si la cle d'ABI change (compilateur, flags,
-sources, ou en-tetes du coeur). Artefact hors source (gitignore) :
-`out/two_fluid_ap/build/_two_fluid_ap.dylib` (+ `.abikey`). Caveat plateforme : les signes,
-l'ordre de grandeur des deviations ($\sim5\times10^{-7}$), la borne explicite ($s\approx1$) et le
-verdict `OK` sont stables ; les derniers chiffres varient avec l'ordre de sommation et le solveur
-multigrille (cf. `figures/provenance.json`).
+Cost: ~3.6 s wall time (build cache up to date), ~5.5 s on the first call (compilation of the
+`.dylib` included). Recompilation is triggered only if the ABI key changes (compiler, flags,
+sources, or core headers). Out-of-source artifact (gitignored):
+`out/two_fluid_ap/build/_two_fluid_ap.dylib` (+ `.abikey`). Platform caveat: the signs,
+the order of magnitude of the deviations ($\sim5\times10^{-7}$), the explicit bound ($s\approx1$) and
+the `OK` verdict are stable; the last digits vary with the summation order and the multigrid
+solver (cf. `figures/provenance.json`).
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | pilote Python : build JIT (`_build_lib`), `ctypes` (`_bind`), classe `TwoFluidAP`, 2 runs, asserts |
-| `two_fluid_ap.hpp` | physique AP : kernels Rusanov/MUSCL/Boris, Poisson reformule, `TwoFluidAP2D<Elliptic>` |
-| `_two_fluid_ap.cpp` | ABI `extern "C"` (`tfap_create`/`step`/`advance`/diagnostics) + instancie `<GeometricMG>` |
-| `make_figures.py` | balaie la raideur (AP vs explicite) + etat final ; ecrit les 2 figures + `provenance.json` |
-| `figures/ap_vs_explicit.png`, `final_state.png` | assets versionnes, regeneres en place |
-| `figures/provenance.json` | SHA adc_cpp/adc_cases, compilateur, balayage de raideur, plateau AP mesure |
-| `../adc_cases/common/native.py` | `build_shared` (cache hors source + cle d'ABI), `load_symbols` |
+| `run.py` | Python driver: JIT build (`_build_lib`), `ctypes` (`_bind`), `TwoFluidAP` class, 2 runs, asserts |
+| `two_fluid_ap.hpp` | AP physics: Rusanov/MUSCL/Boris kernels, reformulated Poisson, `TwoFluidAP2D<Elliptic>` |
+| `_two_fluid_ap.cpp` | `extern "C"` ABI (`tfap_create`/`step`/`advance`/diagnostics) + instantiates `<GeometricMG>` |
+| `make_figures.py` | sweeps the stiffness (AP vs explicit) + final state; writes the 2 figures + `provenance.json` |
+| `figures/ap_vs_explicit.png`, `final_state.png` | versioned assets, regenerated in place |
+| `figures/provenance.json` | adc_cpp/adc_cases SHA, compiler, stiffness sweep, measured AP plateau |
+| `../adc_cases/common/native.py` | `build_shared` (out-of-source cache + ABI key), `load_symbols` |

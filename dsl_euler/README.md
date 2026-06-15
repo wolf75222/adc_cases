@@ -1,37 +1,37 @@
-# dsl_euler : Euler 2D ecrit en formules (mini-DSL adc.dsl, backend interprete numpy)
+# dsl_euler: 2D Euler written as formulas (mini-DSL adc.dsl, numpy interpreter backend)
 
-Prototype declaratif : on declare le systeme d'Euler compressible 2D entierement en expressions
-symboliques (variables, primitives, flux, valeurs propres), `adc.dsl` interprete l'arbre en numpy, et
-le branche sur le backend hote `adc.PythonFlux` qui assemble $-\nabla\cdot F^*$ par volumes finis
-(Rusanov ordre 1, periodique). Aucune brique nommee, aucune compilation : ce cas est le seul `*_dsl`
-du manifeste qui n'emet pas de C++ et ne se compare pas au natif. Une bulle de surpression centrale
-se detend ; le cas verifie un etat fini et coherent, pas un nombre cible.
+Declarative prototype: you declare the entire 2D compressible Euler system as symbolic expressions
+(variables, primitives, fluxes, eigenvalues), `adc.dsl` interprets the tree in numpy, and it is
+wired to the host backend `adc.PythonFlux`, which assembles $-\nabla\cdot F^*$ by finite volumes
+(first-order Rusanov, periodic). No named brick, no compilation: this case is the only `*_dsl` in the
+manifest that emits no C++ and does not compare against the native path. A central overpressure bubble
+expands; the case checks for a finite, coherent state, not a target number.
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `experimental` (`cases_manifest.toml`, `dsl_euler/run.py`, `ci = false`, `needs = []`). Prototype interprete CPU, hors CI par prudence. |
-| Entrees | grille $64^2$, $L=1$, periodique ; CI gaz au repos $\rho=1$, $v=0$, bulle gaussienne $p=1+0.4\,e^{-r^2/0.01}$ centree, $E=p/(\gamma-1)$ ; $\gamma=1.4$ ; schema Rusanov ordre 1 + Euler avant, CFL $0.4$, 120 pas (dt reevalue par pas) |
-| Sorties | etat $(4,n,n)=[\rho,\rho u,\rho v,E]$ en memoire numpy ; diagnostics console `drho_max`, `|v|_max`, `drel`, `max|dp|` ; 2 figures dans `figures/` + `figures/provenance.json` (ecrites par `make_figures.py`, pas par `run.py`) |
-| Invariants garantis | les 4 `assert` de `run.py:90-93` : `assert_finite(U)` ; `U[0].min()>0 and pressure(U).min()>0` ; `drel < 1e-9` ; `moved > 1e-3` |
-| Prouve | l'arbre symbolique declare en formules produit un etat fini, positif ($\rho_{\min}=0.9222>0$, $p_{\min}=0.9752>0$) et non trivial (la bulle se detend : `moved`$=0.3939 \gg 10^{-3}$) ; la masse est conservee exactement (`drel`$=0.0$, bit-machine, flux conservatif + `np.roll` periodique) |
-| Ne prouve pas | prototype, pas production : backend numpy interprete (`PythonFlux`), pas de chemin compile, pas de GPU/MPI/AMR. Aucune egalite au natif n'est verifiee ici (`np.array_equal` absent) : c'est le seul `*_dsl` qui ne compile pas et ne se compare pas (voir [`diocotron_dsl`](../diocotron_dsl/)). Schema ordre 1 dissipatif : energie et impulsion non asserees, fronts etales. Aucune cible publiee, aucune tolerance sur une valeur physique. Hors CI |
-| Provenance | adc_cpp `01873299`, adc_cases `1affec1d`, backend interprete numpy, $64^2$, ~0.2-0.4 s 1 coeur CPU ; `figures/provenance.json` |
+| Category (manifest) | `experimental` (`cases_manifest.toml`, `dsl_euler/run.py`, `ci = false`, `needs = []`). Interpreted CPU prototype, kept out of CI as a precaution. |
+| Inputs | $64^2$ grid, $L=1$, periodic; IC gas at rest $\rho=1$, $v=0$, centered Gaussian bubble $p=1+0.4\,e^{-r^2/0.01}$, $E=p/(\gamma-1)$; $\gamma=1.4$; first-order Rusanov scheme + forward Euler, CFL $0.4$, 120 steps (dt re-evaluated each step) |
+| Outputs | state $(4,n,n)=[\rho,\rho u,\rho v,E]$ in numpy memory; console diagnostics `drho_max`, `|v|_max`, `drel`, `max|dp|`; 2 figures in `figures/` + `figures/provenance.json` (written by `make_figures.py`, not by `run.py`) |
+| Guaranteed invariants | the 4 `assert`s in `run.py:90-93`: `assert_finite(U)`; `U[0].min()>0 and pressure(U).min()>0`; `drel < 1e-9`; `moved > 1e-3` |
+| Proves | the symbolic tree declared as formulas produces a finite, positive ($\rho_{\min}=0.9222>0$, $p_{\min}=0.9752>0$) and non-trivial state (the bubble expands: `moved`$=0.3939 \gg 10^{-3}$); mass is conserved exactly (`drel`$=0.0$, bit-exact, conservative flux + periodic `np.roll`) |
+| Does not prove | prototype, not production: interpreted numpy backend (`PythonFlux`), no compiled path, no GPU/MPI/AMR. No equality against the native path is checked here (`np.array_equal` absent): this is the only `*_dsl` that neither compiles nor compares (see [`diocotron_dsl`](../diocotron_dsl/)). First-order dissipative scheme: energy and momentum are not asserted, fronts are smeared. No published target, no tolerance on any physical value. Out of CI |
+| Provenance | adc_cpp `01873299`, adc_cases `1affec1d`, interpreted numpy backend, $64^2$, ~0.2-0.4 s on 1 CPU core; `figures/provenance.json` |
 
-A la fin tu sauras : ce que "ecrire un modele en formules" veut dire concretement (les 7 lignes de
-`make_euler`), comment l'arbre est interprete en numpy (pas compile), pourquoi la masse est
-conservee bit-machine, ce que la bulle qui se detend prouve et ne prouve pas, et exactement ce qui
-manque pour promouvoir ce prototype au statut des autres `*_dsl`.
+By the end you will know: what "writing a model as formulas" means concretely (the 7 lines of
+`make_euler`), how the tree is interpreted in numpy (not compiled), why mass is conserved bit-exact,
+what the expanding bubble proves and does not prove, and exactly what is missing to promote this
+prototype to the status of the other `*_dsl` cases.
 
 ---
 
-## 1. Ce que ce cas declare (justifie Prouve : etat fini et coherent)
+## 1. What this case declares (justifies Proves: finite, coherent state)
 
-Pas de derivation de l'Euler-Poisson : c'est de l'Euler compressible pur (ni source ni Poisson ;
-`set_source`/`set_elliptic_rhs` ne sont jamais appeles, donc `source_value` rend des zeros,
-`dsl.py:484-489`). Le contenu du cas est la declaration elle-meme. `make_euler` (`run.py:34-52`)
-ecrit le systeme entier en expressions symboliques :
+No derivation of Euler-Poisson: this is pure compressible Euler (no source, no Poisson;
+`set_source`/`set_elliptic_rhs` are never called, so `source_value` returns zeros,
+`dsl.py:484-489`). The content of the case is the declaration itself. `make_euler` (`run.py:34-52`)
+writes the entire system as symbolic expressions:
 
 ```python
 e = dsl.HyperbolicModel("euler")                                       # run.py:36
@@ -47,39 +47,39 @@ e.set_eigenvalues(x=[u-c, u, u+c], y=[v-c, v, v+c])                    # run.py:
 e.check()                                                             # run.py:51 toute var referencee declaree ?
 ```
 
-- Chaque `/`, `*`, `-`, `+` construit un noeud d'arbre (`Div`, `Mul`, `Sub`, `Add` ; surcharge
-  d'operateurs sur `Expr`). `u`, `v`, `p` sont enregistrees comme primitives (`primitive`,
-  `dsl.py:419-422`) : a l'evaluation elles sont derivees depuis `U` dans l'ordre de dependance
-  (`_env`, `dsl.py:462-470`). `H` et `c` sont des sous-arbres reutilises, pas des primitives nommees.
-- `check()` (`dsl.py:500-517`) verifie que toute variable utilisee dans flux / valeurs propres /
-  primitives est declaree comme cons/prim/aux ; sinon `ValueError`. C'est la seule validation
-  statique : il n'y a pas de compilateur derriere, l'arbre est la specification.
+- Each `/`, `*`, `-`, `+` builds a tree node (`Div`, `Mul`, `Sub`, `Add`; operator overloading on
+  `Expr`). `u`, `v`, `p` are registered as primitives (`primitive`, `dsl.py:419-422`): at evaluation
+  time they are derived from `U` in dependency order (`_env`, `dsl.py:462-470`). `H` and `c` are
+  reused subtrees, not named primitives.
+- `check()` (`dsl.py:500-517`) verifies that every variable used in fluxes / eigenvalues /
+  primitives is declared as cons/prim/aux; otherwise `ValueError`. This is the only static
+  validation: there is no compiler behind it, the tree is the specification.
 
-Les equations correspondantes (forme conservative, $U=(\rho,\rho u,\rho v,E)$, $p=(\gamma-1)(E-\tfrac12\rho|v|^2)$,
-$H=(E+p)/\rho$, $c=\sqrt{\gamma p/\rho}$) :
+The corresponding equations (conservative form, $U=(\rho,\rho u,\rho v,E)$, $p=(\gamma-1)(E-\tfrac12\rho|v|^2)$,
+$H=(E+p)/\rho$, $c=\sqrt{\gamma p/\rho}$):
 
 $$F_x=(\rho u,\ \rho u^2+p,\ \rho u v,\ \rho H u),\quad F_y=(\rho v,\ \rho u v,\ \rho v^2+p,\ \rho H v),$$
 $$\lambda_x=\{u-c,\ u,\ u+c\},\quad \lambda_y=\{v-c,\ v,\ v+c\}.$$
 
-## 2. Qui calcule quoi : la couche du milieu est l'arbre, pas une brique
+## 2. Who computes what: the middle layer is the tree, not a brick
 
-Pour un cas DSL, la couche centrale n'est pas une brique C++ nommee : ce sont les expressions que
-`adc.dsl` interprete. Ici, troisieme couche = numpy hote (pas un kernel device).
+For a DSL case, the central layer is not a named C++ brick: it is the expressions that `adc.dsl`
+interprets. Here, the third layer = numpy host (not a device kernel).
 
-| Ligne `run.py` | Couche | Ce qui se passe |
+| `run.py` line | Layer | What happens |
 |---|---|---|
-| `for _ in range(120): U = U + pf.cfl_dt(U,h,0.4)*pf.residual(U,h)` (`run.py:79-80`) | Python compose et integre | choix du schema (Rusanov ordre 1), de l'integrateur (Euler avant), du pas (CFL 0.4 reevalue par pas) |
-| `e.set_flux(...)` / `e.set_eigenvalues(...)` -> `HyperbolicModel.flux` / `.max_wave_speed` (`dsl.py:472-482`) | arbre interprete | `Expr.eval(env)` evalue $F_x,F_y,\lambda$ en numpy sur tout le tableau ; aucun C++ |
-| `adc.PythonFlux.residual` (`__init__.py:1263-1275`) | noyau hote numpy | assemble $-\nabla\cdot F^*$ (Rusanov, `np.roll` periodique) ; pas de device, pas de MPI |
+| `for _ in range(120): U = U + pf.cfl_dt(U,h,0.4)*pf.residual(U,h)` (`run.py:79-80`) | Python composes and integrates | choice of scheme (first-order Rusanov), integrator (forward Euler), step size (CFL 0.4 re-evaluated each step) |
+| `e.set_flux(...)` / `e.set_eigenvalues(...)` -> `HyperbolicModel.flux` / `.max_wave_speed` (`dsl.py:472-482`) | interpreted tree | `Expr.eval(env)` evaluates $F_x,F_y,\lambda$ in numpy over the whole array; no C++ |
+| `adc.PythonFlux.residual` (`__init__.py:1263-1275`) | numpy host kernel | assembles $-\nabla\cdot F^*$ (Rusanov, periodic `np.roll`); no device, no MPI |
 
-Contraste avec la couche du milieu des autres `*_dsl` : eux appellent `emit_cpp_brick` /
-`emit_cpp_source` -> `add_compiled_model` (`dsl.py:560-806`), donc la couche du milieu devient une
-brique C++ generee branchee sur `assemble_rhs` device. Ici `to_python_flux` (`run.py:77`,
-`dsl.py:491-498`) court-circuite tout cela : l'arbre alimente directement `PythonFlux`.
+Contrast with the middle layer of the other `*_dsl` cases: they call `emit_cpp_brick` /
+`emit_cpp_source` -> `add_compiled_model` (`dsl.py:560-806`), so the middle layer becomes a generated
+C++ brick wired to the `assemble_rhs` device path. Here `to_python_flux` (`run.py:77`,
+`dsl.py:491-498`) short-circuits all of that: the tree feeds `PythonFlux` directly.
 
-## 3. Le schema, ligne par ligne (justifie Prouve : masse conservee bit-machine)
+## 3. The scheme, line by line (justifies Proves: mass conserved bit-exact)
 
-`PythonFlux.residual` (`__init__.py:1263-1275`) assemble le flux de Rusanov (Lax-Friedrichs local) :
+`PythonFlux.residual` (`__init__.py:1263-1275`) assembles the Rusanov (local Lax-Friedrichs) flux:
 
 ```python
 a = float(self.max_wave_speed(U))                    # une vitesse globale a = max_k max_cell |lambda_k|
@@ -90,23 +90,21 @@ for axis, h, d in ((2, dx, 0), (1, dy, 1)):          # x = axe 2, y = axe 1 du t
     res -= (face - np.roll(face,1,axis=axis)) / h    # -div : (F_{i+1/2} - F_{i-1/2}) / h
 ```
 
-- `a` est une seule vitesse globale ($\max$ sur les deux directions, `to_python_flux`,
-  `dsl.py:498`), recalculee a chaque appel : diffusion maximale, schema le plus simple. Pas de MUSCL,
-  pas de limiteur, ordre 1.
-- Masse conservee exactement. La premiere composante du flux est $\rho u$ / $\rho v$ (forme
-  conservative), et `np.roll` est une permutation circulaire : la somme telescopique de
-  `face - roll(face)` sur un axe periodique est identiquement nulle ligne a ligne. La masse
-  totale $\sum\rho$ ne bouge donc qu'a l'arrondi flottant ; mesure : `drel`$=0.0$ (les flux de bord
-  s'annulent par construction, aucune erreur d'arrondi residuelle a $64^2$). C'est la raison de
-  `TOL_MASS`$=10^{-9}$ (`run.py:92`) : borne haute = un schema conservatif ne doit pas deriver au-dela
-  du bruit machine ; mesure $0.0$, soit largement sous la tolerance.
-- `assert moved > 1e-3` (`run.py:93`, `moved`$=$`max|p - p_init|`, `run.py:83`) : borne basse a
-  $10^{-3}$, trois ordres sous la magnitude attendue ($p$ varie de $\approx 0.4$) ; elle rejette un
-  etat fige (rien ne bouge) sans rejeter la dynamique reelle. Mesure : `moved`$=0.3939$.
+- `a` is a single global speed ($\max$ over both directions, `to_python_flux`, `dsl.py:498`),
+  recomputed on each call: maximal diffusion, the simplest scheme. No MUSCL, no limiter, first order.
+- Mass is conserved exactly. The first flux component is $\rho u$ / $\rho v$ (conservative form), and
+  `np.roll` is a circular permutation: the telescoping sum of `face - roll(face)` over a periodic axis
+  is identically zero line by line. The total mass $\sum\rho$ therefore moves only at floating-point
+  roundoff; measured: `drel`$=0.0$ (the boundary fluxes cancel by construction, no residual roundoff
+  error at $64^2$). This is the reason for `TOL_MASS`$=10^{-9}$ (`run.py:92`): an upper bound, a
+  conservative scheme must not drift beyond machine noise; measured $0.0$, well under the tolerance.
+- `assert moved > 1e-3` (`run.py:93`, `moved`$=$`max|p - p_init|`, `run.py:83`): a lower bound at
+  $10^{-3}$, three orders below the expected magnitude ($p$ varies by $\approx 0.4$); it rejects a
+  frozen state (nothing moves) without rejecting the real dynamics. Measured: `moved`$=0.3939$.
 
-## 4. Conditions initiales (justifie : la bulle qui se detend)
+## 4. Initial conditions (justifies: the expanding bubble)
 
-`run.py:63-72` : grille $64^2$ periodique, gaz au repos, surpression gaussienne centree.
+`run.py:63-72`: $64^2$ periodic grid, gas at rest, centered Gaussian overpressure.
 
 ```python
 r2 = (gx - 0.5)**2 + (gy - 0.5)**2                   # run.py:66
@@ -114,62 +112,61 @@ p0 = 1.0 + 0.4*np.exp(-r2 / 0.01)                    # run.py:69 bulle +40%, eca
 U[0] = 1.0;  U[3] = p0 / (GAMMA - 1.0)               # run.py:71-72 rho=1, v=0, E = p/(gamma-1) (repos)
 ```
 
-Densite uniforme, vitesses nulles, pression au sommet $1.4$ (cellule centrale : $p_c(0)=1.395$). La
-detente de cette bulle est ce qui met le systeme en mouvement et genere l'onde acoustique radiale.
+Uniform density, zero velocities, peak pressure $1.4$ (central cell: $p_c(0)=1.395$). The expansion of
+this bubble is what sets the system in motion and generates the radial acoustic wave.
 
-## 5. Figures (generees par `make_figures.py`, dans `figures/`)
+## 5. Figures (generated by `make_figures.py`, in `figures/`)
 
-Figures de diagnostic d'un prototype, pas un asset de reproduction versionne (categorie
-`experimental`) : elles montrent que l'etat est fini/coherent et que la bulle se detend, pas une
-courbe d'article. Commande exacte en section 7.
+Prototype diagnostic figures, not a versioned reproduction asset (category `experimental`): they show
+that the state is finite/coherent and that the bubble expands, not a paper curve. Exact command in
+section 7.
 
-### `final_state.png` : carte de densite et de pression finales
+### `final_state.png`: final density and pressure maps
 
-![Densite finale (coeur rarefie) et pression finale (anneau radial), 64x64 periodique a t=0.589](figures/final_state.png)
+![Final density (rarefied core) and final pressure (radial ring), 64x64 periodic at t=0.589](figures/final_state.png)
 
-- **Prouve** (asserte `run.py:90-91`) : l'etat final est fini et positif sur tout le domaine :
-  $\rho\in[0.9222,1.0452]$, $p\in[0.9752,1.0638]$, aucun NaN/Inf. Le coeur s'est rarefie
-  ($\rho\approx 0.94$ au centre : la bulle s'est videe), entoure d'un anneau radial sortant.
-- **Suggéré** (non assere) : la signature acoustique (front radial qui s'eloigne du centre) est
-  visible mais aucun assert ne la mesure ; le motif en croix est l'interference de l'onde avec
-  ses images periodiques (domaine periodique + bulle alignee sur la grille), pas un artefact de bug.
-- **Non montré** : aucune comparaison a une solution de reference (Sedov, onde de souffle
-  analytique) ; l'ordre 1 dissipatif etale les fronts, la carte n'est pas calibree quantitativement.
+- **Proves** (asserted `run.py:90-91`): the final state is finite and positive across the whole
+  domain: $\rho\in[0.9222,1.0452]$, $p\in[0.9752,1.0638]$, no NaN/Inf. The core has rarefied
+  ($\rho\approx 0.94$ at the center: the bubble has emptied), surrounded by an outgoing radial ring.
+- **Suggested** (not asserted): the acoustic signature (radial front moving away from the center) is
+  visible but no assert measures it; the cross pattern is the interference of the wave with its
+  periodic images (periodic domain + bubble aligned with the grid), not a bug artifact.
+- **Not shown**: no comparison against a reference solution (Sedov, analytical blast wave); the
+  first-order dissipative scheme smears the fronts, the map is not quantitatively calibrated.
 
-### `bubble_decay.png` : decroissance de la perturbation
+### `bubble_decay.png`: decay of the perturbation
 
-![Pression au centre qui relaxe de 1.395 vers la moyenne 1.013, et amplitude max|p-p0| qui culmine a 0.457 a t=0.148](figures/bubble_decay.png)
+![Center pressure relaxing from 1.395 toward the mean 1.013, and amplitude max|p-p0| peaking at 0.457 at t=0.148](figures/bubble_decay.png)
 
-- **Prouve / mesure** : la bulle se detend : la pression au sommet chute de $p_c(0)=1.395$, passe
-  sous la moyenne ($\bar p=1.013$ : rebond de rarefaction a $t\approx 0.15$), puis remonte vers
-  $1.001$ a $t=0.589$. L'amplitude $\max|p-p_0|$ croit, culmine a $0.457$ a $t=0.148$ (le front
-  est constitue), puis decroit vers la valeur asseree `moved`$=0.394$. C'est la "decroissance d'une
-  perturbation" : le pic localise se dilue en onde etalee.
-- **Suggéré** : la relaxation monotone vers $\bar p$ apres le rebond suggere un amortissement
-  numerique (diffusion de Rusanov), non quantifie.
-- **Non montré** : ni periode acoustique exacte, ni taux d'amortissement physique ; le schema ordre 1
-  dissipe, le cas ne separe pas amortissement physique et numerique.
+- **Proves / measured**: the bubble expands: the peak pressure drops from $p_c(0)=1.395$, falls below
+  the mean ($\bar p=1.013$: rarefaction rebound at $t\approx 0.15$), then rises toward $1.001$ at
+  $t=0.589$. The amplitude $\max|p-p_0|$ grows, peaks at $0.457$ at $t=0.148$ (the front has formed),
+  then decays toward the asserted value `moved`$=0.394$. This is the "decay of a perturbation": the
+  localized peak diffuses into a spread-out wave.
+- **Suggested**: the monotone relaxation toward $\bar p$ after the rebound suggests numerical damping
+  (Rusanov diffusion), not quantified.
+- **Not shown**: neither the exact acoustic period nor a physical damping rate; the first-order scheme
+  is dissipative, the case does not separate physical from numerical damping.
 
-## 6. Ce qui manque pour promouvoir ce prototype (limites)
+## 6. What is missing to promote this prototype (limits)
 
-- **Pas de chemin compile.** Les autres `*_dsl` ([`diocotron_dsl`](../diocotron_dsl/),
+- **No compiled path.** The other `*_dsl` cases ([`diocotron_dsl`](../diocotron_dsl/),
   [`two_species_dsl`](../two_species_dsl/), [`magnetic_isothermal_dsl`](../magnetic_isothermal_dsl/))
-  appellent `emit_cpp_brick`/`add_compiled_model` et asserent `np.array_equal` contre le natif.
-  Ce cas s'arrete a `to_python_flux` : il ne genere pas de C++ et ne se compare a rien. Pour le
-  promouvoir, il faudrait emettre la brique (`make_euler().emit_cpp_brick(...)`), la compiler, et
-  ajouter l'assert d'egalite au natif (`adc.CompressibleFlux`, dispo via
-  [`models.euler`](../adc_cases/models.py) `l.58-66`).
-- **Backend numpy hote, pas device.** `PythonFlux` est documente "hors hot path GPU/MPI : chemin
-  hote pur" (`__init__.py:1250`). Pas de GPU, pas de MPI, pas de multi-box/AMR ; tableau unique
-  $(4,64,64)$.
-- **Schema ordre 1 dissipatif.** Rusanov + Euler avant : energie et impulsion non conservees et
-  non asserees (seules masse, positivite, finitude, dynamique le sont). Adapte a une demo
-  qualitative, pas a une etude acoustique quantitative.
-- **Aucune reference publiee, geometrie figee.** $64^2$ periodique en dur, pas d'argument cli, aucune
-  cible d'article (d'ou `experimental`, pas `reproduction`). Pour le couplage source/Poisson en DSL,
-  voir les cas dedies ci-dessus.
+  call `emit_cpp_brick`/`add_compiled_model` and assert `np.array_equal` against the native path.
+  This case stops at `to_python_flux`: it generates no C++ and compares to nothing. To promote it, you
+  would emit the brick (`make_euler().emit_cpp_brick(...)`), compile it, and add the equality assert
+  against the native path (`adc.CompressibleFlux`, available via [`models.euler`](../adc_cases/models.py)
+  `l.58-66`).
+- **Host numpy backend, not device.** `PythonFlux` is documented as "off the GPU/MPI hot path: pure
+  host path" (`__init__.py:1250`). No GPU, no MPI, no multi-box/AMR; a single $(4,64,64)$ array.
+- **First-order dissipative scheme.** Rusanov + forward Euler: energy and momentum are not conserved
+  and not asserted (only mass, positivity, finiteness, and dynamics are). Suited to a qualitative
+  demo, not to a quantitative acoustic study.
+- **No published reference, fixed geometry.** $64^2$ periodic hard-coded, no cli argument, no paper
+  target (hence `experimental`, not `reproduction`). For source/Poisson coupling in the DSL, see the
+  dedicated cases above.
 
-## 7. Reproduire (justifie : commande exacte + cout mesure)
+## 7. Reproduce (justifies: exact command + measured cost)
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/dsl_euler
@@ -179,13 +176,13 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json
 ```
 
-Prerequis : `numpy` (`matplotlib` pour les figures, hors `needs` du cas) ; module `adc` importe avec
-le meme interpreteur que celui qui l'a compile (suffixe ABI `cpython-312`). Le premier chemin du
-`PYTHONPATH` fournit `adc` (dont `dsl` et `PythonFlux`) ; le second rend `adc_cases` importable (le
-cas a aussi un fallback `sys.path`, `run.py:21-26`). Aucun compilateur C++ requis (`needs = []`),
-c'est la difference clef avec les autres `*_dsl` (`needs = ["cxx"]`).
+Prerequisites: `numpy` (`matplotlib` for the figures, outside the case's `needs`); the `adc` module
+imported with the same interpreter that compiled it (ABI suffix `cpython-312`). The first `PYTHONPATH`
+entry provides `adc` (including `dsl` and `PythonFlux`); the second makes `adc_cases` importable (the
+case also has a `sys.path` fallback, `run.py:21-26`). No C++ compiler required (`needs = []`), which
+is the key difference from the other `*_dsl` cases (`needs = ["cxx"]`).
 
-Sortie attendue de `run.py` (capturee, macOS arm64, identique sur 3 executions) :
+Expected output of `run.py` (captured, macOS arm64, identical across 3 runs):
 
 ```
 modele declare en formules : 4 variables ['rho', 'rho_u', 'rho_v', 'E']
@@ -194,20 +191,20 @@ masse : drel=0.00e+00   dynamique : max|dp|=0.394
 OK dsl_euler
 ```
 
-Cout : ~0.2-0.4 s temps mur (dominee par l'import du package `adc` / chargement du `.so` ; le calcul
-pur 120 pas a $64^2$ est negligeable), ~44 Mo de pic memoire, mono-thread numpy. Caveat
-plateforme : la masse exactement nulle (`drel`$=0.0$), le verdict `OK`, l'ordre de grandeur de
-`moved`$\approx 0.39$ et de $|v|_{\max}\approx 0.03$ sont stables ; les derniers chiffres peuvent
-varier avec la version numpy et l'ordre de sommation (cf. `figures/provenance.json`).
+Cost: ~0.2-0.4 s wall time (dominated by importing the `adc` package / loading the `.so`; the pure
+120-step compute at $64^2$ is negligible), ~44 MB peak memory, single-threaded numpy. Platform caveat:
+the exactly-zero mass (`drel`$=0.0$), the `OK` verdict, the order of magnitude of `moved`$\approx 0.39$
+and of $|v|_{\max}\approx 0.03$ are stable; the last digits may vary with the numpy version and the
+summation order (cf. `figures/provenance.json`).
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | le cas : declare Euler en formules (`make_euler`), CI bulle, 120 pas, 4 asserts |
-| `make_figures.py` | re-joue la physique en instrumentant ; ecrit les 2 figures + `provenance.json` |
-| `figures/final_state.png`, `figures/bubble_decay.png` | diagnostics du prototype (carte finale, relaxation) |
-| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, nombres mesures |
-| `<build>/python/adc/dsl.py` | `HyperbolicModel` (arbre, interprete numpy, `to_python_flux`), `sqrt` ; fourni par le build adc_cpp |
-| `<build>/python/adc/__init__.py` | facade `adc` ; `PythonFlux` (Rusanov + periodicite `np.roll` + `residual`/`cfl_dt`) |
-| `../adc_cases/models.py` | `euler(gamma)` = brique native `adc.CompressibleFlux` (le pendant compile, `l.58-66`) |
+| `run.py` | the case: declares Euler as formulas (`make_euler`), bubble IC, 120 steps, 4 asserts |
+| `make_figures.py` | replays the physics with instrumentation; writes the 2 figures + `provenance.json` |
+| `figures/final_state.png`, `figures/bubble_decay.png` | prototype diagnostics (final map, relaxation) |
+| `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured numbers |
+| `<build>/python/adc/dsl.py` | `HyperbolicModel` (tree, numpy interpreter, `to_python_flux`), `sqrt`; provided by the adc_cpp build |
+| `<build>/python/adc/__init__.py` | `adc` facade; `PythonFlux` (Rusanov + `np.roll` periodicity + `residual`/`cfl_dt`) |
+| `../adc_cases/models.py` | `euler(gamma)` = native brick `adc.CompressibleFlux` (the compiled counterpart, `l.58-66`) |

@@ -1,36 +1,36 @@
-# `safe_euler_periodic/` - cas sûr de référence (validation)
+# `safe_euler_periodic/` - safe reference case (validation)
 
-Euler compressible **pur**, domaine périodique, **bulle de pression lisse** de faible amplitude :
+**Pure** compressible Euler, periodic domain, low-amplitude **smooth pressure bubble**:
 
-- `rho ≡ rho0 = 1` (densité uniforme → `rho > 0` garanti) ;
-- `v = 0` à `t = 0` ; `p = p0 + dp·exp(-r²/(σ²L²))` avec `p0 = 1`, `dp = 0.1` (→ `p > 0` garanti) ;
-- `E = p/(γ-1)`, `γ = 1.4` ; AUCUNE source, AUCUN couplage Poisson (transport pur).
+- `rho ≡ rho0 = 1` (uniform density -> `rho > 0` guaranteed);
+- `v = 0` at `t = 0`; `p = p0 + dp·exp(-r²/(σ²L²))` with `p0 = 1`, `dp = 0.1` (-> `p > 0` guaranteed);
+- `E = p/(γ-1)`, `γ = 1.4`; NO source, NO Poisson coupling (pure transport).
 
-La bulle de pression se détend en ondes acoustiques : dynamique non triviale mais douce, sans choc,
-sans perte de positivité. C'est le cas de référence de la campagne de perf (`perf/`), choisi pour
-être **sûr** (pas de Poisson physique, pas de Schur, pas de géométrie disque) et donc isoler le coût
-des fronts à calcul identique.
+The pressure bubble expands into acoustic waves: nontrivial but smooth dynamics, no shock,
+no loss of positivity. This is the reference case for the performance campaign (`perf/`), chosen to be
+**safe** (no physical Poisson, no Schur, no disk geometry) so as to isolate the cost
+of the fronts at identical compute.
 
-## Ce que ce cas valide (CI)
+## What this case validates (CI)
 
-- **Équivalence briques ↔ DSL** : état final **bit-identique** (`np.array_equal`, tolérance 1e-10),
-  comme `diocotron_dsl` / `two_species_dsl`. Mêmes réglages : minmod / rusanov / reconstruction
-  conservative / SSPRK2 / `dt` fixe.
-- **Invariants** : masse conservée (transport, périodique), `rho > 0`, `p > 0`, état fini.
-- **Dynamique** : `max|Δp| > 1e-4` (la bulle évolue, le cas n'est pas trivial).
+- **Bricks <-> DSL equivalence**: **bit-identical** final state (`np.array_equal`, tolerance 1e-10),
+  like `diocotron_dsl` / `two_species_dsl`. Same settings: minmod / rusanov / conservative
+  reconstruction / SSPRK2 / fixed `dt`.
+- **Invariants**: conserved mass (transport, periodic), `rho > 0`, `p > 0`, finite state.
+- **Dynamics**: `max|Δp| > 1e-4` (the bubble evolves, the case is not trivial).
 
-## Source de vérité
+## Source of truth
 
-Le modèle (briques & DSL), les CI, le `dt` et les réglages vivent dans
-[`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) - partagés avec
-`perf/frontend_compare.py`. Le pendant C++ direct est `adc_cpp/bench/frontend_cpp.cpp` (namespace
-`safecase`) : les constantes et le schéma numérique **doivent** y coïncider bit-à-bit.
+The model (bricks and DSL), the CI, the `dt`, and the settings live in
+[`adc_cases/common/safe_euler.py`](../adc_cases/common/safe_euler.py) - shared with
+`perf/frontend_compare.py`. The direct C++ counterpart is `adc_cpp/bench/frontend_cpp.cpp` (namespace
+`safecase`): the constants and the numerical scheme **must** match it bit for bit.
 
-## Lancement
+## Running
 
 ```bash
 PYTHONPATH=<adc_cpp>/build-master/python:. python3 safe_euler_periodic/run.py --n 64 --steps 40
 ```
 
-Nécessite un compilateur C++20 (`needs = ["cxx"]`) pour la compilation DSL `production`/`aot`. La
-**mesure** de performance (3 fronts, temps, figures) n'est PAS ici - voir [`perf/`](../perf).
+Requires a C++20 compiler (`needs = ["cxx"]`) for the `production`/`aot` DSL compilation. The
+performance **measurement** (3 fronts, timings, figures) is NOT here - see [`perf/`](../perf).

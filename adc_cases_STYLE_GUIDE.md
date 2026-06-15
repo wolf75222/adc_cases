@@ -1,170 +1,170 @@
-# Guide de style : tutoriels de cas adc_cases
+# Style guide: adc_cases case tutorials
 
-## 1. Principe directeur
+## 1. Guiding principle
 
-On vise un README qui rend un cas reproductible et compris par un lecteur sans connaissance prealable : il doit pouvoir relancer le cas, lire le code reel ligne par ligne, suivre les derivations math sans trou, comprendre le mecanisme physique, et savoir exactement ce qui est prouve et ce qui ne l'est pas. On refuse trois choses : le bullshit promotionnel (mots-creux, ton commercial), la sur-vente (presenter une validation comme une reproduction, sur-lire une figure de diagnostic), et la redondance (re-dire au chapitre 12 ce que disait le chapitre 1). Chaque phrase porte un fait, un nombre, un symbole, un signe ou une raison verifiable ; sinon elle saute. L'honnetete sur les limites n'est pas une concession, c'est le coeur du contrat : la clause `Ne prouve pas` est aussi detaillee que les garanties positives.
+You aim for a README that makes a case reproducible and understood by a reader with no prior knowledge: they must be able to re-run the case, read the real code line by line, follow the math derivations with no gaps, understand the physical mechanism, and know exactly what is proven and what is not. You refuse three things: promotional bullshit (empty words, sales tone), over-selling (presenting a validation as a reproduction, over-reading a diagnostic figure), and redundancy (re-stating in section 12 what section 1 already said). Every sentence carries a fact, a number, a symbol, a sign, or a verifiable reason; otherwise it goes. Honesty about the limits is not a concession, it is the heart of the contract: the `Does not prove` clause is as detailed as the positive guarantees.
 
-## 2. Structure canonique d'un README de cas
+## 2. Canonical structure of a case README
 
-Le README s'ouvre toujours par le bloc Contrat (section 2.0), puis enchaine les sections de fond. Chaque section de fond doit nommer la clause du contrat qu'elle justifie ; une section qui ne justifie aucune clause est coupee.
+The README always opens with the Contract block (section 2.0), then chains the substantive sections. Each substantive section must name the contract clause it justifies; a section that justifies no clause is cut.
 
-### 2.0 Bloc Contrat (obligatoire, en tete, tous types)
+### 2.0 Contract block (mandatory, at the top, all types)
 
-Un tableau dense, le plus dur a remplir de bullshit. Colonnes / lignes :
+A dense table, the hardest to pad with bullshit. Columns / rows:
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | la valeur exacte de `cases_manifest.toml` (`validation` / `tutoriel` / `reproduction` / `reproduction-candidate` / `experimental`). Elle dicte le ton de Ne prouve pas (voir 2.x). |
-| Entrees | grille (n, L, periodique ?), CI, parametres physiques avec valeurs et unites (ou "sans unites", ex. `four_pi_G=1`). |
-| Sorties | etat(s) lus, diagnostics calcules, figures/CSV produits et leur emplacement. |
-| Invariants garantis | la liste des `assert` reels du `run.py`, chacun avec sa tolerance. |
-| Prouve | ce qu'un `assert` etablit reellement (ex. signe de dE, masse conservee a 1e-9, egalite bit). |
-| Ne prouve pas | aussi detaille que Prouve : nommer le proxy, le regime, ce qui n'est pas teste (voir 2.x). |
-| Provenance | SHA adc_cpp + adc_cases, backend, resolution, cout mesure, plateforme. |
+| Category (manifest) | the exact value from `cases_manifest.toml` (`validation` / `tutoriel` / `reproduction` / `reproduction-candidate` / `experimental`). It dictates the tone of Does not prove (see 2.x). |
+| Inputs | grid (n, L, periodic?), IC, physical parameters with values and units (or "dimensionless", e.g. `four_pi_G=1`). |
+| Outputs | state(s) read, diagnostics computed, figures/CSV produced and their location. |
+| Guaranteed invariants | the list of the real `assert` statements in `run.py`, each with its tolerance. |
+| Proves | what an `assert` actually establishes (e.g. sign of dE, mass conserved to 1e-9, bit-exact equality). |
+| Does not prove | as detailed as Proves: name the proxy, the regime, what is not tested (see 2.x). |
+| Provenance | adc_cpp + adc_cases SHA, backend, resolution, measured cost, platform. |
 
-La regle de couplage : chaque section en aval ecrit en clair "justifie la clause X du contrat". Si une clause Prouve/Ne prouve pas n'est justifiee par aucune section, soit on ecrit la section, soit on retire la clause.
+The coupling rule: each downstream section writes explicitly "justifies clause X of the contract". If a Proves / Does not prove clause is justified by no section, you either write the section or remove the clause.
 
-### 2.x Le ton de Ne prouve pas est dicte par la categorie
+### 2.x The tone of Does not prove is dictated by the category
 
-- `reproduction` (ex. `diocotron/run.py`) : dire ce qui est reproduit (oracle analytique == papier a 3 chiffres) et ce qui ne l'est pas (taux FV sous-estime de -22 a -27 %). Pas de pending : la reproduction est etablie pour la partie annoncee.
-- `reproduction-candidate` (ex. `hoffart_euler_poisson_dsl/run.py`) : doit ecrire pending. La table de validation est explicitement non etablie ; interdiction de presenter comme reproduit.
-- `validation` (ex. `euler_poisson/run.py`) : doit dire "ce n'est pas une reproduction publiee". On verifie des invariants, pas une courbe du papier.
-- `tutoriel` (ex. `composition/run.py`) : la clause dit "demontre une capacite d'API, ne valide aucun resultat physique publie".
-- `experimental` (ex. `schur_magnetized_cartesian/run.py`, `dsl_euler/run.py`) : doit signaler prototype / chemin non finalise (DSL interprete, mesure de timing dependante plateforme).
+- `reproduction` (e.g. `diocotron/run.py`): state what is reproduced (analytic oracle == paper to 3 digits) and what is not (FV rate underestimated by -22 to -27 %). No pending: the reproduction is established for the announced part.
+- `reproduction-candidate` (e.g. `hoffart_euler_poisson_dsl/run.py`): must write pending. The validation table is explicitly not established; presenting it as reproduced is forbidden.
+- `validation` (e.g. `euler_poisson/run.py`): must state "this is not a published reproduction". You verify invariants, not a curve from the paper.
+- `tutoriel` (e.g. `composition/run.py`): the clause states "demonstrates an API capability, validates no published physical result".
+- `experimental` (e.g. `schur_magnetized_cartesian/run.py`, `dsl_euler/run.py`): must flag prototype / unfinished path (interpreted DSL, platform-dependent timing measurement).
 
-### Sections de fond, par type de cas
+### Substantive sections, by case type
 
-L'ossature commune (apres le contrat) :
+The common skeleton (after the contract):
 
-1. Physique : le mecanisme (section 5).
-2. Equations resolues + table des briques (3 couches, section 3).
-3. Maths / derivation de la prediction (section 4).
-4. Code, fonction par fonction, ancre lignes (section 3).
-5. Conditions initiales.
-6. Figures, generees et analysees (section 6).
-7. Analyse honnete des ecarts / limites.
-8. Provenance, commande exacte, cout (re-detaille).
+1. Physics: the mechanism (section 5).
+2. Equations solved + brick table (3 layers, section 3).
+3. Math / derivation of the prediction (section 4).
+4. Code, function by function, anchored to line numbers (section 3).
+5. Initial conditions.
+6. Figures, generated and analyzed (section 6).
+7. Honest analysis of the discrepancies / limits.
+8. Provenance, exact command, cost (re-detailed).
 
-La prediction falsifiable est enoncee des le contrat (section 0) et l'artefact qui la confronte est produit en section 6. La nature de la prediction glisse selon le type, et l'ossature s'adapte :
+The falsifiable prediction is stated from the contract on (section 0) and the artifact that confronts it is produced in section 6. The nature of the prediction shifts by type, and the skeleton adapts:
 
-- Reproduction physique (`diocotron`, `hoffart_*`, `plasma`, `euler_poisson` cote contraste) : prediction = un nombre physique (taux de croissance, signe et magnitude de dE). Garder toutes les sections ; la section 7 (analyse de l'ecart au papier/a l'analytique) est le coeur.
+- Physical reproduction (`diocotron`, `hoffart_*`, `plasma`, `euler_poisson` on the contrast side): prediction = a physical number (growth rate, sign and magnitude of dE). Keep all sections; section 7 (analysis of the gap to the paper / to the analytic) is the heart.
 
-- Validation d'invariant (`euler_poisson`, `multispecies`, `two_euler`, `plasma`, `diocotron_amr`) : prediction = un invariant structurel (masse conservee, impulsion nette nulle, signes opposes). La derivation math (4) explique pourquoi l'invariant tient (potentiel periodique -> somme de force nulle). Section physique allegee, section "pourquoi cet invariant" renforcee. La section 7 devient "ce que l'invariant ne capture pas".
+- Invariant validation (`euler_poisson`, `multispecies`, `two_euler`, `plasma`, `diocotron_amr`): prediction = a structural invariant (mass conserved, net momentum zero, opposite signs). The math derivation (4) explains why the invariant holds (periodic potential -> zero net force sum). Trimmed physics section, reinforced "why this invariant" section. Section 7 becomes "what the invariant does not capture".
 
-- Equivalence DSL-vs-natif (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`) : prediction = egalite de chemins bit-a-bit (`np.array_equal`). ne jamais reproduire la physique deja derivee dans le cas-parent : lier (`../diocotron/`), pas copier. Les sections 1/4/5 se reduisent a un renvoi ; le coeur devient "quelles conventions du coeur sont reproduites" (table ExBVelocity / BackgroundDensity ancree `include/adc/physics/*.hpp`) et "comment l'egalite bit est verifiee et ce qu'une divergence trahirait".
+- DSL-vs-native equivalence (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`): prediction = bit-for-bit path equality (`np.array_equal`). Never reproduce the physics already derived in the parent case: link (`../diocotron/`), do not copy. Sections 1/4/5 shrink to a cross-reference; the heart becomes "which core conventions are reproduced" (ExBVelocity / BackgroundDensity table anchored to `include/adc/physics/*.hpp`) and "how the bit-exact equality is verified and what a divergence would betray".
 
-- Etude de timing (`schur_magnetized_cartesian`) : prediction = un facteur de gain (pas stable Schur / pas stable explicite) et la borne `dt*omega_c`. Le coeur est la methodologie de mesure (`largest_stable_dt`, balayage geometrique, critere de stabilite densite finie/bornee/positive) et les caveats plateforme (backend AOT, `set_source_stage` au lieu de `adc.Split`). Pas de figure physique : un tableau methode/dt_stable/gain.
+- Timing study (`schur_magnetized_cartesian`): prediction = a speedup factor (stable Schur step / stable explicit step) and the `dt*omega_c` bound. The heart is the measurement methodology (`largest_stable_dt`, geometric sweep, finite/bounded/positive density stability criterion) and the platform caveats (AOT backend, `set_source_stage` instead of `adc.Split`). No physical figure: a method / dt_stable / speedup table.
 
-- Prototype (`dsl_euler`, chemins `experimental`) : prediction = "le chemin declaratif produit un etat fini et coherent", pas un nombre cible. Dire franchement que c'est un prototype interprete, non en CI, et ce qui manque pour le promouvoir.
+- Prototype (`dsl_euler`, `experimental` paths): prediction = "the declarative path produces a finite, coherent state", not a target number. State plainly that it is an interpreted prototype, not in CI, and what is missing to promote it.
 
-## 3. Comment traiter le code
+## 3. How to treat the code
 
-Regles dures :
+Hard rules:
 
-- Ancrage reel : citer `run.py:NN` (intervalle de lignes) et le nom exact (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`). Une affirmation theorique sans ligne qui l'implemente est coupee. Aucune ligne non triviale sans son justificatif.
-- Ne jamais paraphraser une ligne triviale (`import numpy as np`, `sys.path.insert`). On glose uniquement les lignes porteuses de physique ou d'algorithme.
-- Inline vs lien : on montre inline les fonctions physique-cle (le flux, les valeurs propres, l'assemblage de l'operateur, la mesure du diagnostic) en blocs de 5 a 15 lignes du `run.py` reel, suivis de puces qui expliquent chaque variable non triviale (`rho`, `Om`, `Lmat`, `Q`, `dE_grav`). On lie (sans copier) la plomberie : le bloc try/except import `adc_cases`, la machinerie de fallback backend, l'argparse.
-- Granularite selon le role : une fonction physique-cle (ex. `mode_l_amplitude`, `diocotron_eigenvalue`, `magnetized_model`) merite le commentaire ligne par ligne ; une fonction de plomberie (ex. `make_system` qui ne fait que `adc.System(...)`) merite une phrase.
-- Table 3 couches "qui calcule quoi", obligatoire pour les cas a briques. Trois lignes, chacune pinnee a une ligne reelle de `run.py` :
+- Real anchoring: cite `run.py:NN` (line range) and the exact name (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`). A theoretical claim with no line implementing it is cut. No non-trivial line without its justification.
+- Never paraphrase a trivial line (`import numpy as np`, `sys.path.insert`). You gloss only the lines that carry physics or algorithm.
+- Inline vs link: you show inline the key-physics functions (the flux, the eigenvalues, the operator assembly, the diagnostic measurement) as 5-to-15-line blocks of the real `run.py`, followed by bullets explaining each non-trivial variable (`rho`, `Om`, `Lmat`, `Q`, `dE_grav`). You link (without copying) the plumbing: the `adc_cases` import try/except block, the backend fallback machinery, the argparse.
+- Granularity by role: a key-physics function (e.g. `mode_l_amplitude`, `diocotron_eigenvalue`, `magnetized_model`) deserves the line-by-line comment; a plumbing function (e.g. `make_system` that only does `adc.System(...)`) deserves one sentence.
+- The 3-layer "who computes what" table, mandatory for brick-based cases. Three rows, each pinned to a real line of `run.py`:
 
-| Ligne run.py | Couche | Ce qui se passe |
+| run.py line | Layer | What happens |
 |---|---|---|
-| `add_block(...)` / `add_equation(...)` | Python compose et diagnostique | choix du modele, du schema, de l'integrateur ; lecture de l'etat |
-| `models.euler_poisson(...)` / brique `ExBVelocity` / `BackgroundDensity` | brique C++ compilee | le choix physique fige (flux, valeurs propres, RHS elliptique) |
-| `assemble_rhs<Limiter,Flux>`, Newton local, Poisson de systeme | noyau par cellule (device) | le calcul reel, sans callback Python dans le hot path |
+| `add_block(...)` / `add_equation(...)` | Python composes and diagnoses | choice of model, scheme, integrator; reading the state |
+| `models.euler_poisson(...)` / `ExBVelocity` brick / `BackgroundDensity` | compiled C++ brick | the frozen physical choice (flux, eigenvalues, elliptic RHS) |
+| `assemble_rhs<Limiter,Flux>`, local Newton, system Poisson | per-cell kernel (device) | the actual computation, with no Python callback in the hot path |
 
-Pour un cas DSL, la couche du milieu n'est plus une brique nommee mais les expressions (`m.flux(...)`, `m.eigenvalues(...)`, `m.elliptic_rhs(...)`) que `adc.dsl` compile ; ancrer la table sur ces appels.
+For a DSL case, the middle layer is no longer a named brick but the expressions (`m.flux(...)`, `m.eigenvalues(...)`, `m.elliptic_rhs(...)`) that `adc.dsl` compiles; anchor the table on those calls.
 
-## 4. Comment traiter les maths
+## 4. How to treat the math
 
-- Deriver, ne pas assener : pour une prediction falsifiable, on montre les etapes. Exemple obligatoire pour `diocotron` : passer de la linearisation $\phi'=\hat\phi(r)e^{i(m\theta-\omega t)}$ au probleme aux valeurs propres $\omega\mathcal{L}_m\hat\phi=(m\Omega\mathcal{L}_m+Q)\hat\phi$, puis a la forme standard $\omega\hat\phi=\mathcal{L}_m^{-1}(\dots)\hat\phi=M\hat\phi$, et dire que `eigvals(M)` rend le spectre. Chaque symbole de la formule pointe la ligne qui le calcule (`Om` = $\Omega(r)$ ligne 110, `Q` = $\frac{m}{r}\frac{dn_0}{dr}$ ligne 134, `Lmat` = $\mathcal{L}_m$ lignes 120-125).
-- Admettre proprement : ce qui n'est pas re-derivable en quelques lignes (convention exacte du papier, normalisation $\times 2\pi/\bar\rho$) est cite avec sa source, pas reconstruit a la main.
-- Notation : LaTeX GitHub, `$...$` en ligne et `$$...$$` en bloc. Accents francais OK. pas d'em-dash (U+2014) ; utiliser deux-points, parentheses ou points.
-- La prediction quantitative falsifiable est privilegiee. Pour `euler_poisson`, la vraie prediction testable de la linearisation est $|dE|\propto\epsilon^2$ : un graphe log-log de $|dE|$ vs $\epsilon$ doit avoir une pente 2 ; doubler $\epsilon$ quadruple $|dE|$. C'est verifiable et transforme un assert booleen en courbe de convergence. L'enoncer, et dire ce qu'une pente differente trahirait (pente ~1 = terme lineaire parasite, fond `rho0` mal soustrait ; pente > 2 aux grands $\epsilon$ = entree non lineaire).
-- Verifier le signe par le comportement, jamais par une convention de manuel plaquee. Le solveur Poisson (`poisson_operator.hpp`) a plusieurs couches de signe plus un `GradSign` en post-traitement. Ecrire "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ donc gravite attractive" sans verifier est faux (peut donner une repulsion). Le signe physique se lit sur l'assert qui passe : pour `euler_poisson`, `run.py:177-180` impose `dE_grav < 0` (attractif) et `dE_plas > 0` (repulsif) ; c'est CA la reference, pas une formule de cours.
-- Nommer les paradoxes, ne pas fabriquer la derivation. Pour `euler_poisson`, $E_{tot}=U[3].sum()$ est l'energie fluide seule (pas de potentiel de champ) et elle diminue pour la gravite meme si $v\cdot g>0$. Enoncer la tension ouvertement et l'attribuer a la convention de couplage, sans manufacturer un theoreme encadre. Un signe encadre faux est pire qu'un report honnete.
+- Derive, do not assert: for a falsifiable prediction, you show the steps. Mandatory example for `diocotron`: go from the linearization $\phi'=\hat\phi(r)e^{i(m\theta-\omega t)}$ to the eigenvalue problem $\omega\mathcal{L}_m\hat\phi=(m\Omega\mathcal{L}_m+Q)\hat\phi$, then to the standard form $\omega\hat\phi=\mathcal{L}_m^{-1}(\dots)\hat\phi=M\hat\phi$, and state that `eigvals(M)` returns the spectrum. Each symbol in the formula points to the line that computes it (`Om` = $\Omega(r)$ line 110, `Q` = $\frac{m}{r}\frac{dn_0}{dr}$ line 134, `Lmat` = $\mathcal{L}_m$ lines 120-125).
+- Admit cleanly: what is not re-derivable in a few lines (the exact paper convention, the $\times 2\pi/\bar\rho$ normalization) is cited with its source, not reconstructed by hand.
+- Notation: GitHub LaTeX, `$...$` inline and `$$...$$` in block. French accents OK. No em-dash (U+2014); use a colon, parentheses, or periods.
+- The quantitative falsifiable prediction is preferred. For `euler_poisson`, the real testable prediction from the linearization is $|dE|\propto\epsilon^2$: a log-log plot of $|dE|$ vs $\epsilon$ must have slope 2; doubling $\epsilon$ quadruples $|dE|$. This is verifiable and turns a boolean assert into a convergence curve. State it, and say what a different slope would betray (slope ~1 = spurious linear term, background `rho0` poorly subtracted; slope > 2 at large $\epsilon$ = nonlinear onset).
+- Verify the sign by behavior, never by a textbook convention pasted on top. The Poisson solver (`poisson_operator.hpp`) has several sign layers plus a `GradSign` in post-processing. Writing "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ hence attractive gravity" without checking is wrong (may yield repulsion). The physical sign is read off the assert that passes: for `euler_poisson`, `run.py:177-180` imposes `dE_grav < 0` (attractive) and `dE_plas > 0` (repulsive); that is the reference, not a textbook formula.
+- Name the paradoxes, do not fabricate the derivation. For `euler_poisson`, $E_{tot}=U[3].sum()$ is the fluid energy alone (no field potential) and it decreases for gravity even though $v\cdot g>0$. State the tension openly and attribute it to the coupling convention, without manufacturing a boxed theorem. A wrong boxed sign is worse than an honest report.
 
-## 5. Comment traiter la physique
+## 5. How to treat the physics
 
-- Le mecanisme avant le resultat. Pour `diocotron` : la rotation differentielle $\Omega(r)=-\frac{1}{r^2}\int_0^r n_e r'dr'$ cree un cisaillement, le cisaillement est une instabilite de Kelvin-Helmholtz d'un anneau de vorticite ($n_e$ joue la vorticite, $\phi$ la fonction de courant), donc l'anneau developpe $l$ lobes qui s'enroulent. Le taux $\gamma_l$ vient après, comme consequence quantifiee.
-- Relier le modele reduit au modele complet, explicitement. `diocotron` resout la limite de derive E x B ; le systeme Euler-Poisson magnetise complet est `hoffart_euler_poisson_dsl`. Dire "ce cas ne reproduit que la limite de derive, pas le systeme complet", avec le lien.
-- Honnetete sur ce qui est modelise : nommer les simplifications (une seule variable conservee, pas de quantite de mouvement ni d'energie pour le diocotron ; `four_pi_G=1` sans unites ; regime quasi-lineaire $\epsilon=0.01$, 20 pas, pas d'effondrement de Jeans pour `euler_poisson`).
+- The mechanism before the result. For `diocotron`: the differential rotation $\Omega(r)=-\frac{1}{r^2}\int_0^r n_e r'dr'$ creates a shear, the shear is a Kelvin-Helmholtz instability of a vorticity ring ($n_e$ plays the vorticity, $\phi$ the stream function), so the ring develops $l$ lobes that roll up. The rate $\gamma_l$ comes after, as a quantified consequence.
+- Relate the reduced model to the full model, explicitly. `diocotron` solves the E x B drift limit; the full magnetized Euler-Poisson system is `hoffart_euler_poisson_dsl`. State "this case reproduces only the drift limit, not the full system", with the link.
+- Honesty about what is modeled: name the simplifications (a single conserved variable, no momentum nor energy for the diocotron; `four_pi_G=1` dimensionless; quasi-linear regime $\epsilon=0.01$, 20 steps, no Jeans collapse for `euler_poisson`).
 
-## 6. figures : quelles figures, comment les generer, comment les analyser
+## 6. Figures: which figures, how to generate them, how to analyze them
 
-### Tableau par type de cas
+### Table by case type
 
-| Type | Figures de diagnostic a generer | Ce qu'on y lit |
+| Type | Diagnostic figures to generate | What you read in them |
 |---|---|---|
-| Reproduction physique (taux) | `dispersion.png` (gamma vs mode : analytique + points papier + mesures adc) ; `amplitude.png` (semilog $|c_l|(t)$, droite = exponentielle) ; `snapshots.png` + `*.gif` (enroulement non lineaire) | classement des modes, ecart mesure/analytique, signature visuelle a $l$ lobes |
-| Validation d'invariant | conservation vs t (masse, impulsion en echelle absolue) ; contraste energetique (dE des deux runs cote a cote) ; convergence $|dE|$ vs $\epsilon$ en log-log (pente attendue 2) ; carte 2D de la perturbation | l'invariant tient a la tolerance ; le signe est franc et au-dessus du bruit ; la pente confirme le regime |
-| Equivalence DSL-vs-natif | heatmap $|state_{dsl}-state_{natif}|$ qui doit etre identiquement noire ; histogramme du residu plafonnant a ~1e-15 (ou exactement 0) | un seul pixel non noir = echec ; le residu au niveau machine est l'observable qui prouve le determinisme |
-| Multi-especes / couple | masses par espece vs t (chacune plate) ; carte de densite par espece ; potentiel couple $|\phi|$ | conservation par espece, couplage Poisson actif |
-| Uniforme vs AMR (`diocotron_amr`) | comparaison cote a cote uniforme/AMR du meme diagnostic ; carte des patches | le reflux conservatif preserve l'invariant ; l'AMR suit la meme dynamique |
-| Timing (`schur`) | dt_stable vs methode (barres ou tableau) ; dt*omega_c ; gain | la source explicite s'effondre quand omega_c grandit ; le Schur leve la borne |
+| Physical reproduction (rate) | `dispersion.png` (gamma vs mode: analytic + paper points + adc measurements); `amplitude.png` (semilog $|c_l|(t)$, straight line = exponential); `snapshots.png` + `*.gif` (nonlinear roll-up) | mode ranking, measured/analytic gap, visual signature with $l$ lobes |
+| Invariant validation | conservation vs t (mass, momentum in absolute scale); energy contrast (dE of the two runs side by side); $|dE|$ vs $\epsilon$ convergence in log-log (expected slope 2); 2D map of the perturbation | the invariant holds to tolerance; the sign is clean and above noise; the slope confirms the regime |
+| DSL-vs-native equivalence | $|state_{dsl}-state_{natif}|$ heatmap that must be identically black; residual histogram capping at ~1e-15 (or exactly 0) | a single non-black pixel = failure; the machine-level residual is the observable that proves determinism |
+| Multi-species / coupled | masses per species vs t (each flat); density map per species; coupled potential $|\phi|$ | conservation per species, active Poisson coupling |
+| Uniform vs AMR (`diocotron_amr`) | side-by-side uniform/AMR comparison of the same diagnostic; patch map | the conservative reflux preserves the invariant; the AMR follows the same dynamics |
+| Timing (`schur`) | dt_stable vs method (bars or table); dt*omega_c; speedup | the explicit source collapses as omega_c grows; the Schur lifts the bound |
 
-### Convention de generation
+### Generation convention
 
-- Assets de reproduction versionnes : seuls les cas `reproduction` committent leurs figures dans `<cas>/figures/` avec un `figures/provenance.json` (champs reels : `adc_cpp_sha`, `adc_cases_sha`, `backend`, `resolution`, `nsteps_growth`, `cfl`, `python`, et les nombres mesures comme `gamma_num_mesure`).
-- Diagnostics transitoires : tout le reste ecrit sous `out/<cas>/` via `case_output_dir(<cas>)` (cf. `adc_cases/common/io.py`), repertoire git-ignore. Ne jamais ecrire un diagnostic jetable dans l'arbre source.
-- Workflow d'un cas sans figure aujourd'hui : dire explicitement quelle figure generer (run + plot + commit), avec la commande exacte et l'emplacement (`out/<cas>/` pour explorer, `<cas>/figures/` seulement si le cas devient une reproduction versionnee).
+- Versioned reproduction assets: only `reproduction` cases commit their figures into `<case>/figures/` with a `figures/provenance.json` (real fields: `adc_cpp_sha`, `adc_cases_sha`, `backend`, `resolution`, `nsteps_growth`, `cfl`, `python`, and the measured numbers such as `gamma_num_mesure`).
+- Transient diagnostics: everything else writes under `out/<case>/` via `case_output_dir(<case>)` (see `adc_cases/common/io.py`), a git-ignored directory. Never write a throwaway diagnostic into the source tree.
+- Workflow for a case with no figure today: state explicitly which figure to generate (run + plot + commit), with the exact command and the location (`out/<case>/` to explore, `<case>/figures/` only if the case becomes a versioned reproduction).
 
-### Regles d'analyse
+### Analysis rules
 
-- Chaque figure est embed (`![alt parlant](figures/xxx.png)`) puis suivie de 2 a 4 phrases qui interpretent ce qu'elle montre physiquement. Jamais une legende creuse ("voici la densite").
-- Partitionner la lecture en Prouve / Suggéré / Non montré :
-  - Prouve : ce qu'un assert teste (signes opposes de dE, masse plate, egalite bit).
-  - Suggéré (non assere) : ce qui est plausible a l'oeil mais non teste (ex. la symetrie miroir ~5 % gravite/plasma est visible mais aucun assert ne la verifie ; le dire comme suggestion).
-  - Non montré : ce que la figure ne couvre pas (pas de dynamique non lineaire sur 20 pas ; pas d'effondrement de Jeans).
-- Lecture diagnostique, pas decorative. Une pente != 2 sur $|dE|$ vs $\epsilon$ trahit (pente ~1 = lineaire parasite, pente > 2 = non lineaire). Sur une heatmap d'equivalence, dire ce qu'une tache non noire signalerait (une formule DSL qui diverge d'une brique du coeur, ex. mauvaise convention de signe dans `eigenvalues` ou `elliptic_rhs`).
-- Provenance sur chaque nombre cite : SHA, backend, resolution, cout mesuré (pas estime), plus le caveat plateforme : les signes et l'ordre de grandeur sont stables, les derniers chiffres varient avec la bibliotheque BLAS et l'ordre de sommation. Citer les vrais nombres du run (les `gamma_num_mesure` du `provenance.json`, pas des valeurs inventees).
+- Each figure is embedded (`![meaningful alt](figures/xxx.png)`) then followed by 2 to 4 sentences that interpret what it shows physically. Never an empty caption ("here is the density").
+- Partition the reading into Proves / Suggests / Not shown:
+  - Proves: what an assert tests (opposite signs of dE, flat mass, bit-exact equality).
+  - Suggests (not asserted): what is plausible to the eye but not tested (e.g. the ~5 % gravity/plasma mirror symmetry is visible but no assert checks it; state it as a suggestion).
+  - Not shown: what the figure does not cover (no nonlinear dynamics over 20 steps; no Jeans collapse).
+- Diagnostic reading, not decorative. A slope != 2 on $|dE|$ vs $\epsilon$ betrays (slope ~1 = spurious linear, slope > 2 = nonlinear). On an equivalence heatmap, state what a non-black spot would signal (a DSL formula that diverges from a core brick, e.g. a wrong sign convention in `eigenvalues` or `elliptic_rhs`).
+- Provenance on every cited number: SHA, backend, resolution, measured cost (not estimated), plus the platform caveat: the signs and the order of magnitude are stable, the last digits vary with the BLAS library and the summation order. Cite the real numbers from the run (the `gamma_num_mesure` from `provenance.json`, not invented values).
 
-## 7. Anti-bullshit : regles dures
+## 7. Anti-bullshit: hard rules
 
-- Test de suppression : si retirer une phrase ne fait perdre ni fait, ni nombre, ni symbole, ni signe, ni raison, elle saute.
-- zero recap. Pas de section "En conclusion" qui re-dit l'intro. L'exemplaire `diocotron` actuel a des sections 8 (Architecture) et 12 (Limites) qui re-disent les sections 1 a 7 ; ce budget est reclame pour la derivation et l'analyse de figures, a longueur quasi constante. Un fait, a une seule altitude.
-- Une affirmation theorique sans la ligne de code qui l'implemente est coupee.
-- Une tolerance est une clause justifiee par un ordre de grandeur, jamais une constante posee. `TOL_DE=1e-5` se situe entre le bruit machine (dE = 0 exactement a $\epsilon=0$) et la magnitude physique attendue ~6e-4 (`run.py:60-62`) : ecrire ce ratio. `TOL_MASS=1e-9` car le schema est conservatif et la derive vient de l'arithmetique flottante. Chaque tolerance a son "pourquoi".
-- Toujours distinguer Prouve (par un assert) de Suggéré (rendu plausible par une figure). Garde-fou anti-sur-interpretation, a appliquer aux 15 cas.
-- Pour les cas-enfants DSL : lier, ne pas copier la physique du parent.
+- Deletion test: if removing a sentence loses neither a fact, a number, a symbol, a sign, nor a reason, it goes.
+- Zero recap. No "In conclusion" section that re-states the intro. The current `diocotron` exemplar has sections 8 (Architecture) and 12 (Limits) that re-state sections 1 through 7; that budget is reclaimed for the derivation and the figure analysis, at near-constant length. One fact, at a single altitude.
+- A theoretical claim without the line of code that implements it is cut.
+- A tolerance is a clause justified by an order of magnitude, never a posited constant. `TOL_DE=1e-5` sits between machine noise (dE = 0 exactly at $\epsilon=0$) and the expected physical magnitude ~6e-4 (`run.py:60-62`): write that ratio. `TOL_MASS=1e-9` because the scheme is conservative and the drift comes from floating-point arithmetic. Each tolerance has its "why".
+- Always distinguish Proves (by an assert) from Suggests (made plausible by a figure). Anti-over-interpretation guardrail, to apply to all 15 cases.
+- For DSL child cases: link, do not copy the parent's physics.
 
-Liste noire (mots/tournures interdits), avec correction :
+Blacklist (forbidden words/phrasings), with correction:
 
-- "puissant / seamless / leverage / robuste (decoratif) / elegant" -> supprimer ou remplacer par le fait. Avant : "adc compose de maniere puissante et elegante." Apres : "adc.System compose un bloc par `add_block`, chaque bloc fige son schema en C++ a l'ajout."
-- Regle de trois decorative -> couper la triade vide. Avant : "rapide, fiable et extensible." Apres : "~60 s sur un coeur CPU (3 modes x 900 pas a $192^2$)."
-- Hedging vide ("il convient de noter que", "d'une certaine maniere", "globalement") -> supprimer.
-- Ton promotionnel ("ce cas met en lumiere la richesse du solveur") -> remplacer par l'enonce de ce qui est teste. Apres : "ce cas verifie par assert : masse conservee a 1e-9, impulsion nette < 1e-8, signes de dE opposes."
-- Sur-vente de categorie. Avant : "reproduction du benchmark Hoffart." Apres (si `reproduction-candidate`) : "vise arXiv:2510.11808 ; reproduction quantitative pending (table de validation non etablie)."
-- Adverbe d'emphase vide ("clairement", "evidemment", "notamment" en ouverture) -> supprimer.
+- "powerful / seamless / leverage / robust (decorative) / elegant" -> remove or replace with the fact. Before: "adc composes powerfully and elegantly." After: "adc.System composes one block per `add_block`, each block freezes its scheme in C++ at insertion."
+- Decorative rule of three -> cut the empty triad. Before: "fast, reliable, and extensible." After: "~60 s on one CPU core (3 modes x 900 steps at $192^2$)."
+- Empty hedging ("it should be noted that", "in some sense", "overall") -> remove.
+- Promotional tone ("this case highlights the richness of the solver") -> replace with the statement of what is tested. After: "this case verifies by assert: mass conserved to 1e-9, net momentum < 1e-8, opposite dE signs."
+- Category over-selling. Before: "reproduction of the Hoffart benchmark." After (if `reproduction-candidate`): "targets arXiv:2510.11808; quantitative reproduction pending (validation table not established)."
+- Empty emphasis adverb ("clearly", "obviously", "notably" at the opening) -> remove.
 
-## 8. Longueur et densite
+## 8. Length and density
 
-Cible par type (texte hors blocs de code) :
+Target per type (text outside code blocks):
 
-- Reproduction physique : 350 a 550 lignes. C'est le plus long ; la derivation et l'analyse des 3 a 4 figures le justifient.
-- Validation d'invariant : 180 a 320 lignes. Centre sur "pourquoi l'invariant tient" et la prediction $\epsilon^2$.
-- Equivalence DSL-vs-natif : 120 a 220 lignes. Court par construction : la physique est liee au parent, le coeur est la table de conventions et l'egalite bit.
-- Timing : 150 a 250 lignes. La methodologie de mesure et les caveats plateforme dominent.
-- Prototype : 100 a 180 lignes. On dit ce que c'est, ce qui manque, on ne sur-construit pas.
+- Physical reproduction: 350 to 550 lines. It is the longest; the derivation and the analysis of the 3 to 4 figures justify it.
+- Invariant validation: 180 to 320 lines. Centered on "why the invariant holds" and the $\epsilon^2$ prediction.
+- DSL-vs-native equivalence: 120 to 220 lines. Short by construction: the physics is linked to the parent, the heart is the conventions table and the bit-exact equality.
+- Timing: 150 to 250 lines. The measurement methodology and the platform caveats dominate.
+- Prototype: 100 to 180 lines. You state what it is, what is missing, you do not over-build.
 
-Test de densite : aucune phrase n'est supprimable sans perte de fait, nombre, symbole, signe ou raison. Si une section depasse la cible, c'est presque toujours un recap a couper, pas du fond a ajouter.
+Density test: no sentence is removable without losing a fact, a number, a symbol, a sign, or a reason. If a section exceeds the target, it is almost always a recap to cut, not substance to add.
 
-## 9. Checklist de validation d'un README
+## 9. README validation checklist
 
-Binaire, a cocher avant acceptation :
+Binary, to tick before acceptance:
 
-1. [ ] Le bloc Contrat est en tete, avec la categorie exacte du manifeste.
-2. [ ] La clause Ne prouve pas est aussi detaillee que Prouve et son ton suit la categorie (pending si `reproduction-candidate`, "pas une repro publiee" si `validation`, prototype si `experimental`).
-3. [ ] Chaque section de fond nomme la clause du contrat qu'elle justifie ; aucune clause orpheline.
-4. [ ] Une prediction falsifiable est enoncee dans le contrat et un artefact (figure/assert/tableau) la confronte.
-5. [ ] Chaque affirmation theorique pointe une ligne reelle (`run.py:NN`) et un nom reel ; aucune ligne triviale n'est paraphrasee.
-6. [ ] La table 3 couches (Python compose / brique fige / noyau par cellule) est presente pour un cas a briques, chaque ligne pinnee a une ligne reelle.
-7. [ ] Les signes physiques sont verifies par le comportement asserte, pas par une convention de manuel plaquee.
-8. [ ] Chaque tolerance est justifiee par un ordre de grandeur (ratio bruit / magnitude physique).
-9. [ ] Chaque figure est embed et suivie de 2 a 4 phrases d'analyse, partitionnees Prouve / Suggéré / Non montré.
-10. [ ] Les diagnostics transitoires vont dans `out/<cas>/` (via `case_output_dir`) ; seules les figures de reproduction versionnees sont dans `<cas>/figures/` avec `provenance.json`.
-11. [ ] Chaque nombre cite a sa provenance (SHA, backend, resolution, cout mesure) et le caveat plateforme (signes/ordre de grandeur stables, derniers chiffres variables).
-12. [ ] Aucune section de recap ; aucun fait dit deux fois a deux altitudes.
-13. [ ] Aucun mot de la liste noire ; le test de suppression passe sur chaque phrase.
-14. [ ] La commande exacte de lancement, les prerequis et le cout mesure sont donnes.
-15. [ ] Pour un cas-enfant DSL : la physique du parent est liee, pas copiee ; le coeur est la table de conventions du coeur (`include/adc/physics/*.hpp`) et l'egalite bit (`np.array_equal`).
+1. [ ] The Contract block is at the top, with the exact category from the manifest.
+2. [ ] The Does not prove clause is as detailed as Proves and its tone follows the category (pending if `reproduction-candidate`, "not a published repro" if `validation`, prototype if `experimental`).
+3. [ ] Each substantive section names the contract clause it justifies; no orphan clause.
+4. [ ] A falsifiable prediction is stated in the contract and an artifact (figure/assert/table) confronts it.
+5. [ ] Each theoretical claim points to a real line (`run.py:NN`) and a real name; no trivial line is paraphrased.
+6. [ ] The 3-layer table (Python composes / brick freezes / per-cell kernel) is present for a brick-based case, each row pinned to a real line.
+7. [ ] The physical signs are verified by the asserted behavior, not by a pasted textbook convention.
+8. [ ] Each tolerance is justified by an order of magnitude (noise / physical magnitude ratio).
+9. [ ] Each figure is embedded and followed by 2 to 4 sentences of analysis, partitioned Proves / Suggests / Not shown.
+10. [ ] Transient diagnostics go into `out/<case>/` (via `case_output_dir`); only versioned reproduction figures are in `<case>/figures/` with `provenance.json`.
+11. [ ] Each cited number has its provenance (SHA, backend, resolution, measured cost) and the platform caveat (signs/order of magnitude stable, last digits variable).
+12. [ ] No recap section; no fact stated twice at two altitudes.
+13. [ ] No word from the blacklist; the deletion test passes on every sentence.
+14. [ ] The exact launch command, the prerequisites, and the measured cost are given.
+15. [ ] For a DSL child case: the parent's physics is linked, not copied; the heart is the core conventions table (`include/adc/physics/*.hpp`) and the bit-exact equality (`np.array_equal`).

@@ -1,15 +1,15 @@
-# diag/ — diagnostics
+# diag/: diagnostics
 
-Scripts de diagnostic, **hors manifeste** (ce ne sont pas des cas) : ils éclairent la
-normalisation, le spectre analytique, la convergence, et génèrent les figures. Lancés à la main
-depuis la racine du cas.
+Diagnostic scripts, **outside the manifest** (these are not cases): they shed light on the
+normalization, the analytic spectrum, the convergence, and they generate the figures. Run them by
+hand from the case root.
 
-| Fichier | Rôle |
+| File | Role |
 |---|---|
-| `petri_eigenvalue.py` (+ `petri_eigenvalue.md`) | Valeur propre analytique de Davidson/Petri : dérive les cibles `0.772 / 0.911 / 0.683` et l'origine du facteur 2π (numpy seul, aucune dépendance au moteur `adc`). |
-| `diag_normalization_audit.py` | Audit dimensionnel exécutable (échelles, candidats de normalisation, décomposition de la fenêtre). Support de [`../docs/T2_NORMALIZATION_AUDIT.md`](../docs/T2_NORMALIZATION_AUDIT.md). |
-| `diag_polar_omega.py` | Chemin polaire **réduit** E×B scalaire : valide la normalisation `2π/rhobar` (récupère l=4 exact). |
-| `convergence_reduced.py` | Convergence en résolution : l'erreur relative au papier tend vers 0 quand `n` croît. |
-| `make_paper_figures.py` | Générateur des figures et GIF style papier (snapshots schlieren, taux de croissance, animations du rollup). |
+| `petri_eigenvalue.py` (+ `petri_eigenvalue.md`) | Analytic Davidson/Petri eigenvalue: derives the targets `0.772 / 0.911 / 0.683` and the origin of the 2pi factor (numpy only, no dependency on the `adc` engine). |
+| `diag_normalization_audit.py` | Runnable dimensional audit (scales, normalization candidates, window decomposition). Companion to [`../docs/T2_NORMALIZATION_AUDIT.md`](../docs/T2_NORMALIZATION_AUDIT.md). |
+| `diag_polar_omega.py` | **Reduced** scalar ExB polar path: validates the `2pi/rhobar` normalization (recovers l=4 exactly). |
+| `convergence_reduced.py` | Resolution convergence: the relative error to the paper tends to 0 as `n` grows. |
+| `make_paper_figures.py` | Generator for the paper-style figures and GIFs (schlieren snapshots, growth rate, rollup animations). |
 
-Voir le [README du cas](../README.md).
+See the [case README](../README.md).

@@ -1,62 +1,62 @@
-# Balayage diocotron : ordre x resolution x mode (mesure, O1/O2 + haut ordre O5)
+# Diocotron sweep: order x resolution x mode (measured, O1/O2 + high-order O5)
 
-Quantification de l'ecart de taux de croissance diocotron (numerique `adc` vs cible analytique
-de Petri) en fonction de la **resolution** et de l'**ordre de reconstruction**, pour decider la
-PR-A "transport-wall". Aucune physique modifiee : ce balayage reutilise tel quel le pipeline de
-[`run.py`](run.py) (CI anneau partagee, FFT azimutale du mode `l` de `phi`, ajustement de la
-phase lineaire `exp(gamma t)`, normalisation par `omega_D`, cible analytique de Petri en numpy).
-Script : [`sweep.py`](sweep.py). Donnees brutes : `out/diocotron/sweep_results.csv`.
+This sweep quantifies the diocotron growth-rate gap (numerical `adc` vs Petri's analytical
+target) as a function of **resolution** and **reconstruction order**, to decide PR-A
+"transport-wall". No physics is changed: the sweep reuses the [`run.py`](run.py) pipeline as-is
+(shared ring IC, azimuthal FFT of mode `l` of `phi`, fit of the linear `exp(gamma t)` phase,
+normalization by `omega_D`, Petri analytical target in numpy). Script: [`sweep.py`](sweep.py).
+Raw data: `out/diocotron/sweep_results.csv`.
 
-Cette version etend PR-0 (qui balayait {O1, O2-minmod, O2-vanleer}) avec l'axe **haut ordre O5 =
-WENO5-Z + SSPRK3**, desormais atteignable depuis Python (adc_cpp #88, master `ca803dc`). Le but de
-l'axe O5 est d'eclairer la question laissee ouverte par PR-0 : le residu l-dependant a O2 est-il de
-la diffusion (refermable par l'ordre) ou un plancher structurel du bord d'anneau cartesien ?
+This version extends PR-0 (which swept {O1, O2-minmod, O2-vanleer}) with the **high-order axis O5 =
+WENO5-Z + SSPRK3**, now reachable from Python (adc_cpp #88, master `ca803dc`). The O5 axis exists to
+shed light on the question PR-0 left open: is the l-dependent residual at O2 diffusion (closable by
+order) or a structural floor of the cartesian ring boundary?
 
-## Protocole
+## Protocol
 
-- **Cas** : `adc.System` compose `models.diocotron` + Poisson paroi conductrice circulaire
-  (`wall="circle"`, `wall_radius=0.40`), identique a `run.py`. CI anneau `r0:r1:Rwall =
-  0.15:0.20:0.40`, perturbation azimutale `delta=0.01`, CFL=0.4.
-- **Cible** : valeurs propres de Petri (numpy, `run.py`), invariantes en `n` :
+- **Case**: `adc.System` combining `models.diocotron` + Poisson with a circular conducting wall
+  (`wall="circle"`, `wall_radius=0.40`), identical to `run.py`. Ring IC `r0:r1:Rwall =
+  0.15:0.20:0.40`, azimuthal perturbation `delta=0.01`, CFL=0.4.
+- **Target**: Petri eigenvalues (numpy, `run.py`), invariant in `n`:
   `gamma_3 = 0.772`, `gamma_4 = 0.912`, `gamma_5 = 0.687`.
-- **gamma_num** : pente de `log|c_l(phi)|` sur la phase lineaire (diagnostic existant
-  `fit_linear_phase`), normalisee par `2 pi / rhobar`. `%err = 100 (gamma_num - gamma_ana) / gamma_ana`.
-- **Horizon physique commun `t_end = 48`** : a `nsteps` fixe le pas `dt ~ CFL dx` decroit avec
-  `n`, donc le temps physique final decroit avec `n` (n=256, 900 pas -> t ~ 35, phase non
-  saturee, sur-lecture de gamma). On avance donc jusqu'a `t_end = 48` (horizon du calage valide
-  de `run.py` : n=192, 900 pas -> t ~ 48). A cet horizon le balayage **reproduit le README a
-  n=192** (l=3 -22 %, l=4 -27 %, l=5 -5 %), ce qui ancre la mesure. C'est un reglage de boucle,
-  pas un nouvel observable.
+- **gamma_num**: slope of `log|c_l(phi)|` over the linear phase (existing diagnostic
+  `fit_linear_phase`), normalized by `2 pi / rhobar`. `%err = 100 (gamma_num - gamma_ana) / gamma_ana`.
+- **Common physical horizon `t_end = 48`**: at fixed `nsteps` the step `dt ~ CFL dx` shrinks with
+  `n`, so the final physical time shrinks with `n` (n=256, 900 steps -> t ~ 35, phase not yet
+  saturated, gamma over-read). You therefore advance to `t_end = 48` (the horizon of the validated
+  `run.py` tuning: n=192, 900 steps -> t ~ 48). At this horizon the sweep **reproduces the README at
+  n=192** (l=3 -22 %, l=4 -27 %, l=5 -5 %), which anchors the measurement. This is a loop setting,
+  not a new observable.
 
-## Axe ordre : ce qui est atteignable depuis Python
+## Order axis: what is reachable from Python
 
-L'axe ordre vise par le cahier des charges etait {O2, **O5 WENO5-Z**}. Au moment de PR-0 (master
-`adc_cpp` 30f6dfd) WENO5-Z et SSPRK3 n'etaient pas atteignables depuis le chemin du cas diocotron.
-**Depuis adc_cpp #88 (master `ca803dc`), ils le sont** par le chemin natif `add_block` :
+The order axis required by the spec was {O2, **O5 WENO5-Z**}. At the time of PR-0 (master
+`adc_cpp` 30f6dfd), WENO5-Z and SSPRK3 were not reachable from the diocotron case path.
+**Since adc_cpp #88 (master `ca803dc`), they are**, via the native `add_block` path:
 
-- `adc.Spatial(limiter="weno5", flux="rusanov")` : reconstruction WENO5-Z (ordre 5 en zone lisse,
-  stencil 5 points, 3 ghosts) ; `make_block` instancie maintenant la politique `Weno5`. Seul le
-  chemin natif `add_block` l'expose (les chemins .so AOT/JIT allouent 2 ghosts et la rejettent).
-- `adc.Explicit(method="ssprk3")` : integrateur SSPRK3 (Shu-Osher 3 etages, ordre 3). On l'apparie
-  a WENO5-Z car appairer un ordre eleve en espace a SSPRK2 (ordre 2 en temps) briderait l'ordre
-  effectif. La cle d'ordre `weno5` du balayage aiguille donc les deux briques (cf. `sweep.py`
-  `make_system` : `limiter == "weno5"` selectionne `Explicit(method="ssprk3")`).
+- `adc.Spatial(limiter="weno5", flux="rusanov")`: WENO5-Z reconstruction (order 5 in smooth zones,
+  5-point stencil, 3 ghosts); `make_block` now instantiates the `Weno5` policy. Only the native
+  `add_block` path exposes it (the AOT/JIT .so paths allocate 2 ghosts and reject it).
+- `adc.Explicit(method="ssprk3")`: SSPRK3 integrator (Shu-Osher, 3 stages, order 3). You pair it
+  with WENO5-Z because pairing a high spatial order with SSPRK2 (order 2 in time) would cap the
+  effective order. The sweep's order key `weno5` therefore steers both bricks (see `sweep.py`
+  `make_system`: `limiter == "weno5"` selects `Explicit(method="ssprk3")`).
 
-Verification empirique (master `ca803dc`) : `add_block(spatial=adc.Spatial(limiter="weno5"),
-time=adc.Explicit(method="ssprk3"))` se compose et avance sans NaN (la chaine `"weno5"`, qui levait
-`System : limiter inconnu 'weno5'` sur 30f6dfd, est maintenant acceptee). Les ordres O1/O2 gardent
-l'integrateur historique SSPRK2 (`adc.Explicit()` par defaut) : leurs lignes ci-dessous reproduisent
-exactement PR-0 (meme observable, meme calage `t_end=48`).
+Empirical check (master `ca803dc`): `add_block(spatial=adc.Spatial(limiter="weno5"),
+time=adc.Explicit(method="ssprk3"))` composes and advances without NaN (the `"weno5"` string, which
+raised `System : limiter inconnu 'weno5'` on 30f6dfd, is now accepted). Orders O1/O2 keep the legacy
+SSPRK2 integrator (`adc.Explicit()` by default): their rows below reproduce PR-0 exactly (same
+observable, same `t_end=48` tuning).
 
-**Axe ordre effectivement balaye** : `{O1 none, O2 minmod, O2 vanleer, O5 weno5}`. La diffusion
-numerique decroit (a) en montant la resolution et (b) en montant l'ordre / en baissant la
-dissipation (none -> minmod -> vanleer, puis WENO5-Z + SSPRK3 a l'ordre 5). L'axe O5 est ce qui
-permet d'eclairer la question diffusion-vs-structurel : a l'ordre 5 la diffusion residuelle est
-fortement bornee, donc ce qui reste a O5 est le candidat le plus credible au plancher structurel.
+**Order axis actually swept**: `{O1 none, O2 minmod, O2 vanleer, O5 weno5}`. Numerical diffusion
+decreases (a) as you raise resolution and (b) as you raise order / lower dissipation
+(none -> minmod -> vanleer, then WENO5-Z + SSPRK3 at order 5). The O5 axis is what lets you address
+the diffusion-vs-structural question: at order 5 the residual diffusion is strongly bounded, so what
+remains at O5 is the most credible candidate for a structural floor.
 
-## Resultats : gamma_num (%err vs analytique), `t_end = 48`
+## Results: gamma_num (%err vs analytical), `t_end = 48`
 
-| n | ordre | l=3 (cible 0.772) | l=4 (cible 0.912) | l=5 (cible 0.687) |
+| n | order | l=3 (target 0.772) | l=4 (target 0.912) | l=5 (target 0.687) |
 |---|---|---|---|---|
 | 128 | O1 none      | 0.263 (-66.0 %) | 0.005 (-99.5 %) | 0.111 (-83.9 %) |
 | 192 | O1 none      | 0.325 (-57.9 %) | 0.371 (-59.3 %) | 0.343 (-50.0 %) |
@@ -77,176 +77,171 @@ fortement bornee, donc ce qui reste a O5 est le candidat le plus credible au pla
 | 384 | O5 weno5     | 0.706 (-8.6 %)  | 0.828 (-9.2 %)  | 0.702 (+2.2 %) |
 | 512 | O5 weno5     | 0.704 (-8.8 %)  | 0.823 (-9.7 %)  | 0.715 (+4.0 %) |
 
-(n=192 O2 minmod = ligne d'ancrage, reproduit le README. Les lignes O1/O2 sont rejouees ici et
-reproduisent PR-0 a l'identique : en particulier n=384 et n=512 O2 sur ROMEO redonnent les valeurs
-n=384 O2 deja au tableau au centieme pres, ce qui ancre la chaine de build ROMEO sur PR-0. O5 =
-WENO5-Z + SSPRK3, lance en local n=128/192/256 ; **les lignes n=384 et n=512 (tous ordres) sont
-mesurees sur ROMEO** (x64cpu amd EPYC, job SLURM 639912, cf. "lance vs saute"). n=384 O2 = sonde au-dela
-de la grille principale heritee de PR-0.)
+(n=192 O2 minmod = anchor row, reproduces the README. The O1/O2 rows are replayed here and reproduce
+PR-0 exactly: in particular n=384 and n=512 O2 on ROMEO return the n=384 O2 values already tabulated
+to the hundredth, which anchors the ROMEO build chain on PR-0. O5 = WENO5-Z + SSPRK3, run locally at
+n=128/192/256; **rows n=384 and n=512 (all orders) are measured on ROMEO** (x64cpu amd EPYC, SLURM
+job 639912, see "run vs skipped"). n=384 O2 = a probe beyond the main grid inherited from PR-0.)
 
-> **Lecture rapide des lignes haute resolution (n=384/512).** Le point qui change la lecture est
-> O5 l=4 : a basse resolution il valait ~ -4 % sur les deux points propres (n=128, n=256), ce que
-> PR-0 lisait comme "diffusion presque epuisee". A haute resolution O5 l=4 ne descend pas vers 0 %
-> dans ces mesures :
-> il vaut -9.2 % (n=384) puis -9.7 % (n=512). attention : ces deux points ont une fenetre de fit qui
-> s'ouvre tot (t0 = 6.3 et 5.4, cf. tableau de tracabilite), exactement le meme defaut que le point
-> n=192 deja signale ; ils ne sont donc pas directement comparables aux deux points propres basse
-> resolution. Le signal le plus propre est l=3 O5, dont la fenetre s'ouvre de facon homogene
-> (t0 ~ 6.5) a tout n : il passe de -10.3 % (n=256) a -8.6 % (n=384) puis -8.8 % (n=512), soit un
-> aplatissement net autour de -9 % a haute resolution. Voir le verdict prudent plus bas.
+> **Quick read of the high-resolution rows (n=384/512).** The point that changes the reading is
+> O5 l=4: at low resolution it was ~ -4 % on both eigen-points (n=128, n=256), which PR-0 read as
+> "diffusion almost exhausted". At high resolution O5 l=4 does not fall toward 0 % in these
+> measurements:
+> it is -9.2 % (n=384) then -9.7 % (n=512). Caveat: both points have a fit window that opens early
+> (t0 = 6.3 and 5.4, see traceability table), the exact same flaw as the n=192 point already
+> flagged; they are therefore not directly comparable to the two low-resolution eigen-points. The
+> cleanest signal is l=3 O5, whose window opens consistently (t0 ~ 6.5) at every n: it goes from
+> -10.3 % (n=256) to -8.6 % (n=384) then -8.8 % (n=512), a clear flattening around -9 % at high
+> resolution. See the cautious verdict below.
 
-### Tracabilite : fenetre de fit des points O5 l=4 (basse et haute resolution)
+### Traceability: fit window of the O5 l=4 points (low and high resolution)
 
-Le CSV (`out/diocotron/sweep_results.csv`) ecrit pour chaque ligne les bornes de la fenetre de
-`fit_linear_phase` : indices `fit_i0..fit_i1` et temps `fit_t0..fit_t1`. Voici ces bornes pour les
-points O5 l=4. Les trois premiers (n=128/192/256) sont les valeurs locales de PR-0 ; les deux
-derniers (n=384/512) viennent du job ROMEO 639912 (colonnes de fenetre directement issues du CSV
-fusionne `sweep_hires_merged.csv`) :
+For each row, the CSV (`out/diocotron/sweep_results.csv`) writes the bounds of the `fit_linear_phase`
+window: indices `fit_i0..fit_i1` and times `fit_t0..fit_t1`. Here are those bounds for the O5 l=4
+points. The first three (n=128/192/256) are the local PR-0 values; the last two (n=384/512) come from
+ROMEO job 639912 (window columns taken directly from the merged CSV `sweep_hires_merged.csv`):
 
-| n | gamma_num | %err | fenetre i0..i1 | fenetre t0..t1 | fenetre propre ? |
+| n | gamma_num | %err | window i0..i1 | window t0..t1 | clean window ? |
 |---|---|---|---|---|---|
-| 128 | 0.8736 | -4.2 % | 269..528 | 20.8..41.1 | oui (t0 tardif) |
-| 192 | 0.7675 | -15.8 % | 108..703 | **5.4**..35.1 | non (t0 precoce) |
-| 256 | 0.8745 | -4.1 % | 357..1095 | 13.3..40.8 | oui (t0 tardif) |
-| 384 | 0.8282 | -9.2 % | 257..1594 | **6.3**..38.7 | non (t0 precoce) |
-| 512 | 0.8229 | -9.7 % | 295..2126 | **5.4**..38.6 | non (t0 precoce) |
+| 128 | 0.8736 | -4.2 % | 269..528 | 20.8..41.1 | yes (late t0) |
+| 192 | 0.7675 | -15.8 % | 108..703 | **5.4**..35.1 | no (early t0) |
+| 256 | 0.8745 | -4.1 % | 357..1095 | 13.3..40.8 | yes (late t0) |
+| 384 | 0.8282 | -9.2 % | 257..1594 | **6.3**..38.7 | no (early t0) |
+| 512 | 0.8229 | -9.7 % | 295..2126 | **5.4**..38.6 | no (early t0) |
 
-Lecture directe de la colonne fenetre : les deux points haute resolution (n=384, n=512) ont une
-fenetre qui s'ouvre tot (t0 = 6.3 et 5.4), exactement comme le point n=192 deja signale comme
-artefact (t0 = 5.4). Autrement dit, le point intermediaire n=192 n'etait pas un accident isole :
-des qu'on monte en n, la fenetre lineaire de `fit_linear_phase` tend a s'ouvrir tot pour O5 l=4.
-Les deux seuls points O5 l=4 a fenetre tardive (n=128 t0=20.8 et n=256 t0=13.3) restent donc les
-seuls "propres" du jeu l=4 ; les nouveaux points n=384/512 ne peuvent ni confirmer ni infirmer
-proprement la valeur ~ -4 % de ces deux-la.
+Read straight from the window column: the two high-resolution points (n=384, n=512) have a window
+that opens early (t0 = 6.3 and 5.4), exactly like the n=192 point already flagged as an artifact
+(t0 = 5.4). In other words, the intermediate n=192 point was not an isolated accident: as soon as you
+raise n, the `fit_linear_phase` linear window tends to open early for O5 l=4. The only two O5 l=4
+points with a late window (n=128 t0=20.8 and n=256 t0=13.3) thus remain the only "clean" ones in the
+l=4 set; the new n=384/512 points can neither confirm nor cleanly refute the ~ -4 % value of those
+two.
 
-**Pourquoi l=3 O5 est le signal le plus fiable a haute resolution.** Contrairement a l=4, le mode
-l=3 a une fenetre de fit qui s'ouvre de facon homogene a tout n (t0 ~ 6.5 : n=384 [t6.5..38.1],
-n=512 [t6.5..39.9]). Sa courbe en n est donc comparable point a point, sans le biais de fenetre qui
-affecte l=4. C'est sur l=3 que la lecture diffusion-vs-structurel est la moins ambigue (cf. verdict).
+**Why l=3 O5 is the most reliable signal at high resolution.** Unlike l=4, mode l=3 has a fit window
+that opens consistently at every n (t0 ~ 6.5: n=384 [t6.5..38.1], n=512 [t6.5..39.9]). Its curve in n
+is therefore comparable point by point, without the window bias that affects l=4. It is on l=3 that
+the diffusion-vs-structural reading is least ambiguous (see verdict).
 
-## Lecture diffusion-vs-structurel, par mode
+## Diffusion-vs-structural reading, per mode
 
-Methode : pour un ordre donne, si l'`|%err|` **decroit nettement** avec `n` (et avec l'ordre),
-la part diffuse est dominante ; s'il **plafonne** en resolution, le residu est structurel (bord
-d'anneau cartesien advecte sur grille pleine, cf. `docs/PAPER_ROADMAP.md`).
+Method: for a given order, if `|%err|` **decreases clearly** with `n` (and with order), the
+diffusive part dominates; if it **plateaus** in resolution, the residual is structural (cartesian
+ring boundary advected on a full grid, see `docs/PAPER_ROADMAP.md`).
 
-- **l = 3 : le signal le plus propre. L'ordre reduit le gap, mais a haute resolution O5 aplatit
-  autour de -9 %.** L'`|%err|` se referme avec la resolution et avec l'ordre. minmod : -34 % -> -22 %
-  -> -17 % -> -12 % -> -11 % (128->512) ; vanleer (moins dissipatif) : -21 % -> -15 % -> -11 % ->
-  -9 % -> -9 % ; **O5 : -14.6 % -> -12.4 % -> -10.3 % -> -8.6 % -> -8.8 %** (n=128->512). A chaque n,
-  O5 ameliore strictement vanleer (le meilleur O2). Le point neuf de cette mesure : entre n=384 et
-  n=512, **le residu O5 l=3 ne montre plus de fermeture nette** (-8.6 % puis -8.8 %, soit un ecart dans le bruit de
-  mesure) ; et c'est le mode dont la fenetre de fit est homogene a tout n (t0 ~ 6.5), donc cet
-  aplatissement n'est pas un artefact de fenetre. **Verdict : sur le mode le mieux mesure, l'ordre
-  reduit d'abord fortement le gap puis l'`|%err|` O5 semble plafonner autour de -9 % a haute resolution. Cela
-  Suggéré un plancher residuel de l'ordre de ~9 % qui ne se referme pas par la resolution (candidat
-  structurel), plutot qu'une diffusion encore en train de s'epuiser ; reste a confirmer (un seul cran
-  n=384 -> n=512 plat ne suffit pas a exclure une convergence tres lente).**
-- **l = 4 : le mode-cle. Le -4 % O5 basse resolution ne se reproduit pas a haute resolution ; mais
-  les points haute resolution sont biaises par leur fenetre.** A O2, l=4 bute sur ~10-12 % qui ne se
-  referme pas en resolution (minmod -12.1 % a n=256, -12.5 % a n=384, -11.4 % a n=512 ; vanleer
-  -5.5 % -> -9.5 % -> -10.0 %), ce que PR-0 lisait comme candidat structurel. PR-0 esperait
-  l'autre lecture via O5 (-4.1 % a n=256, -4.2 % a n=128, "diffusion presque epuisee"). **La mesure
-  haute resolution ROMEO ne reproduit pas ce -4 % : O5 l=4 vaut -9.2 % a n=384 et -9.7 % a n=512** -
-  c'est-a-dire qu'il remonte vers la bande des O2 (~-10 a -11 %) et de l=3 O5 (~-9 %) au lieu de
-  tendre vers 0. prudence de premiere importance : ces deux points haute resolution ont une fenetre
-  de fit qui s'ouvre tot (t0 = 6.3 et 5.4, cf. tableau de tracabilite), exactement le defaut qui
-  rendait le point n=192 inutilisable ; ils sous-lisent donc probablement un peu la pente, comme
-  n=192. On ne peut donc pas affirmer que -9.5 % est la "vraie" valeur asymptotique de l=4 O5. Ce
-  qu'on peut dire honnetement : (a) le -4 % observe sur les deux seuls points propres (n=128, n=256)
-  ne se reproduit a aucune des deux resolutions superieures ; (b) des qu'on monte en n, la fenetre de
-  l=4 s'ouvre tot et le %err mesure se loge dans la meme bande ~ -9 a -10 % que l=3 et que les O2.
-  **Verdict : la lecture optimiste de PR-0 (l=4 O5 -> ~-4 %, donc diffusion) est affaiblie - elle ne
-  tient que sur deux points propres basse resolution et ne survit pas a la montee en resolution. Les
-  points n=384/512 (~-9.5 %) sont coherents avec un plancher de l'ordre de ~9-10 % du meme ordre que
-  l=3, mais leur fenetre precoce interdit d'en faire une mesure de plancher fiable. Conclusion l=4 :
-  pas de fermeture vers 0 % a haute resolution -> le residu l=4 ne se comporte pas comme une diffusion
-  qui s'epuise ; un plancher (structurel) de ~9-10 % est le candidat le plus coherent, a confirmer
-  par un diagnostic de fenetre robuste sur l=4 (ouvrir le fit plus tard).**
-- **l = 5 : part diffuse faible, deja resolu ; la haute resolution le confirme.** Deja a la cible
-  des O2 a n=192 (minmod -5 %, vanleer +4 %), l'erreur traverse zero et reste petite et de signe
-  variable. **O5 : +6.9 % -> +1.8 % -> +4.7 % -> +2.2 % -> +4.0 %** (n=128->512), du meme ordre de
-  grandeur (quelques %, signe variable, sans tendance nette) que les O2 (n=512 : minmod +5.9 %,
-  vanleer +4.9 %). Le residu est domine par le bruit de mesure / un leger sur-tir, pas par un
-  plancher structurel ni par une diffusion residuelle. **Verdict : aucun gap notable a refermer ;
-  ni l'ordre ni la haute resolution ne font apparaitre de plancher sur l=5.**
+- **l = 3: the cleanest signal. Order reduces the gap, but at high resolution O5 flattens around
+  -9 %.** `|%err|` closes with resolution and with order. minmod: -34 % -> -22 % -> -17 % -> -12 %
+  -> -11 % (128->512); vanleer (less dissipative): -21 % -> -15 % -> -11 % -> -9 % -> -9 %;
+  **O5: -14.6 % -> -12.4 % -> -10.3 % -> -8.6 % -> -8.8 %** (n=128->512). At every n, O5 strictly
+  improves on vanleer (the best O2). The new point in this measurement: between n=384 and n=512,
+  **the O5 l=3 residual no longer shows a clear closure** (-8.6 % then -8.8 %, a gap within measurement
+  noise); and this is the mode whose fit window is consistent at every n (t0 ~ 6.5), so this
+  flattening is not a window artifact. **Verdict: on the best-measured mode, order first reduces the
+  gap strongly, then O5 `|%err|` appears to plateau around -9 % at high resolution. This suggests a
+  residual floor on the order of ~9 % that does not close with resolution (a structural candidate),
+  rather than a diffusion still in the process of exhausting itself; remains to be confirmed (a single
+  flat step n=384 -> n=512 is not enough to rule out a very slow convergence).**
+- **l = 4: the key mode. The -4 % low-resolution O5 does not reproduce at high resolution; but the
+  high-resolution points are biased by their window.** At O2, l=4 hits ~10-12 % that does not close
+  with resolution (minmod -12.1 % at n=256, -12.5 % at n=384, -11.4 % at n=512; vanleer -5.5 % ->
+  -9.5 % -> -10.0 %), which PR-0 read as a structural candidate. PR-0 hoped for the other reading via
+  O5 (-4.1 % at n=256, -4.2 % at n=128, "diffusion almost exhausted"). **The ROMEO high-resolution
+  measurement does not reproduce this -4 %: O5 l=4 is -9.2 % at n=384 and -9.7 % at n=512**, that
+  is, it climbs back into the O2 band (~-10 to -11 %) and the l=3 O5 band (~-9 %) instead of tending
+  toward 0. A caveat of first importance: both high-resolution points have a fit window that opens
+  early (t0 = 6.3 and 5.4, see traceability table), exactly the flaw that made the n=192 point
+  unusable; they therefore probably under-read the slope a bit, like n=192. You cannot, then, assert
+  that -9.5 % is the "true" asymptotic value of l=4 O5. What you can say honestly: (a) the -4 %
+  observed on the only two clean points (n=128, n=256) does not reproduce at either higher resolution;
+  (b) as soon as you raise n, the l=4 window opens early and the measured %err lands in the same
+  ~ -9 to -10 % band as l=3 and the O2 orders. **Verdict: PR-0's optimistic reading (l=4 O5 -> ~-4 %,
+  hence diffusion) is weakened: it holds only on two clean low-resolution points and does not survive
+  the rise in resolution. The n=384/512 points (~-9.5 %) are consistent with a floor on the order of
+  ~9-10 % of the same order as l=3, but their early window forbids making a reliable floor measurement
+  out of them. l=4 conclusion: no closure toward 0 % at high resolution -> the l=4 residual does not
+  behave like a diffusion that exhausts itself; a (structural) floor of ~9-10 % is the most consistent
+  candidate, to be confirmed with a robust window diagnostic on l=4 (opening the fit later).**
+- **l = 5: weak diffusive part, already resolved; high resolution confirms it.** Already at the O2
+  target at n=192 (minmod -5 %, vanleer +4 %), the error crosses zero and stays small and of varying
+  sign. **O5: +6.9 % -> +1.8 % -> +4.7 % -> +2.2 % -> +4.0 %** (n=128->512), of the same order of
+  magnitude (a few %, varying sign, no clear trend) as the O2 orders (n=512: minmod +5.9 %, vanleer
+  +4.9 %). The residual is dominated by measurement noise / slight overshoot, not by a structural
+  floor nor a residual diffusion. **Verdict: no notable gap to close; neither order nor high
+  resolution reveals a floor on l=5.**
 
-**Conclusion globale (avec l'axe O5 et la confirmation haute resolution ROMEO).** La mesure
-n=384/512 (job ROMEO 639912, x64cpu) reverse la lecture optimiste que PR-0 tirait des deux points
-propres basse resolution. PR-0 lisait : "l=4 O5 tombe a ~-4 % -> le residu est de la diffusion, pas
-un plancher". **La haute resolution ne reproduit pas ce -4 %.** Sur les deux modes ou la mesure est
-exploitable a haute resolution :
+**Overall conclusion (with the O5 axis and the ROMEO high-resolution confirmation).** The n=384/512
+measurement (ROMEO job 639912, x64cpu) reverses the optimistic reading PR-0 drew from the two clean
+low-resolution points. PR-0 read: "l=4 O5 drops to ~-4 % -> the residual is diffusion, not a floor".
+**High resolution does not reproduce this -4 %.** On the two modes where the measurement is usable at
+high resolution:
 
-- **l = 3 (le mieux mesure, fenetre homogene a tout n)** : l'`|%err|` O5 plafonne autour de -9 %
-  (-10.3 % a n=256, puis -8.6 % a n=384 et -8.8 % a n=512 - plat entre les deux derniers crans). Ce
-  n'est pas le comportement d'une diffusion qui s'epuise (qui continuerait de se refermer), mais
-  plutot celui d'un plancher residuel candidat (pas encore une preuve definitive).
-- **l = 4** : le -4 % O5 basse resolution ne se reproduit a aucune des deux resolutions superieures
-  (O5 l=4 = -9.2 % a n=384, -9.7 % a n=512). Il remonte dans la meme bande ~ -9 a -10 % que l=3 et
-  que les O2. La reserve majeure : ces deux points l=4 ont une fenetre de fit precoce (t0 = 6.3 et
-  5.4, comme le point n=192 deja ecarte), donc on ne peut pas en faire une valeur de plancher fiable
-  - on peut seulement dire que l=4 ne tend pas vers 0 % dans ces mesures a haute resolution.
-- **l = 5** : reste petit et de signe variable (quelques %), deja resolu, sans plancher.
+- **l = 3 (best measured, window consistent at every n)**: O5 `|%err|` plateaus around -9 %
+  (-10.3 % at n=256, then -8.6 % at n=384 and -8.8 % at n=512, flat between the last two steps).
+  This is not the behavior of a diffusion that exhausts itself (which would keep closing), but rather
+  that of a candidate residual floor (not yet definitive proof).
+- **l = 4**: the -4 % low-resolution O5 does not reproduce at either higher resolution (O5 l=4 =
+  -9.2 % at n=384, -9.7 % at n=512). It climbs back into the same ~ -9 to -10 % band as l=3 and the
+  O2 orders. The major reservation: both l=4 points have an early fit window (t0 = 6.3 and 5.4, like
+  the n=192 point already discarded), so you cannot make a reliable floor value out of them; you can
+  only say that l=4 does not tend toward 0 % in these high-resolution measurements.
+- **l = 5**: stays small and of varying sign (a few %), already resolved, no floor.
 
-**Verdict prudent (l=4, la question posee).** A la question "le residu l=4 O5 continue-t-il de se
-refermer vers 0 % (-> c'etait de la diffusion, pas de plancher dur) ou plafonne-t-il a un certain %
-(-> plancher de cette taille) ?", la mesure haute resolution repond : **il ne montre pas de fermeture
-vers 0 % dans ces mesures**. Le -4 % de PR-0 etait un artefact des deux seuls points propres basse
-resolution ; a n=384 et n=512 l=4 O5 se loge a ~-9.5 %, du meme ordre que le palier l=3 (~-9 %) qui,
-lui, est mesure proprement et plat sur un cran (n=384 -> n=512). La lecture la plus coherente avec
-l'ensemble des donnees est donc que les donnees SuggéréNT un plancher residuel l-dependant de l'ordre
-de **~9-10 %** a l'ordre 5, qui ne montre pas de fermeture vers 0 par la resolution dans ces mesures -
-candidat structurel du bord d'anneau cartesien vise par la PR-A "transport-wall", pas encore une
-preuve definitive. Cette lecture re-ouvre l'hypothese de plancher de PR-0 (que l'axe O5 basse
-resolution avait semble affaiblir), en situant sa taille plausible vers ~9-10 % a l'ordre 5 (contre
-~12 % vus a O2), sous reserve des deux limites ci-dessous.
+**Cautious verdict (l=4, the question posed).** To the question "does the l=4 O5 residual keep
+closing toward 0 % (-> it was diffusion, not a hard floor) or does it plateau at a given % (-> a floor
+of that size)?", the high-resolution measurement answers: **it shows no closure toward 0 % in these
+measurements**. PR-0's -4 % was an artifact of the only two clean low-resolution points; at n=384 and
+n=512 l=4 O5 lands at ~-9.5 %, the same order as the l=3 plateau (~-9 %) which is itself measured
+cleanly and flat over one step (n=384 -> n=512). The reading most consistent with the full dataset is
+therefore that the data suggest an l-dependent residual floor on the order of **~9-10 %** at order 5,
+which shows no closure toward 0 with resolution in these measurements: the structural candidate of
+the cartesian ring boundary targeted by PR-A "transport-wall", not yet definitive proof. This reading
+re-opens PR-0's floor hypothesis (which the low-resolution O5 axis had seemed to weaken), placing its
+plausible size around ~9-10 % at order 5 (against ~12 % seen at O2), subject to the two limits below.
 
-Ce verdict reste a confirmer et ne justifie a lui seul aucune reecriture de la roadmap papier :
-(1) le plateau l=3 ne tient pour l'instant que sur un cran plat (n=384 -> n=512) ; il faudrait soit
-un n=768/1024, soit deux horizons `t_end` differents, pour exclure une convergence simplement tres
-lente ; (2) les points l=4 haute resolution sont biaises par leur fenetre de fit precoce - avant de
-chiffrer un plancher l=4, il faut un diagnostic de fenetre robuste (ouvrir le fit plus tard, ou caler
-la fenetre sur la phase exponentielle propre comme aux points n=128/256). Autrement dit la question
-"diffusion vs structurel" penche maintenant, sur la base de cette mesure, du cote **structurel
-(plancher ~9-10 % a l'ordre 5)** plutot que diffusion - mais ce basculement par rapport au verdict
-prudent de PR-0 Suggéré seulement, et reste a confirmer.
+This verdict remains to be confirmed and on its own justifies no rewrite of the paper roadmap:
+(1) the l=3 plateau so far holds only over one flat step (n=384 -> n=512); you would need either an
+n=768/1024 or two different `t_end` horizons to rule out a merely very slow convergence; (2) the l=4
+high-resolution points are biased by their early fit window, before putting a number on an l=4 floor,
+you need a robust window diagnostic (open the fit later, or anchor the window on the clean exponential
+phase as at points n=128/256). In other words, the "diffusion vs structural" question now leans, on
+the basis of this measurement, toward the **structural** side **(floor ~9-10 % at order 5)** rather
+than diffusion, but this shift relative to PR-0's cautious verdict is only suggested, and remains to
+be confirmed.
 
-## Ce qui a ete lance vs saute
+## What was run vs skipped
 
-- **Lance (grille principale O1/O2, 27 runs)** : `n in {128,192,256} x {O1 none, O2 minmod,
-  O2 vanleer} x l in {3,4,5}`, `t_end=48`. Rejoue ici a l'identique de PR-0 (memes valeurs), donc
-  les lignes O1/O2 du tableau sont stables. Rejouable par `sweep.py --orders none,minmod,vanleer`.
-- **Lance (axe haut ordre O5, 9 runs)** : `n in {128,192,256} x O5 (weno5 + ssprk3) x l in {3,4,5}`,
-  `t_end=48`. Couts par run mesures en local (CPU mono-thread) : n=128 ~ 9 s, n=192 ~ 30 s,
-  n=256 ~ 88 s (WENO5-Z = stencil 5 points + 3 ghosts, SSPRK3 = 3 etages, donc plus lourd que O2 a
-  meme n). L'ensemble du balayage 4 ordres x 3 n x 3 l = **36 runs en ~16,5 min** (CPU local).
-  CSV complet, rejouable par `sweep.py` (defaut, qui inclut maintenant `weno5`).
-- **Lance (sonde n=384 O2, 6 runs)** : `n=384 x {O2 minmod, O2 vanleer} x l in {3,4,5}` (heritee
-  de PR-0 ; un run n=384 O2 ~ 143 s en local ; rejouable via `sweep.py --ns 384 --orders minmod,vanleer`).
-  O1 saute a n=384 (l'ordre 1 reste domine par la diffusion a toute resolution).
-- **Lance sur ROMEO (haute resolution n=384/512, 18 runs)** : `n in {384, 512} x {O2 minmod,
-  O2 vanleer, O5 weno5} x l in {3,4,5}`, `t_end=48`, job SLURM **639912** (partition `short`,
-  `--constraint=x64cpu`, amd EPYC 192 coeurs, compte `r250127`). Les 18 runs (mono-thread chacun)
-  lances en parallele sur un noeud ; tous rc=0, aucun NaN, `t_final = 48` atteint sans toucher le
-  garde-fou `max_steps=4000` (n=512 demande ~2600 pas, donc marge confortable). Le module `_adc` est
-  rebati sur le noeud de login ROMEO (Spack : python@3.10.14 + numpy@1.26.4 + pybind11@2.13.5 +
-  cmake@3.31.8 + gcc@11.4.1) a partir de `adc_cpp` master `5bb7208` ; **les lignes n=384 et n=512 O2
-  reproduisent les valeurs n=384 O2 de PR-0 au centieme pres**, ce qui valide la chaine ROMEO.
-  Temps de paroi par run mesures (CPU EPYC, 18 puis 9 puis 3 runs concurrents -> contention de bande
-  passante a n=512) :
-  - n=384 O2 (minmod/vanleer) : ~172-182 s ; n=384 O5 (weno5+ssprk3) : ~249-258 s.
-  - n=512 O2 (minmod/vanleer) : ~653-716 s ; n=512 O5 : ~833-880 s (point le plus lourd : n=512 O5
-    l=4 = 880 s).
-  - Job complet (18 runs en parallele) : ~14,5 min de paroi. Rejouable par `sweep.py --ns 384,512
+- **Run (main O1/O2 grid, 27 runs)**: `n in {128,192,256} x {O1 none, O2 minmod, O2 vanleer} x
+  l in {3,4,5}`, `t_end=48`. Replayed here identically to PR-0 (same values), so the O1/O2 rows of
+  the table are stable. Replayable with `sweep.py --orders none,minmod,vanleer`.
+- **Run (high-order axis O5, 9 runs)**: `n in {128,192,256} x O5 (weno5 + ssprk3) x l in {3,4,5}`,
+  `t_end=48`. Per-run costs measured locally (single-thread CPU): n=128 ~ 9 s, n=192 ~ 30 s,
+  n=256 ~ 88 s (WENO5-Z = 5-point stencil + 3 ghosts, SSPRK3 = 3 stages, so heavier than O2 at the
+  same n). The full 4-order x 3-n x 3-l sweep = **36 runs in ~16.5 min** (local CPU). Complete CSV,
+  replayable with `sweep.py` (default, which now includes `weno5`).
+- **Run (n=384 O2 probe, 6 runs)**: `n=384 x {O2 minmod, O2 vanleer} x l in {3,4,5}` (inherited from
+  PR-0; one n=384 O2 run ~ 143 s locally; replayable via `sweep.py --ns 384 --orders minmod,vanleer`).
+  O1 skipped at n=384 (order 1 stays diffusion-dominated at any resolution).
+- **Run on ROMEO (high resolution n=384/512, 18 runs)**: `n in {384, 512} x {O2 minmod, O2 vanleer,
+  O5 weno5} x l in {3,4,5}`, `t_end=48`, SLURM job **639912** (partition `short`,
+  `--constraint=x64cpu`, amd EPYC 192 cores, account `r250127`). The 18 runs (each single-thread) run
+  in parallel on one node; all rc=0, no NaN, `t_final = 48` reached without hitting the `max_steps=4000`
+  guard (n=512 needs ~2600 steps, so a comfortable margin). The `_adc` module is rebuilt on the ROMEO
+  login node (Spack: python@3.10.14 + numpy@1.26.4 + pybind11@2.13.5 + cmake@3.31.8 + gcc@11.4.1) from
+  `adc_cpp` master `5bb7208`; **the n=384 and n=512 O2 rows reproduce the n=384 O2 values of PR-0 to
+  the hundredth**, which validates the ROMEO chain. Wall-time per run measured (EPYC CPU, 18 then 9
+  then 3 concurrent runs -> bandwidth contention at n=512):
+  - n=384 O2 (minmod/vanleer): ~172-182 s; n=384 O5 (weno5+ssprk3): ~249-258 s.
+  - n=512 O2 (minmod/vanleer): ~653-716 s; n=512 O5: ~833-880 s (heaviest point: n=512 O5 l=4 =
+    880 s).
+  - Full job (18 runs in parallel): ~14.5 min wall. Replayable with `sweep.py --ns 384,512
     --orders minmod,vanleer,weno5`.
-- **Toujours saute** : **n=384/512 O1 none** (l'ordre 1 reste domine par la diffusion a toute
-  resolution, sans interet pour la question diffusion-vs-structurel). Pistes ouvertes par cette
-  mesure, non faites ici (cf. verdict) : (a) **n=768/1024** ou **deux horizons `t_end`** pour exclure
-  que le plateau l=3 O5 ~ -9 % soit une convergence tres lente ; (b) un **diagnostic de fenetre
-  robuste pour l=4** (fenetre de fit calee tard, comme aux points propres n=128/256) avant de chiffrer
-  un plancher l=4 - les points l=4 haute resolution ont une fenetre precoce qui sous-lit la pente.
+- **Still skipped**: **n=384/512 O1 none** (order 1 stays diffusion-dominated at any resolution, of no
+  interest for the diffusion-vs-structural question). Avenues opened by this measurement, not done here
+  (see verdict): (a) **n=768/1024** or **two `t_end` horizons** to rule out that the l=3 O5 plateau
+  ~ -9 % is a very slow convergence; (b) a **robust window diagnostic for l=4** (fit window anchored
+  late, as at the clean points n=128/256) before putting a number on an l=4 floor: the l=4
+  high-resolution points have an early window that under-reads the slope.
 
-## Reproduire
+## Reproduce
 
 ```bash
 # adc_cpp est Kokkos-only : un Kokkos installe (Serial pour CPU) est requis (-DKokkos_ROOT).
@@ -261,15 +256,15 @@ PYTHONPATH=../adc_cpp/build-py/python python3 diocotron/sweep.py \
   --ns 384,512 --orders minmod,vanleer,weno5         # haute resolution (lourd : ROMEO)
 ```
 
-Le defaut de `--orders` est maintenant `minmod,vanleer,weno5` (O5 = WENO5-Z + SSPRK3). Ajouter
-`none` pour la ligne O1. L'axe O5 exige adc_cpp #88 ou plus recent (master `ca803dc`). `sweep.py`
-n'a pas ete modifie pour la haute resolution : il parametre deja `--ns` et `--orders`, et le
-garde-fou `max_steps=4000` couvre n=512 (~2600 pas a `t_end=48`).
+The `--orders` default is now `minmod,vanleer,weno5` (O5 = WENO5-Z + SSPRK3). Add `none` for the O1
+row. The O5 axis requires adc_cpp #88 or newer (master `ca803dc`). `sweep.py` was not modified for
+high resolution: it already parameterizes `--ns` and `--orders`, and the `max_steps=4000` guard covers
+n=512 (~2600 steps at `t_end=48`).
 
-Sur ROMEO (haute resolution, job 639912 ci-dessus) : le balayage est CPU (Poisson + transport, pas
-de GPU), partition `short` `--constraint=x64cpu`, et le module `_adc` se rebatit sur le noeud de
-login depuis `adc_cpp` (Spack : python@3.10.14 + numpy@1.26.4 + pybind11@2.13.5 + cmake@3.31.8 +
-gcc@11.4.1, plus un Kokkos installe) via la meme commande `cmake -S . -B build-py -DADC_BUILD_PYTHON=ON
--DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release` (adc_cpp est Kokkos-only :
-le serie passe par Kokkos Serial). Les 18 runs (n=384/512 x 3 ordres x 3 modes) tournent mono-thread en
-parallele sur un noeud (192 coeurs).
+On ROMEO (high resolution, job 639912 above): the sweep is CPU (Poisson + transport, no GPU),
+partition `short` `--constraint=x64cpu`, and the `_adc` module is rebuilt on the login node from
+`adc_cpp` (Spack: python@3.10.14 + numpy@1.26.4 + pybind11@2.13.5 + cmake@3.31.8 + gcc@11.4.1, plus an
+installed Kokkos) via the same command `cmake -S . -B build-py -DADC_BUILD_PYTHON=ON
+-DADC_USE_KOKKOS=ON -DKokkos_ROOT=$KOKKOS_ROOT -DCMAKE_BUILD_TYPE=Release` (adc_cpp is Kokkos-only: the
+serial path goes through Kokkos Serial). The 18 runs (n=384/512 x 3 orders x 3 modes) run single-thread
+in parallel on one node (192 cores).

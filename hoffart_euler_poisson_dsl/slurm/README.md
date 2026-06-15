@@ -1,12 +1,12 @@
-# slurm/ — campagnes ROMEO
+# slurm/: ROMEO campaigns
 
-Scripts batch SLURM pour les campagnes de mesure sur ROMEO (URCA, partition x64cpu). Ils pilotent
-`run.py` / `run_polar.py` (à la racine du cas) ; leurs chemins internes sont **absolus**
-(`${ADC_CASES_ROOT}/hoffart_euler_poisson_dsl/...`), donc inchangés par ce déplacement.
+SLURM batch scripts for the measurement campaigns on ROMEO (URCA, x64cpu partition). They drive
+`run.py` / `run_polar.py` (at the case root); their internal paths are **absolute**
+(`${ADC_CASES_ROOT}/hoffart_euler_poisson_dsl/...`), so this move leaves them unchanged.
 
-| Fichier | Lance | But |
+| File | Runs | Purpose |
 |---|---|---|
-| `campaign_geometry.sbatch` | `run.py --geometry {square,staircase}` | Discriminant géométrie : le bord d'anneau cartésien est-il le verrou du taux mesuré ? |
-| `campaign_polar.sbatch` | `run_polar.py` (frozen-equilibrium) | Chemin complet sur grille polaire (anneau résolu), l=3,4,5, nr=ntheta=256, t_end=10. |
+| `campaign_geometry.sbatch` | `run.py --geometry {square,staircase}` | Geometry discriminant: is the Cartesian ring boundary the bottleneck of the measured rate? |
+| `campaign_polar.sbatch` | `run_polar.py` (frozen-equilibrium) | Full path on a polar grid (resolved ring), l=3,4,5, nr=ntheta=256, t_end=10. |
 
-Voir le [README du cas](../README.md), section « Performance et passage à l'échelle ».
+See the [case README](../README.md), section "Performance and scaling".

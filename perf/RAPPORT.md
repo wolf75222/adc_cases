@@ -1,221 +1,220 @@
-# Campagne de performance adc_cpp / adc_cases - Rapport
+# adc_cpp / adc_cases performance campaign - report
 
-**Sans Hoffart.** Deux axes : (1) coût des fronts C++ vs Python briques vs Python DSL sur un cas
-sûr, (2) scaling CPU/GPU/MPI sur cas synthétiques contrôlés. Cas physique = **Euler compressible
-pur, périodique, bulle de pression lisse** (`rho>0`, `p>0` garantis, transport pur, pas de Poisson
-physique, pas de Schur, pas de géométrie disque).
+**Without Hoffart.** Two axes: (1) the cost of the C++ vs Python-bricks vs Python-DSL frontends on a
+safe case, (2) CPU/GPU/MPI scaling on controlled synthetic cases. The physical case is **pure
+compressible Euler, periodic, smooth pressure bubble** (`rho>0`, `p>0` guaranteed, pure transport, no
+physical Poisson, no Schur, no disk geometry).
 
-## Provenance (SHA exacts)
+## Provenance (exact SHAs)
 
-| Donnée | Dépôt | SHA | Machine |
+| Data | Repo | SHA | Machine |
 |---|---|---|---|
-| Frontend (3 fronts) | adc_cpp `feat/perf-campaign-bench` | `5e17c7a` | ROMEO x64cpu (nœud propre, série) |
-| Scaling CPU + GPU + AMR | adc_cpp `feat/perf-campaign-bench` | `0162d5f` | ROMEO x64cpu / GH200 |
-| Harnais Python | adc_cases `feat/perf-campaign-harness` | `80c3049` | - |
+| Frontend (3 frontends) | adc_cpp `feat/perf-campaign-bench` | `5e17c7a` | ROMEO x64cpu (clean node, serial) |
+| CPU + GPU + AMR scaling | adc_cpp `feat/perf-campaign-bench` | `0162d5f` | ROMEO x64cpu / GH200 |
+| Python harness | adc_cases `feat/perf-campaign-harness` | `80c3049` | - |
 
-Le commit `0162d5f` (durcissement JSONL + AMR) **ne touche pas** le chemin frontend
-(`frontend_cpp`, `frontend_compare`, `safe_euler`) : les chiffres frontend `5e17c7a` valent pour
-`0162d5f`. PR : **adc_cpp #246**, **adc_cases #33**. Aucune figure ne mélange deux SHA (garde-fou
-`plot_frontend.py`).
+Commit `0162d5f` (JSONL hardening + AMR) **does not touch** the frontend path (`frontend_cpp`,
+`frontend_compare`, `safe_euler`): the `5e17c7a` frontend numbers hold for `0162d5f`. PRs: **adc_cpp
+#246**, **adc_cases #33**. No figure mixes two SHAs (`plot_frontend.py` guard).
 
 ---
 
-## Axe 1 - Fronts C++ / Python briques / Python DSL
+## Axis 1 - C++ / Python-bricks / Python-DSL frontends
 
-Cas sûr, `n=256`, 50 pas, **dt fixe**, mêmes réglages numériques sur les trois fronts
-(minmod / rusanov / reconstruction conservative / SSPRK2). Nœud x86 propre, **CV < 1.2 %**.
+Safe case, `n=256`, 50 steps, **fixed dt**, same numerical settings on all three frontends
+(minmod / rusanov / conservative reconstruction / SSPRK2). Clean x86 node, **CV < 1.2 %**.
 
-| Front | hot ms/pas | ratio vs C++ | `advance` ms/pas | cold-cache total | backend DSL |
+| Frontend | hot ms/step | ratio vs C++ | `advance` ms/step | cold-cache total | DSL backend |
 |---|---|---|---|---|---|
-| **C++ direct** | 21.0 | 1.00× | - | 1.18 s | - |
-| **Python briques** | 20.2 | **0.96×** | 20.2 | 1.18 s | - |
-| **Python DSL (froid)** | 31.1 | **1.48×** | 31.1 | **17.4 s** | production |
-| **Python DSL (chaud)** | 31.1 | 1.48× | 31.0 | 1.77 s | production |
+| **C++ direct** | 21.0 | 1.00x | - | 1.18 s | - |
+| **Python bricks** | 20.2 | **0.96x** | 20.2 | 1.18 s | - |
+| **Python DSL (cold)** | 31.1 | **1.48x** | 31.1 | **17.4 s** | production |
+| **Python DSL (warm)** | 31.1 | 1.48x | 31.0 | 1.77 s | production |
 
-Identité numérique briques ↔ DSL : `max|Δ| = 8.9e-16` (epsilon machine). Masse conservée à
-`2e-15`, `rho>0`, `p>0` sur les trois fronts. `poisson=on` quasi identique (le solve inerte
-charge=0 ajoute peu à `n=256`).
+Numerical identity bricks vs DSL: `max|delta| = 8.9e-16` (machine epsilon). Mass conserved to
+`2e-15`, `rho>0`, `p>0` on all three frontends. `poisson=on` is nearly identical (the inert solve at
+charge=0 adds little at `n=256`).
 
-**Où part le temps, et pourquoi :**
+**Where the time goes, and why:**
 
-1. **Python briques ne coûte rien dans le hot path** (0.96×, dans le bruit). `step(dt)` en boucle
-   Python ≈ `advance(dt, nsteps)` en un appel ≈ le même noyau C++. → *Python n'est pas sur le
-   chemin chaud* ; l'orchestration par pas (un appel pybind par `step`) est négligeable devant le
-   calcul FV.
-2. **Python DSL était ~1.5× plus lent en hot loop - cause trouvée et CORRIGÉE.** Ce n'est pas un
-   coût de crossing (`advance` ≈ `step` = 31 ms) ni le codegen (le `.so` est en parité stricte,
-   flux inliné dans `assemble_rhs`) : c'était les **flags de compilation du `.so`**. `compile_native`
-   compilait en **`-O2` sans `-DNDEBUG`** (asserts vivants dans le hot-loop + vectorisation faible),
-   alors que le natif est `-O3 -DNDEBUG` (CMake Release). Expérience contrôlée (ROMEO x64cpu, nœud
-   propre, CV<1%, job 648019) :
+1. **Python bricks cost nothing in the hot path** (0.96x, within the noise). `step(dt)` in a Python
+   loop ~= `advance(dt, nsteps)` in a single call ~= the same C++ kernel. -> *Python is not on the hot
+   path*; per-step orchestration (one pybind call per `step`) is negligible next to the FV
+   computation.
+2. **Python DSL was ~1.5x slower in the hot loop - cause found and FIXED.** This is not a crossing
+   cost (`advance` ~= `step` = 31 ms) nor codegen (the `.so` is in strict parity, flux inlined in
+   `assemble_rhs`): it was the **compilation flags of the `.so`**. `compile_native` was compiling at
+   **`-O2` without `-DNDEBUG`** (asserts live in the hot loop + weak vectorization), whereas the
+   native build is `-O3 -DNDEBUG` (CMake Release). Controlled experiment (ROMEO x64cpu, clean node,
+   CV<1%, job 648019):
 
-   | flags du `.so` production | hot ms/pas | ratio vs C++ |
+   | production `.so` flags | hot ms/step | ratio vs C++ |
    |---|---|---|
-   | `-O2` (avant) | 31.0 | 1.48× |
-   | `-O3 -DNDEBUG` (corrigé, **adc_cpp PR #253**) | 21.8 | **1.04× (parité)** |
-   | `-O3 -DNDEBUG -march=native -funroll-loops` | 18.5 | **0.88× (bat le natif)** |
+   | `-O2` (before) | 31.0 | 1.48x |
+   | `-O3 -DNDEBUG` (fixed, **adc_cpp PR #253**) | 21.8 | **1.04x (parity)** |
+   | `-O3 -DNDEBUG -march=native -funroll-loops` | 18.5 | **0.88x (beats native)** |
 
-   → `-O3 -DNDEBUG` ramène le DSL à **parité** avec la brique (dans le bruit de briques=0.96×).
-   Et comme le `.so` est **JIT-compilé sur la machine cible**, `-march=native` (opt-in via
-   `$ADC_DSL_OPTFLAGS`) lui donne l'AVX-512/NEON que le binaire natif générique n'a pas → le DSL
-   **dépasse** la brique (0.88×). Le codegen lui-même n'avait rien à corriger.
+   -> `-O3 -DNDEBUG` brings the DSL back to **parity** with the brick (within the brick noise of
+   0.96x). And since the `.so` is **JIT-compiled on the target machine**, `-march=native` (opt-in via
+   `$ADC_DSL_OPTFLAGS`) gives it the AVX-512/NEON that the generic native binary lacks -> the DSL
+   **outperforms** the brick (0.88x). The codegen itself had nothing to fix.
 
-   **Régime THREADÉ (Kokkos OpenMP) - 2ᵉ cause, plus profonde (diagnostic croisé Codex).** Sur un
-   module `_adc` Kokkos-OpenMP, le DSL warm restait **341 ms INVARIANT** à threads=1/4/8 (ratio qui
-   se dégradait 1.17→1.43→1.92) : `compile_native` ne propageait **pas** `-DADC_HAS_KOKKOS`/`-fopenmp`
-   → les templates header-only du loader s'instanciaient sur le **fallback série**, le bloc DSL ne
-   scalait pas. Fix (PR #253) : compiler le `.so` avec les en-têtes Kokkos + `-fopenmp` quand
-   `ADC_KOKKOS_ROOT` est défini, **sans linker libkokkos** (sinon 2ᵉ runtime Kokkos → `SIGABRT` à la
-   finalize) - les symboles se résolvent depuis le module déjà chargé (runtime unique). Validation
-   ROMEO (module Kokkos-OpenMP, n=256, EXIT=0) :
+   **THREADED regime (Kokkos OpenMP) - 2nd, deeper cause (cross-diagnosis with Codex).** On a Kokkos-
+   OpenMP `_adc` module, the warm DSL stayed **341 ms INVARIANT** at threads=1/4/8 (a ratio that
+   degraded 1.17->1.43->1.92): `compile_native` did **not** propagate `-DADC_HAS_KOKKOS`/`-fopenmp`
+   -> the header-only loader templates instantiated against the **serial fallback**, and the DSL block
+   did not scale. Fix (PR #253): compile the `.so` with the Kokkos headers + `-fopenmp` when
+   `ADC_KOKKOS_ROOT` is defined, **without linking libkokkos** (otherwise a 2nd Kokkos runtime ->
+   `SIGABRT` at finalize) - the symbols resolve from the already-loaded module (single runtime).
+   ROMEO validation (Kokkos-OpenMP module, n=256, EXIT=0):
 
-   | OMP threads | briques ms/pas | DSL ms/pas | ratio |
+   | OMP threads | bricks ms/step | DSL ms/step | ratio |
    |---|---|---|---|
    | 1 | 24.3 | 27.3 | 1.12 |
    | 4 | 19.3 | 19.9 | 1.03 |
    | 8 | 10.5 | 10.7 | **1.02** |
 
-   → le DSL **scale désormais avec les threads** et suit les briques (ratio → 1.02), au lieu des
-   341 ms plats. Sans `ADC_KOKKOS_ROOT`, comportement historique (série) inchangé.
-3. **Le coût propre du DSL est la compilation** : `dsl_compile` froid = ~15 s (sous-processus
-   `g++`), entièrement amorti par le cache hors source (`adc_cache_dir`, clé `model_hash+abi_key`)
-   → warm = 1.8 s (≈ briques). L'`import adc` (chargement de `_adc`) domine le cold-cache des
-   fronts non-DSL (~1.2 s).
+   -> the DSL **now scales with the threads** and tracks the bricks (ratio -> 1.02), instead of the
+   flat 341 ms. Without `ADC_KOKKOS_ROOT`, the historical (serial) behavior is unchanged.
+3. **The DSL's own cost is compilation**: cold `dsl_compile` = ~15 s (`g++` subprocess), fully
+   amortized by the out-of-source cache (`adc_cache_dir`, key `model_hash+abi_key`) -> warm = 1.8 s
+   (~= bricks). The `import adc` (loading `_adc`) dominates the cold-cache of the non-DSL frontends
+   (~1.2 s).
 
-Figures : `frontend_cold_stages.png` (étages cold), `frontend_hot_ms.png` (hot ± p10/p90),
+Figures: `frontend_cold_stages.png` (cold stages), `frontend_hot_ms.png` (hot +/- p10/p90),
 `frontend_step_vs_advance.png`, `frontend_ratio.png`.
 
 ---
 
-## Axe 2 - Scaling CPU / GPU / MPI
+## Axis 2 - CPU / GPU / MPI scaling
 
-### CPU OpenMP - strong (transport 4096², poisson 1024², CV < 1 %)
+### CPU OpenMP - strong (transport 4096^2, poisson 1024^2, CV < 1 %)
 
-| threads | transport ms/pas | speedup | poisson ms/pas |
+| threads | transport ms/step | speedup | poisson ms/step |
 |---|---|---|---|
-| 1  | 5239 | 1.00× | 71.2 |
-| 2  | 5107 | 1.03× | **319.5** |
-| 4  | 2736 | 1.91× | 214.0 |
-| 8  | 1483 | 3.53× | 121.3 |
-| 16 | 913  | **5.74×** (eff 36 %) | **82.4** |
+| 1  | 5239 | 1.00x | 71.2 |
+| 2  | 5107 | 1.03x | **319.5** |
+| 4  | 2736 | 1.91x | 214.0 |
+| 8  | 1483 | 3.53x | 121.3 |
+| 16 | 913  | **5.74x** (eff 36 %) | **82.4** |
 
-- **Transport monte à 5.74× sur 16 threads** (efficacité 36 %) : noyau FV *memory-bound*, sous-
-  linéaire attendu. Décomposition à 16t : transport 836 ms (dominant), alloc_tmp 57 ms, diag 38 ms,
-  halos 13 ms, réduction 5 ms.
-- **Poisson (V-cycle GeometricMG) est le MUR de scaling** : 16 threads (82 ms) est *plus lent* que
-  1 thread (71 ms) - anti-scaling. Le V-cycle est latence/synchro-bound, les niveaux grossiers
-  sérialisent. Le pic à 2 threads (319 ms, reproductible sur 2 jobs) est un effet de placement NUMA
-  (`OMP_PROC_BIND=spread` sur 2 domaines). C'est une propriété du solveur, pas du harnais.
+- **Transport reaches 5.74x on 16 threads** (36 % efficiency): the FV kernel is *memory-bound*, so
+  sub-linear is expected. Breakdown at 16t: transport 836 ms (dominant), alloc_tmp 57 ms, diag 38 ms,
+  halos 13 ms, reduction 5 ms.
+- **Poisson (V-cycle GeometricMG) is the scaling WALL**: 16 threads (82 ms) is *slower* than 1 thread
+  (71 ms) - anti-scaling. The V-cycle is latency/sync-bound, and the coarse levels serialize. The peak
+  at 2 threads (319 ms, reproducible across 2 jobs) is a NUMA placement effect (`OMP_PROC_BIND=spread`
+  over 2 domains). This is a property of the solver, not of the harness.
 
-### CPU - weak scaling (transport 512²/u, poisson 256²/u)
+### CPU - weak scaling (transport 512^2/u, poisson 256^2/u)
 
-| unités (threads) | transport ms/pas | poisson ms/pas |
+| units (threads) | transport ms/step | poisson ms/step |
 |---|---|---|
-| 1  (512² / 256²)  | 80.8 | 4.2 |
-| 4  (1024² / 512²) | 194  | 54  |
-| 16 (2048² / 1024²)| 252  | 80  |
+| 1  (512^2 / 256^2)  | 80.8 | 4.2 |
+| 4  (1024^2 / 512^2) | 194  | 54  |
+| 16 (2048^2 / 1024^2)| 252  | 80  |
 
-Efficacité weak (temps constant idéal) : transport ≈ 32 %, **poisson ≈ 5 %** - confirme que le MG
-ne tire aucun bénéfice du parallélisme CPU.
+Weak efficiency (constant time is ideal): transport ~= 32 %, **poisson ~= 5 %** - confirms that MG
+draws no benefit from CPU parallelism.
 
-### GPU GH200 - mono-GPU (Kokkos CUDA)
+### GPU GH200 - single-GPU (Kokkos CUDA)
 
-| workload | taille | ms/pas | cells/s |
+| workload | size | ms/step | cells/s |
 |---|---|---|---|
-| transport | 1024² | 30.1 | 3.48e7 |
-| transport | 2048² | 124  | 3.39e7 |
-| transport | 4096² | 497  | 3.37e7 |
-| poisson   | 512²  | 6.3  | 4.13e7 |
-| poisson   | 1024² | 19.5 | 5.37e7 |
+| transport | 1024^2 | 30.1 | 3.48e7 |
+| transport | 2048^2 | 124  | 3.39e7 |
+| transport | 4096^2 | 497  | 3.37e7 |
+| poisson   | 512^2  | 6.3  | 4.13e7 |
+| poisson   | 1024^2 | 19.5 | 5.37e7 |
 
-Débit transport **plat ~3.4e7 cells/s** (GPU saturé dès 1024²). **GH200 vs 16 threads x86** : à
-taille égale, transport 4096² → **1.84×** (497 vs 913 ms), poisson 1024² → **4.2×** (19.5 vs
-82 ms). Modeste sur le transport : noyau *bandwidth-bound*, un socket 16 threads n'est pas loin du
-HBM3 du GH200 à ces tailles. (CV poisson GPU ~10 % aux petites tailles - à muscler par plus de
-pas/tailles.)
+Transport throughput is **flat at ~3.4e7 cells/s** (GPU saturated from 1024^2 onward). **GH200 vs 16
+x86 threads**: at equal size, transport 4096^2 -> **1.84x** (497 vs 913 ms), poisson 1024^2 ->
+**4.2x** (19.5 vs 82 ms). Modest on transport: the kernel is *bandwidth-bound*, and a 16-thread socket
+is not far from the GH200 HBM3 at these sizes. (GPU poisson CV ~10 % at small sizes - to be tightened
+with more steps/sizes.)
 
-### GPU - AMR synthétique multi-GPU (4 bulles, np = 1/2/4, masse bit-identique cross-rang)
+### GPU - synthetic AMR multi-GPU (4 bubbles, np = 1/2/4, mass bit-identical cross-rank)
 
-| n | np=1 (répliqué) | np=2 (réparti) | np=4 (réparti) | dérive de masse |
+| n | np=1 (replicated) | np=2 (distributed) | np=4 (distributed) | mass drift |
 |---|---|---|---|---|
 | 128 | 215 ms | 1013 ms | 1390 ms | 0 / 2e-16 |
 | 256 | 233 ms | 1080 ms | 1485 ms | 0 |
 
-Le harnais AMR (chemin `AmrSystem` compilé via `add_compiled_model`) **tourne correctement en
-multi-GPU** : masse bit-identique cross-rang (`drift = 0`). Mais il **anti-scale à ces tailles** :
-le grossier réparti (MG distribué + halos inter-GPU) domine un calcul minuscule (`n=128/256` = 4 à
-16 patchs sur 4 GH200 quasi inactifs). → *le problème AMR est trop petit pour bénéficier du
-multi-GPU* ; un cas représentatif demanderait `n≥1024`. C'est le verrou de scaling AMR à ces
-tailles (comm-bound), pas un défaut de correction.
+The AMR harness (the `AmrSystem` path compiled via `add_compiled_model`) **runs correctly on
+multi-GPU**: mass is bit-identical cross-rank (`drift = 0`). But it **anti-scales at these sizes**: the
+distributed coarse level (distributed MG + inter-GPU halos) dominates a tiny computation (`n=128/256` =
+4 to 16 patches on 4 nearly-idle GH200). -> *the AMR problem is too small to benefit from multi-GPU*; a
+representative case would need `n>=1024`. This is the AMR scaling lock at these sizes (comm-bound), not
+a correctness defect.
 
-Figures : `scaling_strong_transport_kokkos-omp.png`, `scaling_strong_poisson_kokkos-omp.png`,
+Figures: `scaling_strong_transport_kokkos-omp.png`, `scaling_strong_poisson_kokkos-omp.png`,
 `scaling_weak_transport_kokkos-omp.png`, `scaling_weak_poisson_kokkos-omp.png`,
 `scaling_strong_amr_kokkos-cuda.png`.
 
-### MPI multi-rang - DÉBLOQUÉ (deux bugs, corrigés)
+### MPI multi-rank - UNBLOCKED (two bugs, both fixed)
 
-Le **MPI×OpenMP hybride** et le **multi-GPU transport/poisson** deadlockaient à np≥2. Deux bugs
-superposés, tous deux corrigés :
-1. **GPU CUDA-IPC** (`fill_boundary` donnait des buffers UVM à OpenMPI → BTL smcuda routait en
-   CUDA-IPC, impossible entre GPU cgroup-isolés) → corrigé par buffers `SharedHostPinnedSpace`
-   (**adc_cpp #254**, sur master).
-2. **Collective MPI sous `if(rank0)`** dans le bench lui-même : les agrégations `rmax() =
-   all_reduce_max()` étaient évaluées dans le `printf` du rang 0 → le rang 0 faisait ~6
-   `MPI_Allreduce` de plus que les autres → deadlock. Localisé par checkpoints rang-taggés
-   (`fill_boundary` se termine ; le hang est dans l'émission JSON). Corrigé en hissant les `rmax`
-   hors du bloc rang 0 (**adc_cpp #258**). `scaling_amr` était déjà correct → marchait en multi-GPU.
+The **hybrid MPI x OpenMP** and the **multi-GPU transport/poisson** were deadlocking at np>=2. Two
+stacked bugs, both fixed:
+1. **GPU CUDA-IPC** (`fill_boundary` handed UVM buffers to OpenMPI -> the smcuda BTL routed over
+   CUDA-IPC, impossible between cgroup-isolated GPUs) -> fixed with `SharedHostPinnedSpace` buffers
+   (**adc_cpp #254**, on master).
+2. **MPI collective under `if(rank0)`** in the bench itself: the `rmax() = all_reduce_max()`
+   aggregations were evaluated inside the rank-0 `printf` -> rank 0 issued ~6 more `MPI_Allreduce`
+   than the others -> deadlock. Located via rank-tagged checkpoints (`fill_boundary` completes; the
+   hang is in the JSON emission). Fixed by hoisting the `rmax` calls out of the rank-0 block (**adc_cpp
+   #258**). `scaling_amr` was already correct -> it worked on multi-GPU.
 
-**Multi-GPU GH200 - transport 4096² strong scaling** (np = 1 GPU/rang, après fix) :
+**Multi-GPU GH200 - transport 4096^2 strong scaling** (np = 1 GPU/rank, after the fix):
 
-| GPUs | ms/pas | cells/s | speedup | efficacité |
+| GPUs | ms/step | cells/s | speedup | efficiency |
 |---|---|---|---|---|
-| 1 | 490 | 3.4e7 | 1.00× | 100 % |
-| 2 | 282 | 5.9e7 | 1.73× | 87 % |
-| 4 | **141** | **1.19e8** | **3.47×** | **87 %** |
+| 1 | 490 | 3.4e7 | 1.00x | 100 % |
+| 2 | 282 | 5.9e7 | 1.73x | 87 % |
+| 4 | **141** | **1.19e8** | **3.47x** | **87 %** |
 
-→ **excellent strong scaling multi-GPU** (87 % d'efficacité à 4 GH200). Poisson 1024² anti-scale en
-multi-GPU (trop petit, MG comm-bound). **CPU hybride MPI×OpenMP** (transport 4096²) : 1×16=839 ms,
-2×8=812 ms, 4×4=465 ms (meilleure localité NUMA à 4 rangs).
+-> **excellent multi-GPU strong scaling** (87 % efficiency on 4 GH200). Poisson 1024^2 anti-scales on
+multi-GPU (too small, MG comm-bound). **Hybrid CPU MPI x OpenMP** (transport 4096^2): 1x16=839 ms,
+2x8=812 ms, 4x4=465 ms (better NUMA locality at 4 ranks).
 
 ---
 
-## Tests et acceptation
+## Tests and acceptance
 
-| Critère | État |
+| Criterion | Status |
 |---|---|
-| Invariants OK (masse conservée, `rho>0`, `p>0`) | ✅ partout |
-| Pas de NaN | ✅ (`nan=false` sur tous les runs) |
-| CV < 5 % | ✅ CPU (transport/poisson/weak < 1 %), GPU transport (< 1 %), frontend (< 1.2 %), AMR mono (< 1 %) - ⚠️ **exception** : poisson GPU petites tailles (~10 %), AMR np=4 n=128 (15 %, jitter de regrid) |
-| Mêmes paramètres numériques entre fronts | ✅ (identité briques↔DSL 8.9e-16) |
-| SHA exacts dans le JSON | ✅ (frontend `5e17c7a`, scaling `0162d5f`) |
-| Aucun graphe ne mélange master/PR | ✅ (garde-fou `plot_frontend.py` : une seule paire (SHA, branche) par figure) |
+| Invariants OK (mass conserved, `rho>0`, `p>0`) | OK everywhere |
+| No NaN | OK (`nan=false` on all runs) |
+| CV < 5 % | OK CPU (transport/poisson/weak < 1 %), GPU transport (< 1 %), frontend (< 1.2 %), AMR single (< 1 %) - WARN **exception**: GPU poisson at small sizes (~10 %), AMR np=4 n=128 (15 %, regrid jitter) |
+| Same numerical parameters across frontends | OK (bricks vs DSL identity 8.9e-16) |
+| Exact SHAs in the JSON | OK (frontend `5e17c7a`, scaling `0162d5f`) |
+| No graph mixes master/PR | OK (`plot_frontend.py` guard: a single (SHA, branch) pair per figure) |
 
 ## Conclusions
 
-1. **Les fronts Python ne pénalisent pas le calcul** : briques ≈ C++ (0.96×). Le DSL `production`
-   était plus lent pour **deux raisons de compilation du `.so`** (ni codegen, ni orchestration
-   Python), toutes deux corrigées dans **adc_cpp PR #253** : (a) flags `-O2` sans `-DNDEBUG` →
-   `-O3 -DNDEBUG` = parité série (1.04×) ; (b) **pas de propagation Kokkos** (`-DADC_HAS_KOKKOS`/
-   `-fopenmp`) → le bloc DSL tombait en **série** sur un module threadé (341 ms invariant) ; corrigé,
-   il **scale** désormais et suit les briques (ratio 1.02 à 8 threads). `-march=native` (opt-in, `.so`
-   JIT-local) le fait même **dépasser** le natif générique (0.88×). Reste le coût de compilation DSL
-   froide (~15 s, entièrement caché → 1.8 s warm).
-2. **Le solveur elliptique est le mur de scaling CPU** : le V-cycle MG n'accélère pas (voire
-   ralentit) avec les threads ; le transport FV, lui, monte à ~6× sur 16 threads. Sur GPU, le GH200
-   bat un socket de 1.8× (transport) à 4.2× (Poisson) - gains modestes car *bandwidth-bound* à ces
-   tailles.
-3. **Le multi-GPU transport scale bien** : 3.47× sur 4 GH200 (87 % d'efficacité), une fois levés
-   les deux deadlocks (CUDA-IPC #254 + collective-sous-`if(rank0)` #258). L'AMR multi-GPU est correct
-   (bit-identique) mais comm-bound aux tailles du plan (`n=128/256`) ; Poisson multi-GPU anti-scale
-   pareillement (trop petit). Le mur de scaling n'est donc ni Python ni le transport, mais le
-   **solveur elliptique** (CPU) et la **taille trop faible** (multi-GPU Poisson/AMR).
+1. **The Python frontends do not penalize the computation**: bricks ~= C++ (0.96x). The `production`
+   DSL was slower for **two `.so` compilation reasons** (neither codegen nor Python orchestration),
+   both fixed in **adc_cpp PR #253**: (a) `-O2` flags without `-DNDEBUG` -> `-O3 -DNDEBUG` = serial
+   parity (1.04x); (b) **no Kokkos propagation** (`-DADC_HAS_KOKKOS`/`-fopenmp`) -> the DSL block fell
+   back to **serial** on a threaded module (341 ms invariant); fixed, it now **scales** and tracks the
+   bricks (ratio 1.02 at 8 threads). `-march=native` (opt-in, JIT-local `.so`) even makes it
+   **outperform** the generic native build (0.88x). What remains is the cold DSL compilation cost
+   (~15 s, fully hidden -> 1.8 s warm).
+2. **The elliptic solver is the CPU scaling wall**: the MG V-cycle does not speed up (and even slows
+   down) with threads; the FV transport, on the other hand, reaches ~6x on 16 threads. On GPU, the
+   GH200 beats a socket by 1.8x (transport) to 4.2x (Poisson) - modest gains because the workload is
+   *bandwidth-bound* at these sizes.
+3. **Multi-GPU transport scales well**: 3.47x on 4 GH200 (87 % efficiency), once the two deadlocks
+   were lifted (CUDA-IPC #254 + collective-under-`if(rank0)` #258). Multi-GPU AMR is correct
+   (bit-identical) but comm-bound at the plan's sizes (`n=128/256`); multi-GPU Poisson anti-scales
+   likewise (too small). The scaling wall is therefore neither Python nor transport, but the **elliptic
+   solver** (CPU) and the **too-small size** (multi-GPU Poisson/AMR).
 
-## Reproduire
+## Reproduce
 
 ```bash
-# Frontend (3 fronts) :
+# Frontend (3 frontends):
 PYTHONPATH=<adc_cpp>/build/python:. python3 perf/frontend_compare.py --n 256 --steps 50 \
     --poisson off --cpp-bin <adc_cpp>/build/bin/frontend_cpp
-# Scaling (ROMEO) : bench/run_scaling.sh kokkos-omp|kokkos-cuda|mpi-cuda + scaling_amr
-# Figures : python3 perf/plot_frontend.py --frontend <…>/frontend_compare.jsonl --scaling <…>/scaling.jsonl
+# Scaling (ROMEO): bench/run_scaling.sh kokkos-omp|kokkos-cuda|mpi-cuda + scaling_amr
+# Figures: python3 perf/plot_frontend.py --frontend <…>/frontend_compare.jsonl --scaling <…>/scaling.jsonl
 ```

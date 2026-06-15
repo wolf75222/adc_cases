@@ -1,162 +1,160 @@
-# diocotron_amr : instabilite diocotron sur grille AMR multi-patch
+# diocotron_amr: diocotron instability on a multi-patch AMR grid
 
-La meme dynamique diocotron que [`../diocotron/`](../diocotron/) (une charge advectee par sa propre
-derive E x B), portee non plus sur une grille uniforme mais sur une hierarchie de raffinement
-adaptatif `adc.AmrSystem` : un niveau de base grossier plus un niveau fin re-decoupe dynamiquement
-(regrid Berger-Rigoutsos) pour suivre la bande de charge, avec reflux conservatif aux interfaces
-grossier/fin. Ce cas ne mesure pas un taux de croissance : il valide que le raffinement vient du
-critere de tagging (et non du seul build de la hierarchie), qu'il modifie la solution la ou il agit,
-et que le reflux conserve la masse a l'arrondi machine.
+The same diocotron dynamics as [`../diocotron/`](../diocotron/) (a charge advected by its own
+ExB drift), carried no longer on a uniform grid but on an adaptive-mesh-refinement hierarchy
+`adc.AmrSystem`: a coarse base level plus a fine level re-decomposed dynamically (Berger-Rigoutsos
+regrid) to track the charge band, with conservative reflux at the coarse/fine interfaces. This case
+does not measure a growth rate: it validates that refinement comes from the tagging criterion (and
+not from the hierarchy build alone), that it changes the solution where it acts, and that reflux
+conserves mass to machine roundoff.
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). Pas une reproduction publiee : on verifie des invariants de l'API AMR, pas une courbe d'article. |
-| Entrees | grille de base $64\times 64$, $L=1$, periodique ; AMR `regrid_every=10`, 1 niveau fin, seuil de tag `threshold = n_{i0} + 0.15` ; CI `band_density` (bande gaussienne, `mode=4`, `width=0.05`, `disp=0.02`, `amp=1`, `floor=1`) ; modele `diocotron(B0=1, alpha=1, n_i0=<n_e>)` ; fond neutralisant $n_{i0}=\langle n_e\rangle$ ; 40 pas a `CFL=0.4`, schema NoSlope + Rusanov |
-| Sorties | trace stdout (patches, masse, drel par pas) ; 3 figures de diagnostic dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | les `assert` de `run.py` : `n_patches() >= 2` a chaque pas (`run.py:88`) ; `drel < 1e-9` (`run.py:89`) ; densite finie (`run.py:90`) ; `min(patches_seen) > npatch_ctrl` (`run.py:112`) ; `gap > 1e-3` (`run.py:115`) |
-| Prouve | (1) la bande est couverte par 2 patchs fins a tous les pas, vs 1 pour un run de controle a seuil inatteignable : le raffinement vient du tagging ; (2) la solution raffinee differe de la non-raffinee de `max|delta| = 6.40e-2` (`run.py`, ecart sup > 1e-3) ; (3) la masse AMR est conservee a `drel <= 3.06e-15` (reflux) ; (4) densite finie partout |
-| Ne prouve pas | ce n'est pas une reproduction d'un taux $\gamma_l$ ni d'une figure du papier (la reproduction etablie vit dans [`../diocotron/`](../diocotron/), grille uniforme ; la candidate Euler-Poisson magnetisee complete dans [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), statut pending). La CI plafonne a 2 patchs et 1 niveau fin : pas de hierarchie profonde ni de grand nombre de patchs testes. Le seuil est cale empiriquement, pas issu d'un estimateur d'erreur. Aucun assert ne teste la convergence ni le taux de croissance. |
-| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif (`adc.AmrSystem` + `adc.System`), base $64^2$, Python 3.12.2, macOS arm64 ; `figures/provenance.json` |
+| Category (manifest) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). Not a published reproduction: you verify invariants of the AMR API, not a paper curve. |
+| Inputs | base grid $64\times 64$, $L=1$, periodic; AMR `regrid_every=10`, 1 fine level, tag threshold `threshold = n_{i0} + 0.15`; IC `band_density` (gaussian band, `mode=4`, `width=0.05`, `disp=0.02`, `amp=1`, `floor=1`); model `diocotron(B0=1, alpha=1, n_i0=<n_e>)`; neutralizing background $n_{i0}=\langle n_e\rangle$; 40 steps at `CFL=0.4`, NoSlope + Rusanov scheme |
+| Outputs | stdout trace (patches, mass, drel per step); 3 diagnostic figures in `figures/` + `figures/provenance.json` |
+| Guaranteed invariants | the `assert`s in `run.py`: `n_patches() >= 2` at every step (`run.py:88`); `drel < 1e-9` (`run.py:89`); finite density (`run.py:90`); `min(patches_seen) > npatch_ctrl` (`run.py:112`); `gap > 1e-3` (`run.py:115`) |
+| Proves | (1) the band is covered by 2 fine patches at every step, vs 1 for a control run with an unreachable threshold: refinement comes from tagging; (2) the refined solution differs from the unrefined one by `max|delta| = 6.40e-2` (`run.py`, sup difference > 1e-3); (3) the AMR mass is conserved to `drel <= 3.06e-15` (reflux); (4) finite density everywhere |
+| Does not prove | this is not a reproduction of a rate $\gamma_l$ or of a paper figure (the established reproduction lives in [`../diocotron/`](../diocotron/), uniform grid; the full magnetized Euler-Poisson candidate in [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), pending status). The CI caps at 2 patches and 1 fine level: no deep hierarchy nor a large patch count is tested. The threshold is tuned empirically, not derived from an error estimator. No assert tests convergence or the growth rate. |
+| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native backend (`adc.AmrSystem` + `adc.System`), base $64^2$, Python 3.12.2, macOS arm64; `figures/provenance.json` |
 
-A la fin tu sauras : pourquoi cet AMR ne touche pas la masse (la math du reflux + Poisson periodique),
-ou il concentre la resolution (les bords de bande, ou vit le gradient), et ce que la validation ne
-couvre pas (un seul niveau, 2 patchs, pas de taux).
-
----
-
-## 1. Physique : la meme instabilite, sur un maillage adaptatif
-
-Le mecanisme est celui du cas parent : une densite de charge $n_e$ cree son potentiel $\phi$ par
-Poisson, derive a $\mathbf{v}=(\mathbf{E}\times\mathbf{B})/B_0^2$ (vitesse a divergence nulle, donc
-$n_e$ est purement advectee), et le cisaillement de la rotation differentielle enroule la
-perturbation. La derivation complete (rotation $\Omega(r)$, critere de Rayleigh, probleme aux valeurs
-propres, taux $\gamma_l$) est dans [`../diocotron/README.md` section 4](../diocotron/README.md) ; on
-ne la recopie pas.
-
-Deux differences avec le parent, toutes deux au service de la validation AMR :
-
-- **Geometrie de la CI.** Ici la charge est une bande horizontale gaussienne ondulee `mode=4`
-  (`band_density`, section 8), pas l'anneau du benchmark. Une bande offre un gradient transverse
-  net et localise (les deux bords de la bande), qui est exactement ce que le critere de tag doit
-  attraper. Le domaine est periodique (et non a paroi conductrice), ce qui simplifie le couplage
-  Poisson sur la hierarchie.
-- **Maillage.** La grille uniforme du parent devient une hierarchie : grossier $64^2$ + un niveau
-  fin, re-decoupe tous les 10 pas pour suivre la bande. C'est l'objet teste.
-
-L'enjeu physique du cas n'est donc pas "quel taux" mais : un maillage adaptatif change-t-il la
-physique conservee ? La reponse attendue (et asseree) est non pour la masse (le reflux la protege)
-et oui pour le detail local (le niveau fin resout mieux le bord). C'est une validation
-d'invariant, au sens du guide : la masse est l'invariant, le reflux est la raison.
+By the end you will know: why this AMR does not touch mass (the reflux math + periodic Poisson),
+where it concentrates resolution (the band edges, where the gradient lives), and what the validation
+does not cover (a single level, 2 patches, no rate).
 
 ---
 
-## 2. Equations et qui les calcule
+## 1. Physics: the same instability, on an adaptive mesh
 
-Le bloc evolue une densite scalaire $n_e(x,y,t)$ advectee par la derive E x B, couplee a un
-Poisson periodique a fond neutralisant :
+The mechanism is the one of the parent case: a charge density $n_e$ creates its potential $\phi$ via
+Poisson, drifts at $\mathbf{v}=(\mathbf{E}\times\mathbf{B})/B_0^2$ (divergence-free velocity, so
+$n_e$ is purely advected), and the shear of the differential rotation winds up the perturbation. The
+full derivation (rotation $\Omega(r)$, Rayleigh criterion, eigenvalue problem, rate $\gamma_l$) is in
+[`../diocotron/README.md` section 4](../diocotron/README.md); it is not repeated here.
+
+Two differences from the parent, both serving AMR validation:
+
+- **IC geometry.** Here the charge is a `mode=4` undulated horizontal gaussian band
+  (`band_density`, section 8), not the benchmark ring. A band offers a sharp, localized transverse
+  gradient (the two band edges), which is exactly what the tag criterion must catch. The domain is
+  periodic (not conducting-wall), which simplifies the Poisson coupling on the hierarchy.
+- **Mesh.** The parent uniform grid becomes a hierarchy: coarse $64^2$ + one fine level,
+  re-decomposed every 10 steps to track the band. This is the object under test.
+
+The physical question of the case is therefore not "what rate" but: does an adaptive mesh change the
+conserved physics? The expected (and asserted) answer is no for mass (reflux protects it) and yes
+for the local detail (the fine level resolves the edge better). This is an invariant validation, in
+the sense of the guide: mass is the invariant, reflux is the reason.
+
+---
+
+## 2. Equations and who computes them
+
+The block evolves a scalar density $n_e(x,y,t)$ advected by the ExB drift, coupled to a periodic
+Poisson with a neutralizing background:
 
 $$\partial_t n_e + \nabla\cdot(n_e\,\mathbf{v}) = 0,\qquad
 \mathbf{v}=\frac{1}{B_0}(-\partial_y\phi,\ \partial_x\phi),\qquad
 -\nabla^2\phi = \alpha\,(n_e - n_{i0}).$$
 
-| Bloc | Equation | Brique `adc` |
+| Block | Equation | `adc` brick |
 |---|---|---|
-| Etat | densite scalaire $n_e$ | `adc.Scalar()` |
-| Transport | $\partial_t n_e+\nabla\cdot(n_e\mathbf v)=0$, derive E x B | `adc.ExB(B0=1)` |
-| Source | aucune | `adc.NoSource()` |
-| Elliptique | $-\nabla^2\phi=\alpha(n_e-n_{i0})$, periodique | `adc.BackgroundDensity(alpha=1, n0=n_{i0})` |
+| State | scalar density $n_e$ | `adc.Scalar()` |
+| Transport | $\partial_t n_e+\nabla\cdot(n_e\mathbf v)=0$, ExB drift | `adc.ExB(B0=1)` |
+| Source | none | `adc.NoSource()` |
+| Elliptic | $-\nabla^2\phi=\alpha(n_e-n_{i0})$, periodic | `adc.BackgroundDensity(alpha=1, n0=n_{i0})` |
 
-C'est exactement `models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0)` (`adc_cases/models.py:18-25`), le
-meme modele que le parent : seuls le maillage (AMR), la CI (bande) et les BC (periodique)
-changent. Qui calcule quoi, les trois couches pinnees aux lignes de `run.py` :
+This is exactly `models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0)` (`adc_cases/models.py:18-25`), the
+same model as the parent: only the mesh (AMR), the IC (band) and the BC (periodic) change. Who
+computes what, the three layers pinned to lines of `run.py`:
 
-| Ligne `run.py` | Couche | Ce qui se passe |
+| `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_block("ne", model=models.diocotron(...), spatial=adc.Spatial(none=True))` (`run.py:57-58`) | Python compose | choix du modele, du schema spatial (NoSlope + Rusanov), porte sur la hierarchie ; l'integrateur explicite est le defaut de `step_cfl` |
-| `models.diocotron(...)` -> `ExB` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | brique C++ fige la physique | la convention exacte du flux $n\,v(\mathrm{dir})$, de la valeur propre $v(\mathrm{dir})$, du RHS $\alpha(n-n_{i0})$ |
-| `assemble_rhs<NoSlope,Rusanov>` + regrid Berger-Rigoutsos + reflux + Poisson `geometric_mg` (`run.py:81` `step_cfl`) | noyau par cellule / par patch | le calcul effectif : transport sur chaque patch, re-decoupe de la hierarchie, correction de flux aux interfaces, sans callback Python dans le hot path |
+| `sim.add_block("ne", model=models.diocotron(...), spatial=adc.Spatial(none=True))` (`run.py:57-58`) | Python composes | choice of model, of spatial scheme (NoSlope + Rusanov), carried onto the hierarchy; the explicit integrator is the default of `step_cfl` |
+| `models.diocotron(...)` -> `ExB` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | C++ brick freezes the physics | the exact convention of the flux $n\,v(\mathrm{dir})$, of the eigenvalue $v(\mathrm{dir})$, of the RHS $\alpha(n-n_{i0})$ |
+| `assemble_rhs<NoSlope,Rusanov>` + Berger-Rigoutsos regrid + reflux + Poisson `geometric_mg` (`run.py:81` `step_cfl`) | per-cell / per-patch kernel | the actual computation: transport on each patch, hierarchy re-decomposition, flux correction at interfaces, with no Python callback in the hot path |
 
-`models.diocotron` ne nomme aucun scenario cote coeur : le mot "diocotron" vit dans `adc_cases`, la
-physique est une composition de briques generiques. `adc.AmrSystem` est le pendant raffine de
-`adc.System` ; il porte le meme bloc, plus la machinerie regrid/reflux.
-
----
-
-## 3. La prediction falsifiable : reflux => masse invariante, AMR => solution locale modifiee
-
-Le cas confronte deux runs qui ne different que par le seuil de tag (`build_sim`, `run.py:54-62`,
-reutilisee pour les deux) :
-
-- **nominal** : `threshold = n_i0 + 0.15` (`run.py:70`), les cellules de la bande sont taggees ;
-- **controle** : `threshold = 1e30` (`NO_REFINE`, `run.py:48`), aucune cellule ne le depasse, le
-  critere ne tagge jamais.
-
-Trois predictions tombent de ce contraste, chacune justifiant une clause Prouve du contrat :
-
-1. **Le raffinement vient du tagging** : `n_patches()` nominal $\ge 2$ a chaque pas (`run.py:88`),
-   mais le controle reste a $1$ (`run.py:112`). Si la hierarchie produisait des patchs sans tagging,
-   le controle en aurait autant : il n'en a pas.
-2. **L'AMR change la solution** : la densite nominale projetee differe de la densite de controle de
-   `gap > 1e-3` (`run.py:115`). Une egalite signalerait un niveau fin inerte.
-3. **Le reflux conserve la masse** : `drel < 1e-9` a chaque pas (`run.py:89`). Sans reflux, chaque
-   regrid laisserait fuir de la masse aux interfaces grossier/fin.
-
-Les figures de la section 6 confrontent ces trois predictions a l'oeil et au nombre.
+`models.diocotron` names no scenario on the core side: the word "diocotron" lives in `adc_cases`, the
+physics is a composition of generic bricks. `adc.AmrSystem` is the refined counterpart of
+`adc.System`; it carries the same block, plus the regrid/reflux machinery.
 
 ---
 
-## 4. Maths : pourquoi la masse est invariante (et pourquoi $n_{i0}=\langle n_e\rangle$)
+## 3. The falsifiable prediction: reflux => invariant mass, AMR => modified local solution
 
-C'est le coeur d'une validation d'invariant : pas une derivation de taux, mais la raison
-structurelle pour laquelle la masse ne bouge pas, et pourquoi le fond neutralisant est obligatoire.
+The case contrasts two runs that differ only by the tag threshold (`build_sim`, `run.py:54-62`,
+reused for both):
 
-### 4.1 Conservation = forme divergence + reflux
+- **nominal**: `threshold = n_i0 + 0.15` (`run.py:70`), the band cells are tagged;
+- **control**: `threshold = 1e30` (`NO_REFINE`, `run.py:48`), no cell exceeds it, the criterion
+  never tags.
 
-Le transport est sous forme conservative $\partial_t n_e+\nabla\cdot(\mathbf F)=0$ avec
-$\mathbf F=n_e\mathbf v$. Sur une grille uniforme, un schema volumes-finis conserve exactement la
-somme $\sum_{ij} n_e\,h^2$ : le flux sortant d'une cellule est le flux entrant de sa voisine
-(telescopage). C'est ce qu'on lit sur le run uniforme : `drel <= 6.12e-15` (section 6, fig. 3).
+Three predictions fall out of this contrast, each justifying a Proves clause of the contract:
 
-Sur une hierarchie AMR ce telescopage casse aux interfaces grossier/fin : la cellule grossiere
-voit un flux calcule a son pas, la cellule fine voisine un flux calcule au sien ; les deux ne
-coincident pas, et la masse derive a chaque regrid. Le reflux (refluxing) corrige : il remplace
-le flux grossier de l'interface par la somme des flux fins coincidents, retablissant le telescopage.
-Resultat asseré : `drel <= 3.06e-15` sur l'AMR (section 6, fig. 3), du meme ordre que l'uniforme.
-C'est l'observable qui prouve que le reflux agit : sans lui, la trace montrerait une derive
-croissante a chaque pas multiple de `regrid_every=10`, pas un plancher d'arrondi.
+1. **Refinement comes from tagging**: nominal `n_patches()` $\ge 2$ at every step (`run.py:88`),
+   but the control stays at $1$ (`run.py:112`). If the hierarchy produced patches without tagging,
+   the control would have as many: it does not.
+2. **AMR changes the solution**: the nominal density projected differs from the control density by
+   `gap > 1e-3` (`run.py:115`). An equality would signal an inert fine level.
+3. **Reflux conserves mass**: `drel < 1e-9` at every step (`run.py:89`). Without reflux, each
+   regrid would leak mass at the coarse/fine interfaces.
 
-### 4.2 Pourquoi $n_{i0}=\langle n_e\rangle$ : solubilite du Poisson periodique
-
-Sur un domaine periodique, $-\nabla^2\phi=f$ n'a de solution que si $\langle f\rangle=0$
-(l'integrale du Laplacien sur un tore est nulle ; c'est la condition de compatibilite). Ici
-$f=\alpha(n_e-n_{i0})$, donc il faut $\langle n_e\rangle=n_{i0}$. Le cas le garantit en mesurant
-le fond : `n_i0 = float(ne.mean())` (`run.py:68`), valeur $n_{i0}=1.088623$. Un $n_{i0}$
-arbitraire (ex. $0$) violerait la compatibilite et le multigrille ne convergerait pas vers un champ a
-moyenne definie. Ce $n_{i0}$ sert aussi de point de reference au seuil de tag : `threshold = n_i0 +
-0.15 = 1.238623`, soit "la densite depasse le fond de $0.15$", ce qui ne tagge que la bande (pas le
-plancher a $1.0$).
-
-### 4.3 La tolerance `TOL_MASS = 1e-9`, justifiee par un ordre de grandeur
-
-`TOL_MASS = 1e-9` (`run.py:45`) se situe entre le bruit machine mesure ($\mathrm{drel}\sim
-3\times 10^{-15}$, soit l'arrondi flottant accumule sur $40$ pas + regrids) et le seuil d'alerte
-qu'on voudrait : une fuite de reflux serait au moins $O(h)\sim 10^{-2}$ par regrid. La marge
-entre $10^{-15}$ mesure et $10^{-9}$ assere est de six ordres : assez large pour ne pas claquer
-sur la variabilite BLAS, assez serre pour attraper une fuite de reflux des le premier regrid. De
-meme, `MIN_SOLUTION_GAP = 1e-3` (`run.py:51`) est cale bien sous l'ecart mesure $\sim 6\times
-10^{-2}$ (section 6) et bien au-dessus du bruit : il atteste un effet reel, pas un flottement de
-schema.
+The figures of section 6 confront these three predictions to the eye and to the number.
 
 ---
 
-## 5. Le code, fonction par fonction (`run.py`)
+## 4. Math: why mass is invariant (and why $n_{i0}=\langle n_e\rangle$)
 
-Le fichier se lit en deux temps : une usine `build_sim` et un `main`.
+This is the heart of an invariant validation: not a rate derivation, but the structural reason why
+mass does not move, and why the neutralizing background is mandatory.
 
-**`build_sim(ne, n_i0, threshold)` (`run.py:54-62`)** construit un `AmrSystem` identique au nominal
-au seuil pres (c'est elle qui sert aussi au controle, garantissant que seul le seuil change) :
+### 4.1 Conservation = divergence form + reflux
+
+Transport is in conservative form $\partial_t n_e+\nabla\cdot(\mathbf F)=0$ with
+$\mathbf F=n_e\mathbf v$. On a uniform grid, a finite-volume scheme conserves exactly the sum
+$\sum_{ij} n_e\,h^2$: the flux leaving a cell is the flux entering its neighbor (telescoping). This
+is what you read on the uniform run: `drel <= 6.12e-15` (section 6, fig. 3).
+
+On an AMR hierarchy this telescoping breaks at the coarse/fine interfaces: the coarse cell sees a
+flux computed at its step, the neighboring fine cell a flux computed at its own; the two do not
+coincide, and mass drifts at each regrid. Reflux (refluxing) corrects it: it replaces the coarse
+flux of the interface by the sum of the coincident fine fluxes, restoring the telescoping. Asserted
+result: `drel <= 3.06e-15` on the AMR (section 6, fig. 3), of the same order as the uniform. This is
+the observable that proves reflux acts: without it, the trace would show a growing drift at each step
+multiple of `regrid_every=10`, not a roundoff floor.
+
+### 4.2 Why $n_{i0}=\langle n_e\rangle$: solvability of the periodic Poisson
+
+On a periodic domain, $-\nabla^2\phi=f$ has a solution only if $\langle f\rangle=0$ (the integral of
+the Laplacian over a torus is zero; this is the compatibility condition). Here
+$f=\alpha(n_e-n_{i0})$, so you need $\langle n_e\rangle=n_{i0}$. The case guarantees it by measuring
+the background: `n_i0 = float(ne.mean())` (`run.py:68`), value $n_{i0}=1.088623$. An arbitrary
+$n_{i0}$ (e.g. $0$) would violate compatibility and the multigrid would not converge to a field with
+a defined mean. This $n_{i0}$ also serves as the reference point for the tag threshold:
+`threshold = n_i0 + 0.15 = 1.238623`, i.e. "the density exceeds the background by $0.15$", which tags
+only the band (not the floor at $1.0$).
+
+### 4.3 The tolerance `TOL_MASS = 1e-9`, justified by an order of magnitude
+
+`TOL_MASS = 1e-9` (`run.py:45`) sits between the measured machine noise ($\mathrm{drel}\sim
+3\times 10^{-15}$, i.e. the floating-point roundoff accumulated over $40$ steps + regrids) and the
+alarm threshold you would want: a reflux leak would be at least $O(h)\sim 10^{-2}$ per regrid. The
+margin between $10^{-15}$ measured and $10^{-9}$ asserted is six orders: wide enough not to trip on
+BLAS variability, tight enough to catch a reflux leak from the very first regrid. Likewise,
+`MIN_SOLUTION_GAP = 1e-3` (`run.py:51`) is tuned well below the measured difference $\sim 6\times
+10^{-2}$ (section 6) and well above the noise: it attests a real effect, not a scheme wobble.
+
+---
+
+## 5. The code, function by function (`run.py`)
+
+The file reads in two parts: a `build_sim` factory and a `main`.
+
+**`build_sim(ne, n_i0, threshold)` (`run.py:54-62`)** builds an `AmrSystem` identical to the nominal
+up to the threshold (it is also what serves the control, guaranteeing that only the threshold
+changes):
 
 ```python
 sim = adc.AmrSystem(n=N, L=L, regrid_every=10, periodic=True)          # run.py:56
@@ -166,193 +164,192 @@ sim.set_refinement(threshold=threshold)                                # run.py:
 sim.set_poisson(rhs="charge_density", solver="geometric_mg")           # run.py:60
 sim.set_density("ne", ne)                                              # run.py:61
 ```
-- `adc.AmrSystem(n=64, regrid_every=10, periodic=True)` : hierarchie a niveau de base $64^2$, regrid
-  tous les 10 pas, BC periodiques (heritees par le Poisson).
-- `adc.Spatial(none=True)` : limiteur NoSlope (reconstruction ordre 1, "none") + flux Rusanov
-  (defaut de `Spatial`, cf. signature `Spatial(limiter, flux, recon, *, none, ...)`). Ordre 1 dissipatif,
-  choisi pour une bande qui s'enroule sur grille AMR grossiere sans oscillations.
-- `set_refinement(threshold)` : le parametre discriminant. Les cellules avec $n_e>\text{threshold}$
-  sont taggees, et le niveau fin est re-decoupe en patchs rectangulaires (Berger-Rigoutsos) pour les
-  couvrir.
-- `set_poisson(rhs="charge_density", solver="geometric_mg")` : multigrille geometrique, RHS porte par
-  la brique `BackgroundDensity` du modele.
+- `adc.AmrSystem(n=64, regrid_every=10, periodic=True)`: hierarchy with a $64^2$ base level, regrid
+  every 10 steps, periodic BCs (inherited by the Poisson).
+- `adc.Spatial(none=True)`: NoSlope limiter (order-1 reconstruction, "none") + Rusanov flux
+  (default of `Spatial`, cf. signature `Spatial(limiter, flux, recon, *, none, ...)`). Order 1,
+  dissipative, chosen for a band that winds up on a coarse AMR grid without oscillations.
+- `set_refinement(threshold)`: the discriminating parameter. Cells with $n_e>\text{threshold}$ are
+  tagged, and the fine level is re-decomposed into rectangular patches (Berger-Rigoutsos) to cover
+  them.
+- `set_poisson(rhs="charge_density", solver="geometric_mg")`: geometric multigrid, RHS carried by
+  the `BackgroundDensity` brick of the model.
 
-**`main()` (`run.py:65-119`)** :
+**`main()` (`run.py:65-119`)**:
 
 ```python
-ne = band_density(N, L, amp=1.0, width=0.05, mode=MODE, disp=0.02)  # CI bande (run.py:67)
-n_i0 = float(ne.mean())                                            # fond neutralisant (run.py:68)
-sim = build_sim(ne, n_i0, threshold=n_i0 + REFINE_FRAC)            # run nominal (run.py:70)
+ne = band_density(N, L, amp=1.0, width=0.05, mode=MODE, disp=0.02)  # band IC (run.py:67)
+n_i0 = float(ne.mean())                                            # neutralizing background (run.py:68)
+sim = build_sim(ne, n_i0, threshold=n_i0 + REFINE_FRAC)            # nominal run (run.py:70)
 for k in range(NSTEPS):
-    sim.step_cfl(0.4)                                              # 1 macro-pas CFL=0.4 (run.py:81)
-    npatch = sim.n_patches()                                       # patchs fins courants (run.py:83)
-    drel = relative_drift(mass, mass0)                             # derive masse (run.py:84)
-    assert npatch >= 2                                             # >= 2 patchs (run.py:88)
-    assert drel < TOL_MASS                                         # masse conservee (run.py:89)
-    assert_finite(sim.density(), ...)                              # pas de NaN/Inf (run.py:90)
+    sim.step_cfl(0.4)                                              # 1 macro-step CFL=0.4 (run.py:81)
+    npatch = sim.n_patches()                                       # current fine patches (run.py:83)
+    drel = relative_drift(mass, mass0)                             # mass drift (run.py:84)
+    assert npatch >= 2                                             # >= 2 patches (run.py:88)
+    assert drel < TOL_MASS                                         # mass conserved (run.py:89)
+    assert_finite(sim.density(), ...)                             # no NaN/Inf (run.py:90)
 ```
-- `step_cfl(0.4)` (`run.py:81`) : un macro-pas explicite a CFL=0.4 ($dt=\text{CFL}\cdot h/w_{\max}$),
-  qui declenche le regrid tous les `regrid_every` pas et applique le reflux.
-- `n_patches()` (`run.py:83`) renvoie le nombre de patchs fins courants ; l'assert $\ge 2$
-  (`run.py:88`) exige une couverture multi-patch de la bande, pas le simple "un niveau fin existe".
+- `step_cfl(0.4)` (`run.py:81`): one explicit macro-step at CFL=0.4 ($dt=\text{CFL}\cdot h/w_{\max}$),
+  which triggers the regrid every `regrid_every` steps and applies the reflux.
+- `n_patches()` (`run.py:83`) returns the number of current fine patches; the assert $\ge 2$
+  (`run.py:88`) requires a multi-patch coverage of the band, not just "a fine level exists".
 - `relative_drift(mass, mass0)` (`common/checks.py:11`) = $|m-m_0|/\max(|m_0|,10^{-30})$.
-- `assert_finite` (`common/checks.py:29`) : ni NaN ni Inf.
+- `assert_finite` (`common/checks.py:29`): no NaN, no Inf.
 
-Le run de controle (`run.py:104-117`) reconstruit la meme CI avec `threshold = NO_REFINE = 1e30`,
-avance 40 pas, puis :
+The control run (`run.py:104-117`) rebuilds the same IC with `threshold = NO_REFINE = 1e30`, advances
+40 steps, then:
 ```python
-gap = float(np.abs(dens - dens_ctrl).max())            # ecart sup nominal vs controle (run.py:109)
-assert min(patches_seen) > npatch_ctrl                 # le seuil discrimine (run.py:112)
-assert gap > MIN_SOLUTION_GAP                          # le raffinement change la solution (run.py:115)
+gap = float(np.abs(dens - dens_ctrl).max())            # sup difference nominal vs control (run.py:109)
+assert min(patches_seen) > npatch_ctrl                 # the threshold discriminates (run.py:112)
+assert gap > MIN_SOLUTION_GAP                          # refinement changes the solution (run.py:115)
 ```
-Ces deux asserts ferment la boucle logique : les patchs viennent du tag (sinon le controle en
-aurait autant), et ils agissent sur la solution (sinon `gap` serait nul).
+These two asserts close the logical loop: the patches come from the tag (otherwise the control would
+have as many), and they act on the solution (otherwise `gap` would be zero).
 
-Note d'API : sur `AmrSystem`, `mass()` / `density()` / `n_patches()` se lisent sans nom de bloc
-(la hierarchie agrege le bloc unique) ; sur `adc.System` uniforme c'est `mass("ne")` / `density("ne")`
-avec le nom. Les figures (section 6) exploitent cette difference pour comparer les deux chemins.
+API note: on `AmrSystem`, `mass()` / `density()` / `n_patches()` are read without a block name (the
+hierarchy aggregates the single block); on uniform `adc.System` it is `mass("ne")` / `density("ne")`
+with the name. The figures (section 6) exploit this difference to compare the two paths.
 
 ---
 
-## 6. Figures (generees par `make_figures.py`, dans `figures/`)
+## 6. Figures (generated by `make_figures.py`, in `figures/`)
 
-`make_figures.py` re-joue la meme physique sur deux chemins, AMR (`adc.AmrSystem`) et uniforme
-(`adc.System` $64^2$), avec la meme CI / le meme modele / le meme schema, et ne change que le maillage.
-Tous les nombres ci-dessous sont ceux du run (cf. `figures/provenance.json`).
+`make_figures.py` replays the same physics on two paths, AMR (`adc.AmrSystem`) and uniform
+(`adc.System` $64^2$), with the same IC / the same model / the same scheme, and changes only the
+mesh. All the numbers below are those of the run (cf. `figures/provenance.json`).
 
-### `density_compare.png` : meme dynamique, uniforme vs AMR
+### `density_compare.png`: same dynamics, uniform vs AMR
 
-![Densite finale : uniforme 64x64, AMR base 64x64 + niveau fin, et leur difference](figures/density_compare.png)
+![Final density: uniform 64x64, AMR base 64x64 + fine level, and their difference](figures/density_compare.png)
 
-- **Prouve** (par les asserts de `run.py` et la mesure ici) : les deux runs portent la meme
-  dynamique (bande modulee 4 fois, $n_e^{\max}$ AMR $=1.967$ vs uniforme $=1.920$) ; le panneau de
-  difference est non nul, `max|delta n_e| = 8.68e-2` (du meme ordre que le `gap=6.40e-2` asseré dans
-  `run.py:115`, fenetres de mesure differentes) : l'AMR modifie la solution.
-- **Suggéré (non assere)** : la difference est structuree aux bords de la bande (lobes rouges/bleus
-  alternes le long de $y\approx 0.45$ et $0.57$), pas un bruit diffus : c'est exactement ou le niveau
-  fin resout mieux le gradient transverse. Visible, non teste par un assert spatial.
-- **Non montré** : aucune des deux cartes n'est comparee a une solution de reference convergee ; on ne
-  prouve pas laquelle est "la bonne", seulement qu'elles different la ou l'AMR agit.
+- **Proves** (by the asserts of `run.py` and the measurement here): the two runs carry the same
+  dynamics (band modulated 4 times, AMR $n_e^{\max}=1.967$ vs uniform $=1.920$); the difference panel
+  is nonzero, `max|delta n_e| = 8.68e-2` (of the same order as the `gap=6.40e-2` asserted in
+  `run.py:115`, different measurement windows): AMR modifies the solution.
+- **Suggested (not asserted)**: the difference is structured at the band edges (alternating red/blue
+  lobes along $y\approx 0.45$ and $0.57$), not a diffuse noise: this is exactly where the fine level
+  resolves the transverse gradient better. Visible, not tested by a spatial assert.
+- **Not shown**: neither map is compared to a converged reference solution; you do not prove which
+  one is "the right one", only that they differ where AMR acts.
 
-### `patch_map.png` : ou l'AMR concentre la resolution
+### `patch_map.png`: where AMR concentrates resolution
 
-![Footprint des cellules taggees a 3 instants + n_patches au cours du temps](figures/patch_map.png)
+![Footprint of tagged cells at 3 instants + n_patches over time](figures/patch_map.png)
 
-- **Prouve** : `n_patches()` vaut 2 a tous les pas (panneau de droite, ligne plate ; `patches
-  observed = [2]` dans la provenance), ce qui satisfait l'assert $\ge 2$ (`run.py:88`). La bande est
-  bien couverte par plusieurs patchs fins, pas un seul niveau degenere.
-- **Suggéré** : le footprint des cellules taggees (proxy de la couverture du patch fin, $\approx 500$
-  cellules, soit ~12 % du domaine) suit la bande : les 4 lobes de la modulation sont visibles a
-  $t=0.33$ et s'etalent en une bande lisse a $t=6.62$ a mesure que le schema d'ordre 1 diffuse les
-  bords. Le tag se concentre la ou $n_e>1.239$, jamais sur le plancher a $1.0$.
-- **Non montré** : ce footprint est la zone taggee (densite > seuil), pas la geometrie exacte des
-  rectangles Berger-Rigoutsos : le binding n'expose pas les boites de patch, seulement leur nombre
-  (`n_patches()`). Le footprint approche la couverture, il ne la dessine pas au pixel pres. Le compte
-  reste fige a 2 : on ne teste ni la fusion/scission de patchs ni un grand nombre de patchs.
+- **Proves**: `n_patches()` is 2 at every step (right panel, flat line; `patches observed = [2]` in
+  the provenance), which satisfies the assert $\ge 2$ (`run.py:88`). The band is indeed covered by
+  several fine patches, not a single degenerate level.
+- **Suggested**: the footprint of tagged cells (proxy for the fine patch coverage, $\approx 500$
+  cells, i.e. ~12 % of the domain) follows the band: the 4 lobes of the modulation are visible at
+  $t=0.33$ and spread into a smooth band at $t=6.62$ as the order-1 scheme diffuses the edges. The
+  tag concentrates where $n_e>1.239$, never on the floor at $1.0$.
+- **Not shown**: this footprint is the tagged zone (density > threshold), not the exact geometry of
+  the Berger-Rigoutsos rectangles: the binding does not expose the patch boxes, only their count
+  (`n_patches()`). The footprint approximates the coverage, it does not draw it pixel-perfect. The
+  count stays fixed at 2: neither patch merge/split nor a large patch count is tested.
 
-### `mass_conservation.png` : le reflux maintient la masse a l'arrondi machine
+### `mass_conservation.png`: reflux keeps mass at machine roundoff
 
-![Derive relative de masse vs t, AMR vs uniforme, sous la tolerance 1e-9](figures/mass_conservation.png)
+![Relative mass drift vs t, AMR vs uniform, below the 1e-9 tolerance](figures/mass_conservation.png)
 
-- **Prouve** : les deux courbes restent collees au plancher d'arrondi machine ($\sim 10^{-15}$),
-  six ordres de grandeur sous la tolerance `TOL_MASS = 1e-9` (ligne tiretee). Mesure : AMR
-  `drel_max = 3.06e-15`, uniforme `drel_max = 6.12e-15`. L'assert `drel < 1e-9` (`run.py:89`) passe a
-  chaque pas.
-- **Suggéré** : l'AMR n'est pas moins conservatif que l'uniforme malgre ses interfaces grossier/fin
-  re-decoupees tous les 10 pas : sa courbe est meme legerement plus basse par endroits. C'est la
-  signature attendue d'un reflux correct ; aucun assert ne compare les deux planchers.
-- **Non montré** : on ne montre pas le scenario sans reflux (qui sortirait du graphe par une derive
-  en marches a chaque regrid). La figure prouve que le reflux *present* conserve, pas le contrefactuel.
+- **Proves**: both curves stay glued to the machine roundoff floor ($\sim 10^{-15}$), six orders of
+  magnitude below the tolerance `TOL_MASS = 1e-9` (dashed line). Measured: AMR `drel_max = 3.06e-15`,
+  uniform `drel_max = 6.12e-15`. The assert `drel < 1e-9` (`run.py:89`) passes at every step.
+- **Suggested**: the AMR is not less conservative than the uniform despite its coarse/fine interfaces
+  re-decomposed every 10 steps: its curve is even slightly lower in places. This is the expected
+  signature of a correct reflux; no assert compares the two floors.
+- **Not shown**: the scenario without reflux is not shown (it would leave the graph by a staircase
+  drift at each regrid). The figure proves that the reflux *present* conserves, not the
+  counterfactual.
 
-### `diocotron_amr_hero.gif` : la figure hero du README adc_cpp, en version locale
+### `diocotron_amr_hero.gif`: the hero figure of the adc_cpp README, in a local version
 
-Le README d'adc_cpp affiche en tete une animation, `docs/anim_romeo_diocotron_amr3.gif` : un panneau
-unique ou une bande de charge horizontale (mode $l=2$) s'enroule en oeil-de-chat, suivie par des
-cadres de raffinement AMR. `make_hero_gif.py` en produit une version du meme type, reproductible
-localement (meme cadrage : un seul panneau, fond sombre, colormap inferno, titre
-`diocotron AMR : densite n_e`, bande mode $l=2$ qui s'enroule), mais ou les cadres sont les patchs
-fins du solveur, pas un proxy.
+The adc_cpp README displays an animation at the top, `docs/anim_romeo_diocotron_amr3.gif`: a single
+panel where a horizontal charge band (mode $l=2$) winds up into a cat's-eye, tracked by AMR
+refinement frames. `make_hero_gif.py` produces a version of the same type, reproducible locally (same
+framing: a single panel, dark background, inferno colormap, title `diocotron AMR : densite n_e`,
+mode $l=2$ band that winds up), but where the frames are the solver's fine patches, not a proxy.
 
-![Etat final du diocotron mode l=2 suivi par AMR (image de couverture du GIF)](figures/diocotron_amr_hero_cover.png)
+![Final state of the mode l=2 diocotron tracked by AMR (GIF cover image)](figures/diocotron_amr_hero_cover.png)
 
-![Animation diocotron sur AMR : bande mode l=2 enroulee en oeil-de-chat, vrais patchs AMR](figures/diocotron_amr_hero.gif)
+![Diocotron animation on AMR: mode l=2 band wound into a cat's-eye, real AMR patches](figures/diocotron_amr_hero.gif)
 
-- **Prouve / visible (physique du solveur)** : la bande est advectee par le solveur (derive
-  $E \times B$ de `models.diocotron`, Poisson de charge resolu par multigrille geometrique sur
-  `adc.AmrSystem`). L'enroulement en deux vortex (oeil-de-chat, instabilite de Kelvin-Helmholtz du
-  diocotron au mode $l=2$) est la sortie du code, pas une animation scriptee.
-- **Prouve / visible (cadres du solveur)** : chaque rectangle cyan est la geometrie exacte d'un patch
-  fin, lue par `AmrSystem.patch_rectangles()` (binding `patch_boxes()`). Aucun proxy de
-  densite, aucun `scipy` : ce sont les patchs que le moteur a effectivement raffines. On le
-  voit suivre la physique : au depart les patchs tuilent la bande sinusoidale, puis se concentrent
-  sur les coeurs de vortex et le filament quand l'instabilite s'enroule (criteres de tag au-dessus du
-  plancher, `set_refinement(threshold)` ; le regrid les replace a chaque fenetre). Le nombre de
-  patchs varie (consigne dans `provenance.json`, champ `n_patches_*`).
-- **portee (1 niveau, pas 3)** : la facade Python `adc.AmrSystem` raffine sur un niveau fin
-  multi-patch (Berger-Rigoutsos) : tous les patchs sont de niveau 1 (cyan ; le code colore par
-  niveau, 1=cyan/2=vert/3=rouge, et serait pret si un futur exposait plus de niveaux). La figure hero
-  du README adc_cpp a, elle, ete produite par le moteur C++ multi-niveaux (`advance_amr`, 3
-  niveaux) sur ROMEO (GH200). Ce GIF reproduit le type de la figure (diocotron suivi par un
-  AMR adaptatif), avec les patchs de la facade, pas les 3 niveaux exacts du run ROMEO.
-- Genere par `python make_hero_gif.py` ; provenance dans `figures/provenance.json` (champs
+- **Proves / visible (solver physics)**: the band is advected by the solver (ExB drift of
+  `models.diocotron`, charge Poisson solved by geometric multigrid on `adc.AmrSystem`). The winding
+  into two vortices (cat's-eye, Kelvin-Helmholtz instability of the diocotron at mode $l=2$) is the
+  code's output, not a scripted animation.
+- **Proves / visible (solver frames)**: each cyan rectangle is the exact geometry of a fine patch,
+  read by `AmrSystem.patch_rectangles()` (binding `patch_boxes()`). No density proxy, no `scipy`:
+  these are the patches the engine actually refined. You see it follow the physics: at the start the
+  patches tile the sinusoidal band, then concentrate on the vortex cores and the filament as the
+  instability winds up (tag criteria above the floor, `set_refinement(threshold)`; the regrid
+  replaces them at each window). The number of patches varies (logged in `provenance.json`, field
+  `n_patches_*`).
+- **scope (1 level, not 3)**: the Python facade `adc.AmrSystem` refines on a single multi-patch fine
+  level (Berger-Rigoutsos): all patches are level 1 (cyan; the code colors by level,
+  1=cyan/2=green/3=red, and would be ready if a future one exposed more levels). The hero figure of
+  the adc_cpp README was itself produced by the multi-level C++ engine (`advance_amr`, 3 levels) on
+  ROMEO (GH200). This GIF reproduces the type of the figure (diocotron tracked by an adaptive AMR),
+  with the facade's patches, not the exact 3 levels of the ROMEO run.
+- Generated by `python make_hero_gif.py`; provenance in `figures/provenance.json` (fields
   `physique_reelle`, `cadres`, `difference_avec_hero`, `n_patches_*`).
 
 ---
 
-## 7. Ce que l'invariant ne capture pas
+## 7. What the invariant does not capture
 
-La masse conservee a $10^{-15}$ et la couverture multi-patch sont des invariants structurels : ils
-disent que la machinerie AMR (tag -> regrid -> reflux) est correcte et active, pas que la physique
-resolue est fidele. Restent hors de la validation :
+Mass conserved to $10^{-15}$ and the multi-patch coverage are structural invariants: they say that
+the AMR machinery (tag -> regrid -> reflux) is correct and active, not that the resolved physics is
+faithful. The following remain outside the validation:
 
-- **La fidelite du taux.** Le schema NoSlope + Rusanov est d'ordre 1, volontairement dissipatif : il
-  etale les bords de la bande (visible fig. `patch_map`, t=6.62) et abaisserait un taux de croissance
-  mesure, comme la version uniforme du parent sous-estime $\gamma_l$ de $-22$ a $-27\%$. Ici aucun
-  taux n'est mesure ni asseré.
-- **La convergence.** Un seul niveau fin, $64^2$ de base, 2 patchs : pas de balayage de resolution, pas
-  de hierarchie profonde, pas de demonstration que la solution converge quand on raffine plus.
-- **Le multi-bloc et le device.** Le coeur `adc_cpp` valide la brique AMR sur backends device (regrid
-  B_z GH200) et MPI multi-box dans le projet amont ; ce cas ne fait que composer des briques
-  natives via la facade Python sur le binding charge (CPU host). Aucun chemin GPU/MPI n'est exerce ici.
+- **Rate fidelity.** The NoSlope + Rusanov scheme is order 1, deliberately dissipative: it smears the
+  band edges (visible fig. `patch_map`, t=6.62) and would lower a measured growth rate, just as the
+  parent's uniform version underestimates $\gamma_l$ by $-22$ to $-27\%$. Here no rate is measured or
+  asserted.
+- **Convergence.** A single fine level, $64^2$ base, 2 patches: no resolution sweep, no deep
+  hierarchy, no demonstration that the solution converges when you refine further.
+- **Multi-block and device.** The `adc_cpp` core validates the AMR brick on device backends (B_z
+  regrid GH200) and MPI multi-box in the upstream project; this case only composes native bricks via
+  the Python facade on the charge binding (CPU host). No GPU/MPI path is exercised here.
 
 ---
 
-## 8. Conditions initiales
+## 8. Initial conditions
 
-CI = `band_density` (`common/initial_conditions.py:13-25`) : bande horizontale gaussienne de charge,
-ondulee `mode` fois le long de $x$.
+IC = `band_density` (`common/initial_conditions.py:13-25`): horizontal gaussian charge band,
+undulated `mode` times along $x$.
 
 $$n_e(x,y)=\text{floor}+\text{amp}\cdot e^{-(y-y_0)^2/\text{width}^2},\qquad
 y_0=0.5\,L+\text{disp}\cdot\cos(2\pi\,\text{mode}\,x/L).$$
 
-Parametres du cas (`run.py:42-43,66-67`) : `N=64`, `L=1`, `amp=1`, `width=0.05`, `mode=4`,
-`disp=0.02`, `floor=1` (defaut). Bande centree en $y=0.5$, ondulee 4 fois. Convention `ne[j,i]` a
-centres de cellules (`common/grid.py:meshgrid_xy`). Le fond neutralisant `n_i0 = ne.mean() = 1.088623`
-(mesure) assure la moyenne nulle du RHS de Poisson periodique (section 4.2).
+Case parameters (`run.py:42-43,66-67`): `N=64`, `L=1`, `amp=1`, `width=0.05`, `mode=4`,
+`disp=0.02`, `floor=1` (default). Band centered at $y=0.5$, undulated 4 times. Convention `ne[j,i]`
+at cell centers (`common/grid.py:meshgrid_xy`). The neutralizing background `n_i0 = ne.mean() = 1.088623`
+(measured) ensures the zero mean of the periodic Poisson RHS (section 4.2).
 
-Cette CI `band_density` est partagee avec `../diocotron/` (variante periodique) et `custom_scheme`.
-Elle differe de l'anneau `ring_density` du benchmark publie : `diocotron_amr` n'est pas une
-reproduction de `arXiv:2510.11808` (section 7).
+This `band_density` IC is shared with `../diocotron/` (periodic variant) and `custom_scheme`. It
+differs from the `ring_density` ring of the published benchmark: `diocotron_amr` is not a
+reproduction of `arXiv:2510.11808` (section 7).
 
 ---
 
-## 9. Reproduire
+## 9. Reproduce
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/diocotron_amr
-# le cas (asserts, ~0.4 s CPU host, sans matplotlib) :
+# the case (asserts, ~0.4 s CPU host, without matplotlib):
 PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
   /opt/homebrew/anaconda3/bin/python3.12 run.py
-# les figures de diagnostic (re-joue AMR + uniforme, ecrit figures/*.png + provenance.json) :
+# the diagnostic figures (replays AMR + uniform, writes figures/*.png + provenance.json):
 PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py
 ```
-Le premier element du `PYTHONPATH` apporte le module `adc` (binding C++, suffixe ABI
-`cpython-312-darwin`) ; le second apporte le paquet `adc_cases`. Prerequis : `numpy` (le cas),
-`matplotlib` (les figures seulement). Aucun compilateur C++ a l'execution (`needs = []` au
-manifeste) : rien n'est compile a la volee, le binding `_adc.so` est deja construit.
+The first element of `PYTHONPATH` brings the `adc` module (C++ binding, ABI suffix
+`cpython-312-darwin`); the second brings the `adc_cases` package. Prerequisites: `numpy` (the case),
+`matplotlib` (the figures only). No C++ compiler at runtime (`needs = []` in the manifest): nothing
+is compiled on the fly, the `_adc.so` binding is already built.
 
-Sortie attendue du cas (valeurs reelles capturees) :
+Expected output of the case (real captured values):
 ```
 # n_base=64 regrid_every=10 band_mode=4  n_i0=1.0886
   0     0.1642   2        1.08862269e+00 4.079e-16
@@ -364,22 +361,22 @@ Sortie attendue du cas (valeurs reelles capturees) :
 # controle (seuil 1e+30) : patches=1  ecart_sup solution=6.395745e-02
 OK diocotron_amr
 ```
-Les signes et l'ordre de grandeur sont stables ; les derniers chiffres de `drel` et de `gap` varient
-avec la bibliotheque BLAS et l'ordre de sommation des patchs (cf. `figures/provenance.json` :
-`drel_max` AMR $=3.06\times 10^{-15}$, `gap` figures $=8.68\times 10^{-2}$ sur une fenetre de mesure
-differente de l'assert du `run.py`, $6.40\times 10^{-2}$).
+The signs and the order of magnitude are stable; the last digits of `drel` and of `gap` vary with the
+BLAS library and the patch summation order (cf. `figures/provenance.json`: AMR `drel_max`
+$=3.06\times 10^{-15}$, figures `gap` $=8.68\times 10^{-2}$ on a measurement window different from the
+`run.py` assert, $6.40\times 10^{-2}$).
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | le cas : `AmrSystem`, boucle 40 pas, asserts, run de controle a seuil inatteignable |
-| `make_figures.py` | re-joue AMR + uniforme, ecrit `figures/*.png` + `figures/provenance.json` |
-| `figures/density_compare.png` | densite finale uniforme \| AMR \| difference |
-| `figures/patch_map.png` | footprint des cellules taggees (3 instants) + `n_patches(t)` |
-| `figures/mass_conservation.png` | derive relative de masse vs t, AMR vs uniforme |
-| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, nombres mesures |
-| `../adc_cases/models.py` | `diocotron(B0, alpha, n_i0)` = composition des 4 briques |
-| `../adc_cases/common/initial_conditions.py` | `band_density(...)` : la bande gaussienne perturbee |
+| `run.py` | the case: `AmrSystem`, 40-step loop, asserts, control run at an unreachable threshold |
+| `make_figures.py` | replays AMR + uniform, writes `figures/*.png` + `figures/provenance.json` |
+| `figures/density_compare.png` | final density uniform \| AMR \| difference |
+| `figures/patch_map.png` | footprint of tagged cells (3 instants) + `n_patches(t)` |
+| `figures/mass_conservation.png` | relative mass drift vs t, AMR vs uniform |
+| `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured numbers |
+| `../adc_cases/models.py` | `diocotron(B0, alpha, n_i0)` = composition of the 4 bricks |
+| `../adc_cases/common/initial_conditions.py` | `band_density(...)`: the perturbed gaussian band |
 | `../adc_cases/common/checks.py` | `assert_finite`, `relative_drift` |
-| `../diocotron/` | la reproduction physique (taux $\gamma_l$, figures, gif) sur grille uniforme |
+| `../diocotron/` | the physical reproduction (rate $\gamma_l$, figures, gif) on a uniform grid |
