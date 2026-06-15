@@ -177,6 +177,54 @@ The ssprk2 trajectory gap to MATLAB is 4% (the second order, vs ~4.5e-16 for the
 replay in the table). The Ma=20 realizability contrast (`run_relaxation.py`): projected ~13%
 of cells violated vs ~52% raw, the executable witness that the projection works on a field.
 
+## Initial ExB drift: a deliberate fix to a MATLAB meshgrid trap
+
+The diocotron IC builds the velocity from the drift `v = (E x B) / B^2`, i.e.
+`vx = -d_y(phi) / omega_c`, `vy = +d_x(phi) / omega_c`. For a ring potential this drift is
+azimuthal and incompressible (`div v = 0`). `run_diocotron.py:104-105` (`diocotron_state`)
+computes exactly that.
+
+The reference `initialize_dicotron.m:34-48` does not. With `[X,Y] = meshgrid(xm,ym)` the first
+matrix index runs along y and the second along x; the loop differences `phi_ghosted` on the
+first index but stores it into the component labelled x (and divides by `dx`), without
+transposing. The result is `vx = -d_x(phi) / omega_c`, `vy = +d_y(phi) / omega_c`: the two
+components are swapped relative to the drift, the field is no longer azimuthal, and it is
+divergent (`div v = -d2x(phi) + d2y(phi) != 0`). This is the classic MATLAB meshgrid trap.
+
+This is a deliberate discrepancy where the port is right against the reference. Measured at
+n=64 (Octave running `initialize_dicotron.m` vs the numpy `diocotron_state`):
+
+- `rho` and `phi` are faithful: relative error 5.0e-10 and 3.7e-9 (same scalar equations, same
+  `poisson_fft` to FFT round-off). Only the velocity orientation differs.
+- the swap is exact: `PY vx == -MAT vy` and `PY vy == -MAT vx` to 1.1e-9; equivalently
+  `MAT vx == -d_x(phi)/omega_c` to 1.1e-9, the wrong axis.
+- the physical signature: the normalized divergence `max|div v| / (Vmax/h)` is 1.2e-16 for the
+  standard drift (incompressible) and 0.55 for the MATLAB field (divergent).
+
+Note: this is the IC only. The electric source term is faithful (the M10 flux uses the same
+index convention as its source, so the two are consistent); do not "fix" it by analogy.
+
+Impact on the dynamics (issue point b), measured with the same `phi` so only the orientation
+changes, n=64, Rusanov, no `relaxation15`: the mode-4 azimuthal amplitude `A4` of the density
+starts identical (`A4(0) = 4.93e-2`, both ICs share `phi` and `rho`) and the two runs then
+diverge. The relative gap on `A4` is 11% at 20 steps, 18% at 40, 16% at 80; the kinetic-energy
+proxy `0.5 (M10^2 + M01^2)` differs by 5 to 20%; the full state by `max|U_std - U_bug|` ~
+0.2 to 0.36. The effect is therefore not negligible: the ring density is quasi-axisymmetric,
+but the velocity field is fully reoriented (azimuthal vs divergent), so the trajectories part
+quickly. These are short smoke windows (the perturbation is damped by Rusanov, `A4` decreases
+in both), not the saturated growth regime; the quantitative growth rate is a dedicated campaign
+(see Limitations).
+
+To reproduce the MATLAB field on purpose (strict trajectory comparison against the Octave
+reference), pass `--ic-matlab-bug`; it rebuilds the swapped, divergent drift behind
+`diocotron_state(n, ic_matlab_bug=True)` and prints the impact table above. The default is off
+and the standard, correct drift is always used in CI.
+
+```bash
+python hyqmom15/run_diocotron.py                  # standard ExB drift (default, CI)
+python hyqmom15/run_diocotron.py --ic-matlab-bug  # reproduce the meshgrid trap + impact table
+```
+
 ## Multi-rank MPI smoke (geometric_mg)
 
 [run_mpi.py](run_mpi.py) replays the Vlasov-Poisson diocotron under `mpirun` (np=2 and 4)

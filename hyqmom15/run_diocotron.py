@@ -9,7 +9,10 @@ Troisieme brique de l'integration HyQMOM  : le champ electrique cesse d'etre nul
 agit sur les 15 moments via la source electrique. Scenario de reference :
 main_electrostatic_wave.m, section dicotron (anneau r0 = 0.35..r1 = 0.40, mode 4, omega_p = 25,
 omega_c = -30 ; a l'execution la branche electrostatique SEULE est active, B n'entre que par la
-derive ExB de la condition initiale -- fidele au driver MATLAB).
+derive ExB de la condition initiale). La derive ExB initiale est l'ExB STANDARD (azimutale,
+incompressible) et s'ecarte DELIBEREMENT du MATLAB : initialize_dicotron.m differencie le mauvais
+indice meshgrid (champ transpose, divergent). Cf. README, section "Initial ExB drift", et le flag
+--ic-matlab-bug pour reproduire le piege.
 
 Validation
 ----------
@@ -22,9 +25,10 @@ Validation
   (2) source electrique de bout en bout : Ex implicite = (rhs - advection)[M10]/M00 == gradient
       CENTRE de phi a 1e-16 (la table compilee lit exactement le champ resolu) == analytique a
       8e-4 ;
-  (3) diocotron smoke : IC anneau + perturbation mode 4 + derive ExB (port de
-      initialize_dicotron.m, Poisson IC en numpy/FFT fidele a poisson_fft.m), robust, rusanov,
-      10 pas : etat fini, M00 > 0, masse conservee a 1e-12, phi fini ;
+  (3) diocotron smoke : IC anneau + perturbation mode 4 + derive ExB standard (rho et phi fideles
+      a initialize_dicotron.m a 1e-9 ; Poisson IC en numpy/FFT fidele a poisson_fft.m ;
+      orientation ExB corrigee, cf. README), robust, rusanov, 10 pas : etat fini, M00 > 0, masse
+      conservee a 1e-12, phi fini ;
   (4) checkpoint/restart bit-stable : 2 pas apres restart == 2 pas sans interruption ;
   (5) snapshots cadences : write npz tous les 5 pas (3 fichiers), 15 moments + phi presents.
 
@@ -76,8 +80,11 @@ def poisson_fft_ref(rho, lam, dx, dy):
     return np.real(np.fft.ifft2(phi_hat))
 
 
-def diocotron_state(n):
-    """Port d'initialize_dicotron.m : anneau perturbe + derive ExB calculee sur le Poisson IC.
+def diocotron_state(n, ic_matlab_bug=False):
+    """Anneau perturbe + derive ExB calculee sur le Poisson IC.
+    @param ic_matlab_bug si True, reproduit le piege meshgrid d'initialize_dicotron.m (vx et vy
+        echanges et signes, champ non azimutal et divergent ; cf. README "Initial ExB drift").
+        Defaut False : derive ExB standard (incompressible), physiquement correcte.
     @return (15, n, n), axe x en dernier (x = colonnes, y = lignes)."""
     h = 1.0 / n
     xm = -0.5 + (np.arange(n) + 0.5) * h
@@ -91,8 +98,16 @@ def diocotron_state(n):
     phi = poisson_fft_ref(rho.T, DEBYE, h, h).T
     gphi_x = (np.roll(phi, -1, axis=1) - np.roll(phi, 1, axis=1)) / (2.0 * h)
     gphi_y = (np.roll(phi, -1, axis=0) - np.roll(phi, 1, axis=0)) / (2.0 * h)
-    vx = -gphi_y / OMEGA_C                        # derive ExB (initialize_dicotron.m)
-    vy = gphi_x / OMEGA_C
+    if ic_matlab_bug:
+        # Piege meshgrid MATLAB : initialize_dicotron.m differencie le 1er indice (= y en
+        # convention meshgrid) mais l'etiquette composante 1 (x), sans compenser -> vx = -d_x phi/wc,
+        # vy = +d_y phi/wc (champ NON azimutal, div = -d2x phi + d2y phi != 0). Opt-in pour
+        # comparaisons strictes de trajectoire vs la reference Octave ; jamais le defaut.
+        vx = -gphi_x / OMEGA_C
+        vy = gphi_y / OMEGA_C
+    else:
+        vx = -gphi_y / OMEGA_C                    # derive ExB standard (incompressible)
+        vy = gphi_x / OMEGA_C
     U = np.empty((15, n, n))
     base = gaussian_state(1.0, 0.0, 0.0, T, 0.0, T)
     for j in range(n):
@@ -381,15 +396,67 @@ def check_poisson_solvers():
           % (errs["fft_spectral"], dmg, errs["fft"]))
 
 
+def _mode_amplitude(rho, mode, r0, r1):
+    """Amplitude du m-ieme harmonique azimutal de la densite, sur l'anneau r0 <= r <= r1.
+    @return |sum_{anneau} rho exp(-i m theta)| / (nombre de cellules de l'anneau). Observable du
+    diocotron : l'amplitude du mode perturbe croit exponentiellement quand l'instabilite demarre."""
+    n = rho.shape[0]
+    h = 1.0 / n
+    xm = -0.5 + (np.arange(n) + 0.5) * h
+    X, Y = np.meshgrid(xm, xm, indexing="xy")
+    R = np.sqrt(X ** 2 + Y ** 2)
+    theta = np.arctan2(Y, X)
+    ring = (R >= r0) & (R <= r1)
+    z = np.sum(rho[ring] * np.exp(-1j * mode * theta[ring]))
+    return float(np.abs(z) / max(ring.sum(), 1))
+
+
+def measure_ic_impact(n=64, nsteps=40):
+    """Chiffre l'impact de l'orientation ExB (issue ADC-198, point b) : meme anneau, meme Poisson IC,
+    seule l'orientation de la derive change. On rejoue nsteps pas avec la derive standard et avec le
+    bug meshgrid MATLAB, puis on compare l'amplitude du mode 4 et l'energie cinetique. L'anneau initial
+    etant quasi axisymetrique, le mode 4 vient de la perturbation eps : l'effet sur le DEMARRAGE de
+    l'instabilite est attendu faible (les deux champs derivent du MEME phi), c'est ce que mesure ce run."""
+    def run(ic_matlab_bug):
+        U0 = diocotron_state(n, ic_matlab_bug=ic_matlab_bug)
+        sim = build_sim(n, rho_bg=float(U0[0].mean()))
+        sim.set_state("mom", U0)
+        sim.solve_fields()
+        a0 = _mode_amplitude(U0[0], MODE, R0, R1)
+        for _ in range(nsteps):
+            sim.step_cfl(0.4)
+        U = np.array(sim.get_state("mom"))
+        a1 = _mode_amplitude(U[0], MODE, R0, R1)
+        ke = float(np.sum(U[1] ** 2 + U[6] ** 2) / 2.0)   # 0.5 (M10^2 + M01^2), proxy energie cinetique
+        return a0, a1, ke, U
+
+    a0_std, a1_std, ke_std, U_std = run(False)
+    a0_bug, a1_bug, ke_bug, U_bug = run(True)
+    du = float(np.max(np.abs(U_std - U_bug)))
+    print("=== impact orientation ExB (mode %d, n=%d, %d pas) ===" % (MODE, n, nsteps))
+    print("  derive standard : A4(0)=%.4e -> A4(%d)=%.4e (gain x%.3f), KE=%.4e"
+          % (a0_std, nsteps, a1_std, a1_std / a0_std, ke_std))
+    print("  bug MATLAB      : A4(0)=%.4e -> A4(%d)=%.4e (gain x%.3f), KE=%.4e"
+          % (a0_bug, nsteps, a1_bug, a1_bug / a0_bug, ke_bug))
+    print("  ecart relatif A4 final = %.3e ; ecart KE = %.3e ; max|U_std - U_bug| = %.3e"
+          % (abs(a1_std - a1_bug) / max(a1_std, 1e-300), abs(ke_std - ke_bug) / max(ke_std, 1e-300), du))
+
+
 def main(argv=None):
     import argparse
-    p = argparse.ArgumentParser(description="hyqmom15 Vlasov-Poisson diocotron")
+    ap = argparse.ArgumentParser(description="Cas hyqmom15 : Vlasov-Poisson 15 moments, anneau diocotron")
+    ap.add_argument("--ic-matlab-bug", action="store_true",
+                    help="reproduit le piege meshgrid d'initialize_dicotron.m (derive ExB transposee, "
+                         "non azimutale) puis chiffre son impact vs la derive standard ; defaut off")
     # OPT-IN : reproduit la borne dt source de compute_dt.m (min(dt, dt_source)). Le defaut (sans
     # flag) ne change PAS : le smoke tourne avec m.source_frequency, plus laxe (cf. README).
-    p.add_argument("--dt-source-matlab", action="store_true",
-                   help="run aussi le controle a dt source MATLAB (ecart delibere 4)")
-    args = p.parse_args(argv)
+    ap.add_argument("--dt-source-matlab", action="store_true",
+                    help="run aussi le controle a dt source MATLAB (ecart delibere 4)")
+    args = ap.parse_args(argv)
     print("=== hyqmom15/run_diocotron : Vlasov-Poisson 15 moments, anneau diocotron ===")
+    if args.ic_matlab_bug:
+        measure_ic_impact()
+        return
     check_poisson_oracle()
     check_poisson_solvers()
     check_diocotron()
