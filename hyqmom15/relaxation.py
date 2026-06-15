@@ -13,7 +13,12 @@ standardises (seuil |Im| > 1e-9*max(1, |lambda|)). Les deux branches x et y appl
 meme correction (s21 = s12 = 0, s22 >= 1/3) : seul compte « l'un des blocs est complexe ».
 
 En simulation, la projection s'applique par champ entre les pas (relax_field), comme le
-flagrelax = 1 du MATLAB. Boucle Python par cellule : validation et runs moderes.
+flagrelax = 1 du MATLAB. Ce module est l'ORACLE de reference (== Octave a 4e-14) et la source
+de verite du port natif : boucle Python par cellule (copie host, eigvals par cellule), pour
+validation et runs moderes seulement, PAS dans un pas de temps device/MPI. Le chemin
+production est un projecteur natif compile branche sur le hook generique post-pas du coeur
+(ADC-275, hook ADC-177) ; tant qu'il n'est pas cable, les runs GPU n'appliquent pas de
+projection dans le pas.
 """
 
 import numpy as np

@@ -62,6 +62,33 @@ Writing another moment system = supplying another closure callable (same contrac
 you want exact per-block wave speeds, a partition of the Jacobian (`HYQMOM_BLOCKS` for this
 one).
 
+## MATLAB fidelity: proven, partial, missing
+
+`hyqmom15` is a `validation` case (manifest `cases_manifest.toml`): the drivers assert
+invariants and bit-level agreement against the MATLAB reference RIEMOM2D, they do not
+reproduce a published physical curve. What that means component by component:
+
+| Status | Component | Evidence (number, source) |
+|---|---|---|
+| Proven | closure (`closureS5.m`, 6 standardized order-5 formulas) | `hyqmom_closure` ([model.py](model.py)) === `Flux_closure15_2D.m` to 1e-12 on 10 states (`run.py`), exact on Gaussians via the independent Isserlis oracle (`gaussian_raw_moment`) |
+| Proven | moment algebra M->C->S->C5->M5 (binomials) | delegated to `adc.moments`; the 15-component order and the `(p,q)` map are asserted equal to `gmom.moment_names(4)` / `gmom.moment_indices(4)` at import ([model.py](model.py)) |
+| Proven | flux assembly order, 15 components Fx/Fy | `MOMENT_NAMES` / `MOMENT_PQ` shared with RIEMOM2D ([model.py](model.py)) |
+| Proven | per-block wave speeds | `HYQMOM_BLOCKS` === `eigenvalues15_2D.m` flagsym=1 to ~1e-11 (`run_waves.py`), near-degenerate state judged against its measured conditioning |
+| Proven | Lorentz sources (E lowers order, B conserves) | `moment_sources` === reference eqs 1.3-1.7 to 1e-14, Larmor rotation === analytic (`run_crossing.py`) |
+| Proven | Euler trajectory replay | replaying the HLL golden steps with `time='euler'`, L2 gap to MATLAB ~4.5e-16 after 20 steps (`run.py`); the MATLAB additive split + Euler is algebraically the unsplit Euler |
+| Proven | Poisson | phi === analytic on a sinusoid to 1e-14 in `fft_spectral`, source E === -grad phi centered to 1e-16, checkpoint/restart bit-identical (`run_diocotron.py`) |
+| Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
+| Partial | realizability under transport | the per-cell Python `relax_field` is an oracle, not a scalable path (ADC-275); the native compiled projector is not yet wired (depends on ADC-177) |
+| Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
+| Partial | golden coverage | no spatial golden with relaxation active (transport x relaxation); the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated (ADC-203) |
+| Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
+| Missing | BGK collision (`collision15.m`) | not ported; MATLAB branches with `Kn <= 10` are not yet fidelity-covered (ADC-277) |
+| Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
+
+Use the drivers above for validation. Use the native compiled path (`backend="aot"`, exact
+speeds, Poisson `geometric_mg`) for production runs, with the caveat that the realizability
+projection is still a Python per-cell loop (section below).
+
 ### Useful options
 
 | Option | Effect |
@@ -70,17 +97,19 @@ one).
 | `exact_speeds=False` | speed bound `u +- 3*sqrt(C)` instead of the exact eigenvalues. Good enough to start in Rusanov; realizable states exceed it (checked by run.py), so never for HLL. |
 | `solver=` (drivers) | `fft` (direct periodic), `fft_spectral` (continuous symbol, exact on sinusoids), `geometric_mg` (general, required under MPI). |
 
-## Realizability: the sharp edge
+## Realizability: oracle vs native projector
 
 A moment vector must stay that of a positive distribution (realizability, tested by the
-smallest eigenvalue of the `p2p2` matrix). The scheme does not preserve it: without
-correction, the state drifts out of the realizable set, the Jacobian eigenvalues blow up,
-and the CFL step collapses (measured: dt / 200 on a diocotron run).
+smallest eigenvalue of the `p2p2` matrix, `p2p2_2D.m`). The scheme does not preserve it.
+Measured on a local crossing Ma=20 run, without projection: dt decays as ~exp(-18.5 t), a
+ratio ~212 from start to end, because the state leaves the realizable set and the Jacobian
+eigenvalues blow up. With the projection applied at every step, dt stays ~1.2e-3 over a full
+`tend=4` run (ROMEO CPU job 654809, 3566 steps, mass exact).
 
-The fix is the `relaxation15` projection ([relaxation.py](relaxation.py)), applied at every
-step: clamp the standardized moments, then relax toward a realizable target. The port
-follows the MATLAB branch by branch; the "complex eigenvalues" test uses the model's
-autodiff Jacobian. Per-field usage:
+The projection is `relaxation15` ([relaxation.py](relaxation.py)): clamp the standardized
+moments, then relax toward a realizable target. The port follows the MATLAB branch by
+branch; the "complex eigenvalues" test evaluates the model's autodiff Jacobian. Per-field
+usage:
 
 ```python
 from relaxation import make_corner_eigs, relax_field
@@ -88,13 +117,54 @@ fn = make_corner_eigs()
 U = relax_field(U, lamin=1e-12, Ma=4.0, corner_eigs=fn)   # (15, ny, nx) -> projeté
 ```
 
-This is a per-cell Python loop: suited to validation and moderate runs, not to GPU
-campaigns (a compiled path is coming on the adc_cpp side).
+Two paths, two purposes:
 
-## Validation
+- Oracle (current): `relax_field` is a per-cell Python loop with a host copy and a
+  `numpy.linalg.eigvals` per cell. It is the reference for validation (=== Octave to 4e-14,
+  `run_relaxation.py`) and the source of truth for the native port. It is not scalable: not
+  usable inside a GPU/MPI time step (ADC-275).
+- Native projector (expected, not yet wired): a compiled device-safe `U -> U_projected`
+  applied after each whole step (the MATLAB `flagrelax=1` semantics are per-step, not
+  per-RK-stage). It depends on the generic post-step projection hook ADC-177 (adc_cpp PR #318);
+  the HyQMOM15 formulas stay on the case side, only the hook is core (ADC-275). Until it
+  lands, production GPU runs apply no projection in the step and must keep Ma moderate or
+  accept the dt collapse above.
 
-The references are generated by running the real MATLAB code (RIEMOM2D) under Octave; they
-are never re-transcribed:
+`relaxation15` is a relaxation toward a target, not an idempotent projector: re-relaxing
+relaxes again (verified under Octave); the drivers assert no idempotence, faithful to MATLAB.
+
+## Correlated crossing initial condition (`r != 0`)
+
+`crossing_state(..., r=...)` ([model.py](model.py)) currently raises `NotImplementedError`
+for `r != 0`. The historical comment said MATLAB freezes `S22=1, S31=S13=0`, distinct from an
+exact correlated Gaussian. Direct Octave check (audit ADC-274): for correlated states,
+`RIEMOM2D/InitializeM4_15(...)` and our `gaussian_state(...)` produce the same 15 moments to
+~1e-15, because MATLAB encodes the correlation through `C11 = r*sqrt(C20*C02)` then
+`S4toC4(...)` reconstructs the equivalent raw/central moments. So `r != 0` is removable (set
+`C11 = r*T` since here `C20 = C02 = T`), not a real divergence; the gate stays until ADC-274
+lands the parity test. Until then, `r = 0` is the only validated crossing IC.
+
+## Time-step policy: `omega_p` vs `compute_dt.m`
+
+The case bounds the source coupling with a constant `omega_p` (default 25.0):
+`m.source_frequency(omega_p)` ([model.py](model.py)) yields `dt <= cfl/omega_p`. MATLAB
+(`compute_dt.m`) instead imposes `dt_source = CFL*dx*lambda_flux*k_min^2/max_speed^2`, and
+that is the bound that bites. On the diocotron n=64 IC (Octave): `dt_source = 2.99e-5`,
+`dt_MATLAB = min(dt_flux=2.69e-3, dt_source) = 2.99e-5` (source-limited). The ADC source
+bound at the same point is ~1.6e-2, ~535x laxer; it never triggers, the transport bound
+(`last_dt_bound()='transport:mom'`) governs, and ADC advances ~60x the MATLAB dt.
+
+Implication (ADC-197): the runs stayed stable (ssprk2 + projection), so this is not an
+observed instability, but it is an undocumented fidelity gap: a measured growth rate is taken
+at a dt very different from the reference, and the explicit-source coupling is protected only
+by the transport bound. Resolution is open (recompute an effective `source_frequency` per
+step, or cap dt explicitly, or document it as an approved gap with a control run at the
+MATLAB dt). Until then, do not claim MATLAB dt fidelity.
+
+## Validation: regenerating the goldens
+
+The proven rows of the fidelity table are checked in CI. The references are generated by
+running the real MATLAB code (RIEMOM2D) under Octave; they are never re-transcribed:
 
 ```bash
 python3 gen_states.py
@@ -103,21 +173,9 @@ octave --no-gui --path /chemin/vers/RIEMOM2D golden_hll_gen.m    # trajectoire H
 octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m  # relaxation15 (5 branches)
 ```
 
-What the drivers guarantee, with the numbers checked in CI:
-
-- flux === `Flux_closure15_2D.m` to 1e-12 on 10 states (Gaussians, mixtures,
-  near-degenerate), and exact closure on the Gaussians (independent Isserlis oracle);
-- wave speeds === `eigenvalues15_2D.m` to ~1e-11 (the near-degenerate state is judged
-  against its conditioning, measured in the test);
-- sources === the explicit equations of the reference document to 1e-14; Larmor rotation
-  === analytic;
-- trajectory: replaying the time steps of the HLL golden with `time='euler'`, the L2 gap
-  to MATLAB after 20 steps is ~1e-16 (the MATLAB scheme, additive split + Euler, is
-  algebraically the unsplit Euler); in ssprk2 the gap is 4%, which is the second order;
-- Poisson: phi === analytic on a sinusoid (1e-14 in `fft_spectral`), the source's E field
-  === -grad phi centered to 1e-16, checkpoint/restart bit-identical;
-- `relaxation15` === Octave to 4e-14 on 12 states covering the 5 branches; at Ma=20 the
-  projected/raw contrast is measured in realizability (13% vs 52% of cells violated).
+The ssprk2 trajectory gap to MATLAB is 4% (the second order, vs ~4.5e-16 for the `time='euler'`
+replay in the table). The Ma=20 realizability contrast (`run_relaxation.py`): projected ~13%
+of cells violated vs ~52% raw, the executable witness that the projection works on a field.
 
 ## Multi-rank MPI smoke (geometric_mg)
 
@@ -151,11 +209,51 @@ Measured (n=64, 12 steps, 1 on-node thread, Mac M1, MPI+Kokkos Serial build):
   no speedup, which is expected (the grid fits in one box on rank 0, the other ranks only do
   the collectives): this smoke validates MPI correctness, not load balancing.
 
+## Scale: validated CPU/GPU/MPI, and what is not
+
+What the compiled path has been measured to do:
+
+- CPU serial: full crossing Ma=20 run, `tend=4`, 3566 steps, mass exact, dt stable ~1.2e-3
+  with per-step projection (ROMEO job 654809).
+- GPU GH200: 24706 steps device-clean (dense eigenvalues / HLL / sources / multigrid Poisson)
+  on the diocotron Vlasov-Poisson path (ROMEO job 654562).
+- MPI: bit-identical np=1/2/4 on the geometric_mg Poisson and the reductions (section above),
+  single-box topology only.
+
+What is not validated at scale:
+
+- The realizability projection inside a device/MPI step. The `relaxation15` path that keeps
+  dt stable is still a Python per-cell loop with a host copy; it does not run on device and
+  is not part of the GPU 24706-step run, which therefore advances without per-step projection.
+  The compiled projector (ADC-275, hook ADC-177) is the prerequisite for a high-Ma production
+  run that is both device-resident and realizability-stable.
+- Distributed multi-box Cartesian halo exchange: the MPI smoke is single-box (rank 0 only),
+  so it validates collective correctness, not halo exchange or load balancing. Distributed
+  multi-box belongs to AMR.
+- The diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
+
 ## Limitations
 
 - The closure is exact on Gaussians, but the scheme does not preserve realizability: long
-  runs => project (section above).
+  runs => project (realizability section).
+- The realizability projection is a Python per-cell oracle; a compiled device-safe projector
+  is not yet wired (ADC-275, depends on ADC-177).
+- `crossing_state(r != 0)` raises `NotImplementedError`; the MATLAB parity exists but the gate
+  is not yet removed (ADC-274).
+- The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt
+  fidelity (ADC-197).
+- The MATLAB BGK collision (`collision15.m`) is not ported: branches with `Kn <= 10` are not
+  fidelity-covered (ADC-277).
+- No spatial golden with relaxation active (transport x relaxation interaction) (ADC-203).
 - `riemann="hllc"`/`"roe"` unavailable: no contact wave nor closed eigenstructure for this
   system.
-- The MATLAB BGK collision (`collision15.m`) is not ported.
 - Diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
+
+## Structuring Linear issues
+
+- [ADC-274](https://linear.app/romain7522/issue/ADC-274) crossing `r != 0` parity with `InitializeM4_15`
+- [ADC-275](https://linear.app/romain7522/issue/ADC-275) native compiled `relaxation15` projector (replaces the Python per-cell loop)
+- [ADC-177](https://linear.app/romain7522/issue/ADC-177) generic post-step projection hook in the core (adc_cpp)
+- [ADC-197](https://linear.app/romain7522/issue/ADC-197) source dt bound vs `compute_dt.m`
+- [ADC-203](https://linear.app/romain7522/issue/ADC-203) spatial golden with relaxation active, independent Isserlis oracle, per-state rtol
+- [ADC-277](https://linear.app/romain7522/issue/ADC-277) scope and port `collision15.m` / BGK

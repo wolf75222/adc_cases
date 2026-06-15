@@ -112,8 +112,10 @@ def build_moment_model(name="hyqmom15", closure=hyqmom_closure, robust=False,
     scenario (constante, la masse est conservee) -- l'equivalent de la soustraction de
     moyenne de poisson_fft.m.
 
-    @p omega_p : frequence de la source, borne le pas de temps (la deuxieme CFL de
-    compute_dt.m). None = pas de borne.
+    @p omega_p : frequence de la source (constante), borne le pas de temps via dt <= cfl/omega_p.
+    None = pas de borne. ATTENTION (audit ADC-197) : ce n'est PAS equivalent au dt_source de
+    compute_dt.m (= CFL*dx*lambda_flux*k_min^2/max_speed^2) ; la borne ADC est ~500x plus laxe
+    et ne mord jamais (la borne transport gouverne) -- pas de fidelite dt MATLAB.
 
     @p exact_speeds : True = vitesses d'onde signees par valeurs propres du jacobien de flux
     (autodiff + sous-blocs HYQMOM_BLOCKS) -- requis pour riemann='hll' ; la meme verite
@@ -219,12 +221,14 @@ def crossing_state(n, ma, rho_in=1.0, rho_out=1e-3, T=1.0, r=0.0):
     repos a basse densite @p rho_out sur [-0.5, 0.5]^2, carre central [3n/8, 5n/8) coupe par
     l'anti-diagonale -- jets gaussiens (+Uc, +Uc) sous la diagonale, (-Uc, -Uc) au-dessus,
     repos sur la diagonale exacte, Uc = ma / sqrt(2). @p r : correlation initiale (0 dans le
-    driver de reference : gaussian_state == InitializeM4_15 exactement ; pour r != 0 le MATLAB
-    fige S22 = 1, S31 = S13 = 0, ce qui n'est PAS la gaussienne correlee exacte -- non porte).
+    driver de reference). Pour r != 0 : verifie sous Octave (audit ADC-274) que MATLAB encode
+    la correlation via C11 = r*sqrt(C20*C02) puis reconstruit par S4toC4, ce qui donne les 15
+    memes moments que gaussian_state a ~1e-15 ; le NotImplementedError ci-dessous reste tant
+    que le test de parite ADC-274 n'a pas leve la garde (ce module ne porte que r = 0 valide).
     @return tableau (15, n, n), axe x en dernier (convention des cas adc)."""
     if r != 0.0:
-        raise NotImplementedError("crossing_state : r != 0 non porte (InitializeM4_15 fige "
-                                  "S22=1, S31=S13=0, distinct de la gaussienne correlee exacte)")
+        raise NotImplementedError("crossing_state : r != 0 non porte (garde levee par ADC-274 "
+                                  "apres test de parite ; MATLAB == gaussian_state via C11)")
     uc = ma / np.sqrt(2.0)
     c11 = r * T
     m_out = gaussian_state(rho_out, 0.0, 0.0, T, c11, T)     # fond au repos
