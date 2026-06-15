@@ -162,6 +162,13 @@ needs = ["cxx", "mpi"]
 desc = "HyQMOM 15 moments Vlasov-Poisson : smoke MPI multi-rang (mpirun np=2/4) du diocotron, Poisson geometric_mg, parite bit-a-bit vs serie, rejet FFT sous MPI. Hors CI (exige mpirun + mpi4py compile contre la meme libmpi qu'_adc)."
 
 [[case]]
+path = "hyqmom15/run_amr.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM 15 moments sur AmrSystem : smoke diocotron AMR (hll exact + MG composite, euler+reflux), coherence grossier/fin vs System uniforme fin, rejets aot/target/hll/ssprk3."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false

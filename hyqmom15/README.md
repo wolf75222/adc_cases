@@ -209,6 +209,34 @@ Measured (n=64, 12 steps, 1 on-node thread, Mac M1, MPI+Kokkos Serial build):
   no speedup, which is expected (the grid fits in one box on rank 0, the other ranks only do
   the collectives): this smoke validates MPI correctness, not load balancing.
 
+## AMR
+
+The same model runs on the adaptive `adc.AmrSystem` hierarchy (refinement on M00, composite
+`geometric_mg` Poisson, conservative reflux) by compiling the `.so` for the AMR facade:
+
+```python
+compiled = m.compile(so_path, include_dir, backend="production", target="amr_system")
+sim = adc.AmrSystem(n=48, L=1.0, periodic=True, regrid_every=4)
+sim.add_equation("mom", compiled,
+                 spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+                 time=adc.Explicit())        # on AMR: forward Euler + reflux (default)
+sim.set_refinement(threshold=0.5)            # tags the ring on M00
+sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+sim.set_conservative_state("mom", U0)        # the 15 moments, prolonged to the fine patches
+```
+
+Note: on AMR the default `adc.Explicit()` is forward Euler + reflux, the scheme closest to the
+reference MATLAB (cf. the `time='euler'` replay in run_crossing); `ssprk3` exists only for
+native `add_block` blocks, the `.so` loader rejects it explicitly. `relaxation15` is not
+available on this path: short horizon (smoke), realizable long runs stay on the uniform
+`System`. The `run_amr.py` driver validates construction, per-level mass conservation,
+coarse/fine consistency against a uniform `System` at the fine resolution, and the clean
+rejections:
+
+```bash
+python hyqmom15/run_amr.py
+```
+
 ## Scale: validated CPU/GPU/MPI, and what is not
 
 What the compiled path has been measured to do:
