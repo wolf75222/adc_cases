@@ -414,9 +414,10 @@ def _mode_amplitude(rho, mode, r0, r1):
 def measure_ic_impact(n=64, nsteps=40):
     """Chiffre l'impact de l'orientation ExB (issue ADC-198, point b) : meme anneau, meme Poisson IC,
     seule l'orientation de la derive change. On rejoue nsteps pas avec la derive standard et avec le
-    bug meshgrid MATLAB, puis on compare l'amplitude du mode 4 et l'energie cinetique. L'anneau initial
-    etant quasi axisymetrique, le mode 4 vient de la perturbation eps : l'effet sur le DEMARRAGE de
-    l'instabilite est attendu faible (les deux champs derivent du MEME phi), c'est ce que mesure ce run."""
+    bug meshgrid MATLAB, puis on compare l'amplitude du mode 4 et l'energie cinetique. Les deux champs
+    derivent du MEME phi, donc rho et A4(0) sont identiques, mais le champ de vitesse est entierement
+    reoriente (azimutal incompressible vs divergent) : l'effet n'est PAS faible (mesure : ecart A4
+    11-18 %, KE 5-20 %), les trajectoires se separent vite des le demarrage, c'est ce que chiffre ce run."""
     def run(ic_matlab_bug):
         U0 = diocotron_state(n, ic_matlab_bug=ic_matlab_bug)
         sim = build_sim(n, rho_bg=float(U0[0].mean()))

@@ -181,8 +181,8 @@ of cells violated vs ~52% raw, the executable witness that the projection works 
 
 The diocotron IC builds the velocity from the drift `v = (E x B) / B^2`, i.e.
 `vx = -d_y(phi) / omega_c`, `vy = +d_x(phi) / omega_c`. For a ring potential this drift is
-azimuthal and incompressible (`div v = 0`). `run_diocotron.py:104-105` (`diocotron_state`)
-computes exactly that.
+azimuthal and incompressible (`div v = 0`). `run_diocotron.py:108-110` (`diocotron_state`,
+line 109 `vx = -gphi_y / OMEGA_C`) computes exactly that.
 
 The reference `initialize_dicotron.m:34-48` does not. With `[X,Y] = meshgrid(xm,ym)` the first
 matrix index runs along y and the second along x; the loop differences `phi_ghosted` on the
