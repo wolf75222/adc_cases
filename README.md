@@ -1,149 +1,148 @@
-# adc_cases : cas d'utilisation Python de la lib `adc`
+# adc_cases
 
-Ce dépôt contient les cas d'utilisation du solveur `adc` (advection-diffusion /
-couplage hyperbolique-elliptique). Toute la physique générique et tout le calcul cellule
-par cellule vivent dans la bibliothèque [adc_cpp](../adc_cpp) et sont exposés par son
-module Python `adc` (bindings pybind11). Ici, Python compose et pilote : un dossier par
-cas, chacun important `adc`, écrivant ses conditions initiales en numpy, et lançant la
-simulation. La quasi-totalité des cas est donc du Python pur.
+**The named Python use cases that drive the `adc` solver.**
 
-Un cas sur mesure (par exemple [`two_fluid_ap/`](two_fluid_ap/), solveur asymptotic-preserving)
-peut porter son propre C++ : il est compilé à la volée contre les en-têtes d'`adc_cpp` et chargé
-via `ctypes`. La mécanique commune (localisation des en-têtes, compilation, contrôle d'ABI) vit
-dans `adc_cases.common.native` ; les artefacts vont dans `out/<cas>/build/`.
+`adc_cases` holds the named scenarios: diocotron, Euler-Poisson, two-fluid, and more. The generic
+physics and the cell-by-cell compute live in the engine,
+[adc_cpp](https://github.com/wolf75222/adc_cpp), and are exposed by its `adc` Python module
+(pybind11). Here, Python composes and drives: one folder per case, each importing `adc`, writing
+its initial conditions in numpy, and running the simulation. The core names no scenario, so the
+names live here.
 
-## Prérequis : construire le module `adc`
+Most cases are pure Python. A bespoke case (for example [`two_fluid_ap/`](two_fluid_ap/), an
+asymptotic-preserving solver) can carry its own C++: it is compiled on the fly against the
+`adc_cpp` headers and loaded through `ctypes`. The shared machinery (header location, compilation,
+ABI check) lives in `adc_cases.common.native`; build artifacts go under `out/<case>/build/`.
 
-Le module Python est compilé depuis `adc_cpp`. `adc_cpp` est désormais **Kokkos-only**. Kokkos n'a
-pas besoin d'être pré-installé : CMake le récupère + construit automatiquement (FetchContent) s'il est
-introuvable. Pour réutiliser une install (plus rapide, et nécessaire au *runtime* des cas DSL
-`production`/natifs, cf. `ADC_KOKKOS_ROOT`), pointer `-DKokkos_ROOT` :
+## Quickstart
+
+Build the `adc` module from `adc_cpp` (Kokkos-only; CMake fetches and builds Kokkos if none is
+installed), put it on the path, and run a case:
 
 ```bash
+# 1. Build the module (from adc_cpp)
 cd ../adc_cpp
-cmake -B build-py -DADC_BUILD_PYTHON=ON                       # Kokkos fetch+build auto (Serial)
-# ou, pour réutiliser une install Kokkos (Serial suffit sur CPU) :
-# cmake -B build-py -DADC_BUILD_PYTHON=ON -DKokkos_ROOT=$KOKKOS_ROOT
+cmake -B build-py -DADC_BUILD_PYTHON=ON          # Kokkos fetched and built automatically (Serial)
 cmake --build build-py --target _adc -j
+export PYTHONPATH=$PWD/build-py/python           # the directory that holds the adc/ package
+
+# 2. Run a case (from adc_cases)
+cd ../adc_cases
+python3 euler_poisson/run.py
 ```
 
-Puis on met le paquet sur le `PYTHONPATH` (le dossier qui contient le paquet `adc/`) :
+Run a case with the same Python interpreter that built the module (the extension carries a
+`cpython-3XY` ABI suffix). With several Pythons installed, pin the build with
+`-DPython_EXECUTABLE=$(which python3.12)`. To reuse an existing Kokkos install (faster, and
+required at runtime for the `production` and native DSL cases, see `ADC_KOKKOS_ROOT`), pass
+`-DKokkos_ROOT=...` to the configure step.
 
-```bash
-export PYTHONPATH=$PWD/build-py/python      # depuis adc_cpp
-```
-
-Lancer les cas avec le même interpréteur Python que celui ayant compilé le module
-(l'extension porte un suffixe ABI `cpython-3XY`). En cas de Python multiples, pinner à la
-configuration : `-DPython_EXECUTABLE=$(which python3.12)`.
-
-## Le paquet `adc_cases`
-
-Ce dépôt est lui-même un paquet Python importable `adc_cases` qui centralise ce qui est
-commun aux cas (modèles nommés, conditions initiales, grilles, invariants, sorties) :
-
-| Module | Contenu |
-|---|---|
-| `adc_cases.models` | modèles d'espèce nommés = compositions de briques `adc` (electron_euler, ion_isothermal, diocotron, euler_poisson, euler, neutral_isothermal). Un modèle = une espèce (`adc.Model`). |
-| `adc_cases.recipes` | recettes système = configurations multi-espèces prêtes à l'emploi (`two_fluid`, `plasma` : blocs + Poisson + couplages). Un niveau au-dessus des modèles d'espèce. |
-| `adc_cases.common.grid` | grilles à centres de cellules (`meshgrid_xy`), convention `field[j, i]` de la façade `adc`. |
-| `adc_cases.common.initial_conditions` | CI réutilisées : bande gaussienne (`band_density`), anneau (`ring_density`), bulle de pression Euler (`euler_pressure_blob`). |
-| `adc_cases.common.checks` | invariants vérifiés par plusieurs cas (`assert_mass_conserved`, `assert_finite`, `assert_positive`, `relative_drift`). |
-| `adc_cases.common.io` | répertoire de sortie `out/` (hors source, ignoré par git). |
-| `adc_cases.common.native` | compilation à la volée + chargement `ctypes` des scénarios C++ sur mesure (cache hors source dans `out/`, contrôle d'ABI explicite). |
-
-Installer le paquet en editable une fois (les cas font alors `import adc_cases` sans toucher
-à `sys.path`) :
+To import the shared package without touching `sys.path`, install it once, editable:
 
 ```bash
 cd adc_cases
-pip install -e .                 # numpy tiré automatiquement
-pip install -e '.[figures]'      # + matplotlib (repro diocotron)
+pip install -e .               # pulls numpy
+pip install -e '.[figures]'    # plus matplotlib (the diocotron reproduction)
 ```
 
-Sans installation, chaque cas reste lançable directement : un court préambule met la racine du
-dépôt sur le chemin d'import seulement si le paquet n'est pas installé. Dépendances : `numpy` ;
-`matplotlib` pour la repro diocotron ; un compilateur C++20 pour `two_fluid_ap`.
+Without the install, each case still runs directly: a short preamble puts the repository root on
+the import path only when the package is not installed. Dependencies: `numpy`; `matplotlib` for
+the diocotron reproduction; a C++20 compiler for `two_fluid_ap` and the DSL cases.
 
-## Sorties
+## The cases
 
-Les fichiers éphémères (figures de travail, gif, `.so`) vont sous `out/<cas>/` (ignoré par git,
-surchargeable par `ADC_CASES_OUT`). Exception : `diocotron/run.py` écrit ses figures canoniques
-dans `diocotron/figures/` (tracké) avec un `provenance.json` ; le statut de chaque asset est dans
-[`ASSETS.md`](ASSETS.md). Les figures de `hoffart_euler_poisson_dsl` restent éphémères (cas
-`reproduction-candidate` non encore établi).
+One folder per case, each with its own `README.md` (objective, equations, model, method, file
+map, exact command, initial conditions, invariants, outputs, cost, limits, CI). The table below
+covers the 16 cases; the *Category* column comes from the [manifest](cases_manifest.toml). The
+descriptions are honest: a `reproduction-candidate` is not an established reproduction, and an
+`experimental` case is an unfinished prototype.
 
-## Manifeste des cas et CI
+| Folder | Category | Case | What it shows |
+|---|---|---|---|
+| [`diocotron/`](diocotron/README.md) | reproduction | Diocotron instability (ExB drift) | Reproduces [arXiv:2510.11808](https://arxiv.org/abs/2510.11808): analytic growth rate (Petri, numpy) vs measured, composed generically via `adc.System` (`ExB` + `BackgroundDensity` bricks + a conducting wall), figures + GIF; long, out of CI. The `band_instability.py` sub-script is a minimal periodic variant (instability growth, no figures), classified `validation` (in CI). |
+| [`tutorial/`](tutorial/README.md) | tutoriel | The diocotron written three ways | The same diocotron physics built via the `models.diocotron` helper, via hand-rebuilt native bricks, and via `adc.dsl.Model` formulas: the three final states are bit-identical (`np.array_equal`). The adc_cases mirror of the adc_cpp Sphinx tutorial; figures (growth + GIF + bricks vs DSL). The CI variant `tutorial/equivalence.py` (`validation`, `cxx`) locks the equivalence without figures. |
+| [`composition/`](composition/README.md) | tutoriel | Multi-block composition | Electrons (Euler, VanLeer + HLLC, IMEX, 10 substeps) + ions (isothermal, Minmod + Rusanov, explicit); per-block implicit/explicit choice, reversible; guardrails; a time integrator written in Python (`adc.integrate.ssprk2_step`). |
+| [`euler_poisson/`](euler_poisson/README.md) | validation | Euler + self-consistent field | Self-gravity (attractive) vs plasma / Langmuir (repulsive); a single coupling sign separates them; mass and momentum conserved. |
+| [`multispecies/`](multispecies/README.md) | validation | Two heterogeneous fluids | Euler electrons (4 vars) + isothermal ions (3 vars) coupled by a system Poisson `f = sum_s q_s n_s`; mass conserved per species. |
+| [`two_euler/`](two_euler/README.md) | validation | Two independent Euler | Electrons + ions, two uncoupled Euler gases, same bricks (`CompressibleFlux` + HLLC + primitive reconstruction); only the initial conditions differ (lighter electrons run faster); multirate `step_adaptive`. Shows "two Euler, one code". |
+| [`plasma/`](plasma/README.md) | validation | Coupled plasma (e + i + n) | Three species sharing one system Poisson (`f = sum_s q_s n_s`), coupled by inter-species sources: ionization (`add_ionization`, n_g -> n_i + n_e) and ion-neutral collision (`add_collision`); electrons in HLLC + primitive reconstruction. n_i + n_g conserved to machine precision. |
+| [`two_fluid_ap/`](two_fluid_ap/README.md) | validation (needs `cxx`) | Stiff AP two-fluid | A bespoke AP integrator, not block-composable (the AP stabilization couples the time step to the elliptic): an asymptotic-preserving scheme that stays stable when `dt*omega_pe >> 1` (an explicit one would blow up). A scenario, not a generic brick: its C++ physics (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) lives here, compiled on the fly against the generic adc_cpp headers and driven from Python (`ctypes`). |
+| [`diocotron_amr/`](diocotron_amr/README.md) | validation | Diocotron on AMR | Composed via `adc.AmrSystem` (the refined counterpart of `System`: `add_block` + `set_refinement`): a hierarchy of dynamically refined patches, conservative reflux. |
+| [`custom_scheme/`](custom_scheme/README.md) | tutoriel | Numerical method in Python | Diocotron transport (reconstruction, upwind flux, SSPRK2) written in numpy; `adc` serves only as a Poisson oracle (`set_density` + `solve_fields` + `potential`). Mass conserved to machine precision. |
+| [`diocotron_dsl/`](diocotron_dsl/README.md) | validation (needs `cxx`) | Diocotron as formulas (DSL) | The diocotron physics (ExB transport + neutralizing background) written entirely as `adc.dsl.Model` formulas instead of native bricks; `adc.dsl` generates the C++, compiles and installs it via `add_equation`. The crux: the produced state is bit-identical to the native composition (`np.array_equal`), on the same grid / IC / Poisson. `production` backend (native zero-copy), else `aot` (host-marshaled, numerically identical). |
+| [`two_species_dsl/`](two_species_dsl/README.md) | validation (needs `cxx`) | Electrons + ions as formulas (DSL) | Two species as formulas (`adc.dsl.Model`): Euler electrons (4 vars) + isothermal ions (3 vars), each with an electrostatic source (reads grad phi via the aux channel) and a charge density, coupled by one Poisson. Per-species equivalence to native: ions bit-identical, electrons to machine-epsilon (float reassociation in the shared Poisson RHS accumulation, tolerance 1e-24). |
+| [`magnetic_isothermal_dsl/`](magnetic_isothermal_dsl/README.md) | validation (needs `cxx`) | Magnetized isothermal fluid as formulas (DSL) | A magnetized isothermal fluid as formulas, with a Lorentz force `q rho E + v x B` driven by a constant B_z field read on the extended aux channel (index 3, filled from Python via `set_magnetic_field`). No native reference model: correctness is proven by inter-backend parity (`production` == `aot` when both link) plus a numpy Lorentz oracle and invariants (mass, positivity, momentum rotation). |
+| [`schur_magnetized_cartesian/`](schur_magnetized_cartesian/README.md) | experimental (needs `cxx`) | Schur source stage vs explicit | Measures the time-step effect of the Schur-condensed source stage (`adc.Split(Explicit, CondensedSchur)`) against explicit integration of the same stiff Lorentz source, on a cartesian magnetized isothermal fluid (same DSL as `magnetic_isothermal_dsl`). Sweeps the largest stable explicit `dt` vs Schur (theta=0.5 / theta=1.0), reports `dt*omega_c` and the gain. A measurement prototype, out of CI. |
+| [`dsl_euler/`](dsl_euler/README.md) | experimental | Euler as formulas (interpreted DSL) | 2D compressible Euler as formulas (the `adc.dsl` mini-DSL), an interpreted CPU prototype: the symbolic tree is evaluated in numpy and wired to the host backend `adc.PythonFlux` (Rusanov, periodic). A user-side declarative demonstrator, not the production path (which stays the compiled bricks). Checks mass conservation, non-trivial acoustic dynamics, a physical state. |
+| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | reproduction-candidate pending | Magnetized Euler-Poisson (Hoffart), Schur stage | Targets [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (the full magnetized Euler-Poisson system, Schur source stage) written in `adc.dsl`. The quantitative reproduction is not yet established (validation table pending): the cartesian baseline is far from the paper and the geometry is suspect (see `adc_cpp/docs/HOFFART_FIDELITY.md`). Out of CI. The `check_model.py` sub-script (`validation`, in CI) is an analytic oracle of the model: flux, Lorentz/electric source, eigenvalues and Poisson RHS checked by assert. |
 
-[`cases_manifest.toml`](cases_manifest.toml) classe chaque cas par catégorie (`validation`,
-`tutoriel`, `reproduction`, `reproduction-candidate`, `experimental`) et indique s'il tourne en
-CI (`ci = true`). La CI ne lance que les cas légers (`ci = true`) ; les cas longs
-(reproduction `diocotron/run.py` avec figures/gif), les reproductions-candidates non encore
-établies (`hoffart_euler_poisson_dsl/run.py`, table pending) et les expérimentaux (`dsl_euler`
-DSL interprété, `schur_magnetized_cartesian`) restent hors CI et se lancent à la main.
-
-## Lancer un cas
+Run any of them:
 
 ```bash
 cd ../adc_cases
-python3 diocotron/run.py          # reproduction du papier arXiv:2510.11808 (figures + gif)
-python3 composition/run.py        # composition hétérogène + intégrateur temporel Python
-python3 euler_poisson/run.py      # auto-gravité vs plasma (Langmuir)
-python3 multispecies/run.py       # électrons Euler + ions isothermes, Poisson de système
-python3 two_euler/run.py          # deux Euler indépendants, même schéma (HLLC + recon primitif)
-python3 plasma/run.py             # électrons + ions + neutres : Poisson + ionisation + collision
-python3 two_fluid_ap/run.py       # bi-fluide raide asymptotic-preserving
-python3 diocotron_amr/run.py      # diocotron sur AMR multi-patch
-python3 custom_scheme/run.py      # schéma spatial + temporel écrit en Python, Poisson par adc
-python3 dsl_euler/run.py          # Euler écrit en formules (mini-DSL adc.dsl, expérimental)
+python3 diocotron/run.py          # arXiv:2510.11808 reproduction (figures + GIF)
+python3 composition/run.py        # heterogeneous composition + a Python time integrator
+python3 euler_poisson/run.py      # self-gravity vs plasma (Langmuir)
+python3 multispecies/run.py       # Euler electrons + isothermal ions, system Poisson
+python3 two_euler/run.py          # two independent Euler, same scheme (HLLC + primitive recon)
+python3 plasma/run.py             # electrons + ions + neutrals: Poisson + ionization + collision
+python3 two_fluid_ap/run.py       # stiff asymptotic-preserving two-fluid
+python3 diocotron_amr/run.py      # diocotron on multi-patch AMR
+python3 custom_scheme/run.py      # a spatial + temporal scheme written in Python, Poisson by adc
+python3 dsl_euler/run.py          # Euler written as formulas (the adc.dsl mini-DSL, experimental)
 
-# Tutoriel : le même diocotron écrit en helper / briques / formules (équivalence prouvée) + figures
-python3 tutorial/run.py                   # tutoriel complet (3 fronts équivalents) + figures + gif
-python3 tutorial/equivalence.py           # smoke CI : helper == briques == formules, bit-identique
+# DSL cases written as formulas (codegen + C++ compile: a C++20 compiler is required)
+python3 diocotron_dsl/run.py              # diocotron as formulas, proven bit-identical to native
+python3 two_species_dsl/run.py            # electrons + ions as formulas, coupled Poisson
+python3 magnetic_isothermal_dsl/run.py    # magnetized isothermal fluid (Lorentz via B_z) as formulas
+python3 schur_magnetized_cartesian/run.py # Schur source stage vs explicit (measurement, experimental)
+python3 hoffart_euler_poisson_dsl/run.py  # magnetized Euler-Poisson (Hoffart): reproduction-candidate
 
-# Cas écrits en formules via adc.dsl (génération + compilation C++ : compilateur C++20 requis)
-python3 diocotron_dsl/run.py              # diocotron en formules, prouvé bit-identique au natif
-python3 two_species_dsl/run.py            # électrons + ions en formules, Poisson couplé
-python3 magnetic_isothermal_dsl/run.py    # fluide isotherme magnétisé (Lorentz via B_z) en formules
-python3 schur_magnetized_cartesian/run.py # étage source Schur vs explicite (mesure, expérimental)
-python3 hoffart_euler_poisson_dsl/run.py  # Euler-Poisson magnétisé (Hoffart) : reproduction-candidate pending
+# Tutorial: the same diocotron via helper / bricks / formulas (equivalence proven) + figures
+python3 tutorial/run.py                   # full tutorial (three equivalent paths) + figures + GIF
+python3 tutorial/equivalence.py           # CI smoke: helper == bricks == formulas, bit-identical
 ```
 
-## Les cas (un dossier par cas)
+## The adc_cases package
 
-Chaque dossier de cas dispose désormais d'un `README.md` rédigé selon le gabarit
-commun (objectif, équations, modèle, méthode, architecture, carte des fichiers,
-commande exacte, conditions initiales, invariants, sorties, coût, limites, CI). La table
-ci-dessous couvre les 16 cas ; la colonne *Catégorie* est celle du
-[manifeste](cases_manifest.toml) (`validation` / `tutoriel` / `reproduction` /
-`reproduction-candidate` / `experimental`). Les descriptions sont honnêtes : un cas
-`reproduction-candidate` n'est pas une reproduction établie, un cas `experimental` est
-un prototype non finalisé.
+The repository is itself an importable `adc_cases` package that centralizes what the cases share
+(named models, initial conditions, grids, invariants, outputs):
 
-| Dossier | Catégorie | Cas | Ce qu'il montre |
-|---|---|---|---|
-| [`diocotron/`](diocotron/README.md) | reproduction | Instabilité diocotron (dérive E×B) | Reproduction de [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) : taux de croissance analytique (Petri, numpy) vs mesuré, composé génériquement via `adc.System` (briques `ExB` + `BackgroundDensity` + paroi conductrice), figures + gif ; long, hors CI. Le sous-script `band_instability.py` est une variante périodique minimale (croissance de l'instabilité, sans figures) classée `validation` (en CI). |
-| [`tutorial/`](tutorial/README.md) | tutoriel | Le diocotron écrit de 3 façons | La même physique diocotron construite via le helper `models.diocotron`, via les briques natives reconstruites à la main, et via les formules `adc.dsl.Model` : les trois états finals sont bit-identiques (`np.array_equal`). Mirroir côté `adc_cases` du tutoriel Sphinx d'adc_cpp ; figures (croissance + gif + briques vs DSL). La variante CI `tutorial/equivalence.py` (`validation`, `cxx`) verrouille l'équivalence sans figures. |
-| [`composition/`](composition/README.md) | tutoriel | Composition multi-blocs | Électrons (Euler, VanLeer+HLLC, IMEX, 10 sous-pas) + ions (isotherme, Minmod+Rusanov, explicite) ; choix implicite/explicite par bloc réversible ; garde-fous ; intégrateur temporel écrit en Python (`adc.integrate.ssprk2_step`). |
-| [`euler_poisson/`](euler_poisson/README.md) | validation | Euler + champ auto-consistant | Auto-gravité (attractif) vs plasma/Langmuir (répulsif) ; un seul signe de couplage les sépare ; masse et impulsion conservées. |
-| [`multispecies/`](multispecies/README.md) | validation | Deux fluides hétérogènes | Électrons Euler (4 var) + ions isothermes (3 var) couplés par un Poisson de système `f = Σ q_s n_s` ; masse conservée par espèce. |
-| [`two_euler/`](two_euler/README.md) | validation | Deux Euler indépendants | Électrons + ions, deux gaz d'Euler non couplés, mêmes briques (`CompressibleFlux` + HLLC + reconstruction primitive) ; seules les CI diffèrent (électrons plus légers donc plus rapides) ; multirate `step_adaptive`. Illustre « deux Euler, même code ». |
-| [`plasma/`](plasma/README.md) | validation | Plasma couplé (e + i + n) | Trois espèces partageant un Poisson de système (`f = Σ q_s n_s`), couplées par sources inter-espèces : ionisation (`add_ionization`, n_g->n_i+n_e) et collision ion-neutre (`add_collision`) ; électrons en HLLC + reconstruction primitive. Conservation n_i+n_g à l'arrondi machine. |
-| [`two_fluid_ap/`](two_fluid_ap/README.md) | validation (needs `cxx`) | Bi-fluide raide AP | Intégrateur AP sur mesure, non composable bloc à bloc (stabilisation AP couplée au pas de temps dans l'elliptique) : schéma asymptotic-preserving stable quand `dt·ω_pe ≫ 1` (un explicite exploserait). Scénario, pas une brique générique : sa physique C++ (`two_fluid_ap.hpp` + `_two_fluid_ap.cpp`) vit ici, compilée à la volée contre les en-têtes génériques d'`adc_cpp` puis pilotée depuis Python (`ctypes`). |
-| [`diocotron_amr/`](diocotron_amr/README.md) | validation | Diocotron sur AMR | Composé via `adc.AmrSystem` (pendant raffiné de `System` : `add_block` + `set_refinement`) : hiérarchie de patchs raffinés dynamiquement, reflux conservatif. |
-| [`custom_scheme/`](custom_scheme/README.md) | tutoriel | Méthode numérique en Python | Transport diocotron (reconstruction, flux upwind, SSPRK2) écrit en numpy ; `adc` ne sert que d'oracle de Poisson (`set_density` + `solve_fields` + `potential`). Masse conservée à l'arrondi machine. |
-| [`diocotron_dsl/`](diocotron_dsl/README.md) | validation (needs `cxx`) | Diocotron écrit en formules (DSL) | La physique diocotron (transport E×B + fond neutralisant) écrite entièrement en formules `adc.dsl.Model` au lieu de briques natives ; `adc.dsl` génère le C++, le compile et l'installe via `add_equation`. Coeur du cas : l'état produit est bit-identique à la composition native (`np.array_equal`), sur même grille / CI / Poisson. Backend `production` (natif zéro-copie) sinon `aot` (host-marshalé, numérique identique). |
-| [`two_species_dsl/`](two_species_dsl/README.md) | validation (needs `cxx`) | Électrons + ions en formules (DSL) | Deux espèces en formules (`adc.dsl.Model`) : électrons Euler (4 var) + ions isothermes (3 var), chacune avec source électrostatique (lit grad φ via le canal aux) et densité de charge, couplées par un même Poisson. Équivalence au natif par espèce : ions bit-identiques, électrons à ε-machine (réassociation flottante dans l'accumulation du RHS de Poisson partagé, tolérance 1e-24). |
-| [`magnetic_isothermal_dsl/`](magnetic_isothermal_dsl/README.md) | validation (needs `cxx`) | Fluide isotherme magnétisé en formules (DSL) | Fluide isotherme magnétisé en formules avec force de Lorentz `q ρ E + v×B` pilotée par un champ B_z constant lu sur le canal `aux` étendu (indice 3, peuplé depuis Python via `set_magnetic_field`). Aucun modèle natif de référence : correction prouvée par parité inter-backend (production == aot quand les deux se lient) + oracle Lorentz numpy + invariants (masse, positivité, rotation de la quantité de mouvement). |
-| [`schur_magnetized_cartesian/`](schur_magnetized_cartesian/README.md) | experimental (needs `cxx`) | Étage source Schur vs explicite | Mesure de l'effet temporel de l'étage source condensé par Schur (`adc.Split(Explicit, CondensedSchur)`) face à l'intégration explicite de la même source de Lorentz raide, sur un fluide isotherme magnétisé cartésien (même DSL que `magnetic_isothermal_dsl`). Balaie le plus grand `dt` stable explicite vs Schur (θ=0.5 / θ=1.0), reporte `dt·ω_c` et le gain. Prototype de mesure, hors CI. |
-| [`dsl_euler/`](dsl_euler/README.md) | experimental | Euler en formules (DSL interprété) | Euler compressible 2D en formules (mini-DSL `adc.dsl`), version prototype interprétée CPU : l'arbre symbolique est évalué en numpy et branché sur le backend hôte `adc.PythonFlux` (Rusanov, périodique). Démonstrateur déclaratif côté utilisateur, pas le chemin de production (qui reste les briques compilées). Vérifie masse conservée, dynamique acoustique non triviale, état physique. |
-| [`hoffart_euler_poisson_dsl/`](hoffart_euler_poisson_dsl/README.md) | reproduction-candidate pending | Euler-Poisson magnétisé (Hoffart), étage Schur | Vise [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) (système Euler-Poisson magnétisé complet, étage source Schur) écrit en `adc.dsl`. La reproduction quantitative n'est pas encore établie (table de validation pending) : baseline cartésienne loin du papier, géométrie suspecte (cf. `adc_cpp/docs/HOFFART_FIDELITY.md`). Hors CI. Le sous-script `check_model.py` (`validation`, en CI) est un oracle analytique du modèle : flux, source Lorentz/électrique, valeurs propres et RHS de Poisson vérifiés par assert. |
+| Module | Contents |
+|---|---|
+| `adc_cases.models` | named species models = compositions of `adc` bricks (electron_euler, ion_isothermal, diocotron, euler_poisson, euler, neutral_isothermal). One model = one species (`adc.Model`). |
+| `adc_cases.recipes` | system recipes = ready-made multi-species configurations (`two_fluid`, `plasma`: blocks + Poisson + couplings). One level above the species models. |
+| `adc_cases.common.grid` | cell-centered grids (`meshgrid_xy`), the `field[j, i]` convention of the `adc` facade. |
+| `adc_cases.common.initial_conditions` | reused initial conditions: gaussian band (`band_density`), ring (`ring_density`), Euler pressure blob (`euler_pressure_blob`). |
+| `adc_cases.common.checks` | invariants used by several cases (`assert_mass_conserved`, `assert_finite`, `assert_positive`, `relative_drift`). |
+| `adc_cases.common.io` | the `out/` output directory (out of source, git-ignored). |
+| `adc_cases.common.native` | on-the-fly compilation + `ctypes` loading of bespoke C++ scenarios (out-of-source cache under `out/`, explicit ABI check). |
 
-## API
+## Outputs
 
-Deux niveaux de composition : générique (`adc.System` : des blocs partageant un Poisson de
-système, idéal pour coupler ions/électrons/neutres) et sur AMR (`adc.AmrSystem`, même API plus
-`set_refinement`). Un modèle est une composition `adc.Model(state, transport, source, elliptic)` ;
-les compositions nommées (`diocotron`, `electron_euler`, ...) sont dans [`models.py`](models.py).
-Un scénario sur mesure (AP deux-fluides) porte son C++ à part. Détails :
-[adc_cpp/README.md](../adc_cpp/README.md), [ARCHITECTURE.md](../adc_cpp/docs/ARCHITECTURE.md).
+Ephemeral files (working figures, GIFs, `.so`) go under `out/<case>/` (git-ignored, overridable
+with `ADC_CASES_OUT`). One exception: `diocotron/run.py` writes its canonical figures to
+`diocotron/figures/` (tracked) with a `provenance.json`; each asset's status is in
+[`ASSETS.md`](ASSETS.md). The `hoffart_euler_poisson_dsl` figures stay ephemeral (the
+`reproduction-candidate` is not yet established).
+
+## Manifest and CI
+
+[`cases_manifest.toml`](cases_manifest.toml) classifies each case by category (`validation`,
+`tutoriel`, `reproduction`, `reproduction-candidate`, `experimental`) and records whether it runs
+in CI (`ci = true`). CI runs only the light cases (`ci = true`); the long ones (the figure/GIF
+diocotron reproduction), the not-yet-established candidates (`hoffart_euler_poisson_dsl/run.py`)
+and the experimental ones (`dsl_euler` interpreted DSL, `schur_magnetized_cartesian`) stay out of
+CI and run by hand.
+
+## Composition API
+
+Two levels of composition: generic (`adc.System`: blocks sharing one system Poisson, ideal for
+coupling ions / electrons / neutrals) and on AMR (`adc.AmrSystem`, the same API plus
+`set_refinement`). A model is a composition `adc.Model(state, transport, source, elliptic)`; the
+named compositions (`diocotron`, `electron_euler`, ...) are in [`models.py`](adc_cases/models.py). A bespoke
+scenario (the two-fluid AP) carries its own C++. For the engine, see
+[adc_cpp](https://github.com/wolf75222/adc_cpp) and its
+[ARCHITECTURE.md](https://github.com/wolf75222/adc_cpp/blob/master/docs/ARCHITECTURE.md).
+
+See also [CONTRIBUTING.md](CONTRIBUTING.md).
