@@ -1,85 +1,85 @@
-# diocotron_dsl : le diocotron ecrit en formules, prouve bit-identique au natif
+# diocotron_dsl: the diocotron written in formulas, proven bit-identical to the native build
 
-Le modele diocotron (derive E x B d'une densite scalaire, fond neutralisant) ecrit
-entierement en formules symboliques (`adc.dsl.Model`) au lieu de briques C++ nommees, puis
-prouve bit-identique a la composition native `adc_cases.models.diocotron` sur la meme grille,
-la meme condition initiale et le meme nombre de pas. La physique n'est pas re-derivee ici :
-elle l'est dans [`../diocotron/`](../diocotron/) (mecanisme de l'instabilite, taux de croissance,
-relation de dispersion). Ce cas verifie une seule chose : que les formules DSL reproduisent
-exactement les conventions des briques du coeur, au point que les deux chemins produisent le meme
-etat au bit pres (`np.array_equal`, aucune tolerance).
+The diocotron model (E x B drift of a scalar density, neutralizing background) written
+entirely in symbolic formulas (`adc.dsl.Model`) instead of named C++ bricks, then
+proven bit-identical to the native composition `adc_cases.models.diocotron` on the same grid,
+the same initial condition, and the same step count. The physics is not re-derived here:
+it is derived in [`../diocotron/`](../diocotron/) (instability mechanism, growth rate,
+dispersion relation). This case verifies one thing only: that the DSL formulas reproduce
+the conventions of the core bricks exactly, to the point where both paths produce the same
+state to the bit (`np.array_equal`, no tolerance).
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `diocotron_dsl/run.py`, `ci = true`, `needs = ["cxx"]`) |
-| Entrees | grille $96^2$, $L=1$, periodique ; CI bande mode 2 `band_density(amp=1, width=0.05, mode=2, disp=0.02)` ; $B_0=1$, $\alpha=1$ ; fond ionique $n_{i0}=\overline{n_e}=1.088623$ (moyenne de la CI, solubilite du Poisson periodique) ; 60 pas, CFL 0.4 ; minmod + Rusanov, SSPRK2, Poisson `geometric_mg` |
-| Sorties | densite finale $n$ des deux chemins (natif, DSL) ; backend retenu ; 1 figure (3 panneaux) dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | les `assert` de `run.py:194-209` : `np.array_equal(d_dsl, d_natif)` (bit) ; `t_dsl == t_natif` (bit) ; `m_dsl == m_natif` (bit) ; `mass_drift < 1e-6` ; `amp_final > amp_initial` |
-| Prouve | egalite bit du chemin complet : $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ apres 60 pas, `np.array_equal` True ; temps et masse identiques au bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, les deux). L'identite tient parce que les formules DSL emettent les memes expressions ponctuelles que `ExBVelocity` et `BackgroundDensity` (table section 3), compilees dans le meme assembleur par cellule |
-| Ne prouve pas | ce n'est pas une reproduction publiee, ni une validation du taux de croissance (cela vit dans [`../diocotron/`](../diocotron/), categorie `reproduction`). Aucun nombre n'est confronte a un article. L'egalite bit prouve que le chemin DSL ne devie pas du chemin natif ; elle ne dit rien de la justesse physique des deux (un bug commun aux deux briques resterait invisible). Le backend natif `production` (`add_native_block`) echoue sur cette plateforme (ABI : `_adc` bati contre des en-tetes != `include/`) : le run nominal passe par `aot` (host-marshale, numerique identique au natif, verifie). L'egalite bit du chemin `production` n'est donc pas exercee ici |
-| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend `aot` (apres echec `production`), $96^2$, ~6 s 1 coeur CPU ; `figures/provenance.json` |
+| Category (manifest) | `validation` (`cases_manifest.toml`, `diocotron_dsl/run.py`, `ci = true`, `needs = ["cxx"]`) |
+| Inputs | grid $96^2$, $L=1$, periodic; IC band mode 2 `band_density(amp=1, width=0.05, mode=2, disp=0.02)`; $B_0=1$, $\alpha=1$; ionic background $n_{i0}=\overline{n_e}=1.088623$ (mean of the IC, solvability of the periodic Poisson); 60 steps, CFL 0.4; minmod + Rusanov, SSPRK2, Poisson `geometric_mg` |
+| Outputs | final density $n$ of both paths (native, DSL); selected backend; 1 figure (3 panels) in `figures/` + `figures/provenance.json` |
+| Guaranteed invariants | the `assert` of `run.py:194-209`: `np.array_equal(d_dsl, d_natif)` (bit); `t_dsl == t_natif` (bit); `m_dsl == m_natif` (bit); `mass_drift < 1e-6`; `amp_final > amp_initial` |
+| Proves | bit equality of the full path: $\max\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert=0.000\times10^{0}$ after 60 steps, `np.array_equal` True; time and mass identical to the bit ($t=6.213869$, $m=1.0032746734\times10^{4}$, both). The identity holds because the DSL formulas emit the same pointwise expressions as `ExBVelocity` and `BackgroundDensity` (table in section 3), compiled into the same per-cell assembler |
+| Does not prove | this is not a published reproduction, nor a validation of the growth rate (that lives in [`../diocotron/`](../diocotron/), category `reproduction`). No number is checked against a paper. The bit equality proves that the DSL path does not deviate from the native path; it says nothing about the physical correctness of either (a bug common to both bricks would stay invisible). The native `production` backend (`add_native_block`) fails on this platform (ABI: `_adc` built against headers != `include/`): the nominal run goes through `aot` (host-marshaled, numerically identical to native, verified). The bit equality of the `production` path is therefore not exercised here |
+| Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, backend `aot` (after `production` failure), $96^2$, ~6 s on 1 CPU core; `figures/provenance.json` |
 
-A la fin tu sauras : quelles conventions du coeur le DSL doit reproduire pour que l'egalite bit
-tienne, comment cette egalite est verifiee (`np.array_equal`, pas de tolerance) et ce qu'une carte
-d'ecart non noire trahirait.
-
----
-
-## 1. Physique : liee, pas recopiee
-
-Le mecanisme (anneau/bande de charge, rotation differentielle, instabilite de Kelvin-Helmholtz
-d'un anneau de vorticite, taux $\gamma_l$, relation de dispersion) est derive dans
-[`../diocotron/`](../diocotron/README.md), sections 1, 4 et 5. Ici la CI est une bande
-horizontale (`band_density`, mode azimutal 2), la variante periodique minimale du meme cas (cf.
-[`../diocotron/band_instability.py`](../diocotron/band_instability.py)) : pas de paroi conductrice,
-domaine periodique, ce qui rend le Poisson de systeme soluble sans geometrie cartesienne en marches
-d'escalier. Le seul role de la physique ici est de fournir une dynamique non triviale (l'amplitude
-croit, `run.py:209`) sur laquelle l'egalite bit a un sens : deux chemins qui resteraient identiquement
-nuls seraient une egalite vide.
+By the end you will know: which core conventions the DSL must reproduce for the bit equality
+to hold, how this equality is verified (`np.array_equal`, no tolerance), and what a non-black
+difference map would reveal.
 
 ---
 
-## 2. Les deux chemins, et qui compile quoi
+## 1. Physics: linked, not copied
 
-Le cas construit le meme `adc.System(n=96, L=1, periodic=True)` (`run.py:115`, `make_system`)
-deux fois, avec le meme Poisson (`set_poisson(rhs="charge_density", solver="geometric_mg")`),
-la meme densite initiale et 60 pas `step_cfl(0.4)`. Seul le bloc differe :
+The mechanism (charge ring/band, differential rotation, Kelvin-Helmholtz instability
+of a vorticity ring, rate $\gamma_l$, dispersion relation) is derived in
+[`../diocotron/`](../diocotron/README.md), sections 1, 4, and 5. Here the IC is a horizontal
+band (`band_density`, azimuthal mode 2), the minimal periodic variant of the same case (see
+[`../diocotron/band_instability.py`](../diocotron/band_instability.py)): no conducting wall,
+periodic domain, which makes the system Poisson solvable without staircase Cartesian
+geometry. The only role of the physics here is to provide a nontrivial dynamics (the amplitude
+grows, `run.py:209`) on which the bit equality is meaningful: two paths that stayed identically
+zero would be an empty equality.
 
-| Chemin | Construction du bloc | Ligne `run.py` |
+---
+
+## 2. The two paths, and who compiles what
+
+The case builds the same `adc.System(n=96, L=1, periodic=True)` (`run.py:115`, `make_system`)
+twice, with the same Poisson (`set_poisson(rhs="charge_density", solver="geometric_mg")`),
+the same initial density, and 60 `step_cfl(0.4)` steps. Only the block differs:
+
+| Path | Block construction | `run.py` line |
 |---|---|---|
-| natif (oracle) | `add_block("ne", model=models.diocotron(B0, alpha, n_i0), spatial=Spatial(minmod=True), time=Explicit())` | `run.py:122-123` (`run_native`) |
+| native (oracle) | `add_block("ne", model=models.diocotron(B0, alpha, n_i0), spatial=Spatial(minmod=True), time=Explicit())` | `run.py:122-123` (`run_native`) |
 | DSL | `add_equation("ne", model=compiled, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` | `run.py:155-157` (`run_dsl`) |
 
-`models.diocotron` (`adc_cases/models.py:18-25`) est `adc.Model(state=Scalar, transport=ExB(B0),
-source=NoSource, elliptic=BackgroundDensity(alpha, n0=n_i0))` : quatre briques C++ nommees.
-`compiled` est le meme modele ecrit en expressions (`diocotron_dsl_model`, `run.py:68-101`),
-emis en C++ par `adc.dsl`, compile en `.so` et charge comme bloc. Pour que `add_equation` et
-`add_block` empruntent le meme assembleur par cellule, il suffit que les expressions DSL emettent
-les memes fonctions ponctuelles que les briques (`flux`, `eigenvalues`, `rhs` elliptique).
+`models.diocotron` (`adc_cases/models.py:18-25`) is `adc.Model(state=Scalar, transport=ExB(B0),
+source=NoSource, elliptic=BackgroundDensity(alpha, n0=n_i0))`: four named C++ bricks.
+`compiled` is the same model written in expressions (`diocotron_dsl_model`, `run.py:68-101`),
+emitted as C++ by `adc.dsl`, compiled into a `.so`, and loaded as a block. For `add_equation` and
+`add_block` to take the same per-cell assembler, it is enough that the DSL expressions emit
+the same pointwise functions as the bricks (`flux`, `eigenvalues`, elliptic `rhs`).
 
-### Table 3 couches (qui calcule quoi, chemin DSL)
+### 3-layer table (who computes what, DSL path)
 
-| Ligne `run.py` | Couche | Ce qui se passe |
+| `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_equation("ne", model=compiled, spatial=FiniteVolume(...), time=Explicit())` (`run.py:155-157`) | Python compose | choix du schema (MUSCL minmod + Rusanov) et de l'integrateur (SSPRK2), strictement les memes que le natif (`Spatial(minmod=True)`, `run.py:123`) |
-| `m.flux(...)` / `m.eigenvalues(...)` / `m.elliptic_rhs(...)` (`run.py:88,90,98`) compiles par `model.compile(..., backend=cand)` (`run.py:151`) | les expressions DSL figent la physique | le DSL emet en C++ les memes expressions ponctuelles que `ExBVelocity` / `BackgroundDensity` (table section 3) ; ces expressions remplacent la brique nommee |
-| `assemble_rhs<minmod, Rusanov>` + Poisson de systeme (`GeometricMG`) | noyau par cellule (device) | le meme assembleur que `add_block` : `add_equation` aiguille sur `add_native_block` (production) ou `add_compiled_block` (aot), sans callback Python dans le hot path |
+| `sim.add_equation("ne", model=compiled, spatial=FiniteVolume(...), time=Explicit())` (`run.py:155-157`) | Python composes | choice of scheme (MUSCL minmod + Rusanov) and integrator (SSPRK2), strictly the same as native (`Spatial(minmod=True)`, `run.py:123`) |
+| `m.flux(...)` / `m.eigenvalues(...)` / `m.elliptic_rhs(...)` (`run.py:88,90,98`) compiled by `model.compile(..., backend=cand)` (`run.py:151`) | the DSL expressions freeze the physics | the DSL emits in C++ the same pointwise expressions as `ExBVelocity` / `BackgroundDensity` (table in section 3); these expressions replace the named brick |
+| `assemble_rhs<minmod, Rusanov>` + system Poisson (`GeometricMG`) | per-cell kernel (device) | the same assembler as `add_block`: `add_equation` routes to `add_native_block` (production) or `add_compiled_block` (aot), with no Python callback in the hot path |
 
-C'est le point de tout le cas : la couche du milieu change de forme (expressions vs brique nommee)
-sans changer le resultat, parce que la couche du bas est identique.
+This is the whole point of the case: the middle layer changes shape (expressions vs named brick)
+without changing the result, because the bottom layer is identical.
 
 ---
 
-## 3. Les conventions du coeur, reproduites en formules (justifie Prouve)
+## 3. The core conventions, reproduced in formulas (justifies Proves)
 
-L'egalite bit ne tient que si chaque expression DSL est le sosie exact de la fonction ponctuelle de
-la brique. Voici la correspondance, ancree dans les en-tetes du coeur et dans `run.py`.
+The bit equality holds only if each DSL expression is the exact twin of the brick's pointwise
+function. Here is the correspondence, anchored in the core headers and in `run.py`.
 
-### Transport E x B (`include/adc/physics/hyperbolic.hpp`, struct `ExBVelocity`)
+### E x B transport (`include/adc/physics/hyperbolic.hpp`, struct `ExBVelocity`)
 
-La brique native (`hyperbolic.hpp:27-59`) definit la vitesse de derive, le flux et le spectre :
+The native brick (`hyperbolic.hpp:27-59`) defines the drift velocity, the flux, and the spectrum:
 
 ```cpp
 ADC_HD Real velocity(const Aux& a, int dir) const {            // hyperbolic.hpp:31-33
@@ -89,123 +89,123 @@ f[0] = u[0] * velocity(a, dir);                                // flux : hyperbo
 e[0] = velocity(a, dir);                                       // eigenvalue : hyperbolic.hpp:46
 ```
 
-Les formules DSL (`diocotron_dsl_model`, `run.py:83-94`) reproduisent chaque ligne :
+The DSL formulas (`diocotron_dsl_model`, `run.py:83-94`) reproduce each line:
 
-| Convention du coeur | Brique (`hyperbolic.hpp`) | Formule DSL (`run.py`) |
+| Core convention | Brick (`hyperbolic.hpp`) | DSL formula (`run.py`) |
 |---|---|---|
-| vitesse $v=(-\partial_y\phi/B_0,\ \partial_x\phi/B_0)$ | `velocity` l.31-33 : `(-grad_y/B0, grad_x/B0)` | `vx = (-grad_y)/B0`, `vy = grad_x/B0` (`run.py:84-85`) |
-| flux $f = n\,v(\mathrm{dir})$ | `flux` l.34-38 : `u[0]*velocity` | `m.flux(x=[n*vx], y=[n*vy])` (`run.py:88`) |
-| valeur propre (1 onde) $= v(\mathrm{dir})$ | `eigenvalues` l.44-48 : `velocity` | `m.eigenvalues(x=[vx], y=[vy])` (`run.py:90`) |
-| variable conservative unique $n$ (role Density), prim = cons | `conservative_vars`/`to_primitive` l.49-58 : identite | `m.conservative_vars("n")`, `m.primitive_vars(n=n)`, `m.conservative_from([n])` (`run.py:75,93-94`) |
+| velocity $v=(-\partial_y\phi/B_0,\ \partial_x\phi/B_0)$ | `velocity` l.31-33: `(-grad_y/B0, grad_x/B0)` | `vx = (-grad_y)/B0`, `vy = grad_x/B0` (`run.py:84-85`) |
+| flux $f = n\,v(\mathrm{dir})$ | `flux` l.34-38: `u[0]*velocity` | `m.flux(x=[n*vx], y=[n*vy])` (`run.py:88`) |
+| eigenvalue (1 wave) $= v(\mathrm{dir})$ | `eigenvalues` l.44-48: `velocity` | `m.eigenvalues(x=[vx], y=[vy])` (`run.py:90`) |
+| single conservative variable $n$ (Density role), prim = cons | `conservative_vars`/`to_primitive` l.49-58: identity | `m.conservative_vars("n")`, `m.primitive_vars(n=n)`, `m.conservative_from([n])` (`run.py:75,93-94`) |
 
-Les champs auxiliaires `phi`/`grad_x`/`grad_y` lus par le flux sont declares cote DSL par
-`m.aux("phi")`, `m.aux("grad_x")`, `m.aux("grad_y")` (`run.py:79-81`) : ils nomment les emplacements
-du canal `adc::Aux` que le coeur remplit avec le potentiel et son gradient, les memes membres
-`a.grad_x`/`a.grad_y` que lit `velocity` (`hyperbolic.hpp:32`). `phi` est declare pour completer le
-contrat mais le flux ne lit que le gradient (`velocity` n'utilise que `grad_x`/`grad_y`), exactement
-comme la brique.
+The auxiliary fields `phi`/`grad_x`/`grad_y` read by the flux are declared on the DSL side by
+`m.aux("phi")`, `m.aux("grad_x")`, `m.aux("grad_y")` (`run.py:79-81`): they name the slots
+of the `adc::Aux` channel that the core fills with the potential and its gradient, the same members
+`a.grad_x`/`a.grad_y` that `velocity` reads (`hyperbolic.hpp:32`). `phi` is declared to complete the
+contract, but the flux reads only the gradient (`velocity` uses only `grad_x`/`grad_y`), exactly
+like the brick.
 
-### Second membre elliptique (`include/adc/physics/elliptic.hpp`, struct `BackgroundDensity`)
+### Elliptic right-hand side (`include/adc/physics/elliptic.hpp`, struct `BackgroundDensity`)
 
 ```cpp
 ADC_HD Real rhs(const State& u) const { return alpha * (u[0] - n0); }   // elliptic.hpp:34-36
 ```
 
-Formule DSL (`run.py:98`) : `m.elliptic_rhs(ALPHA * (n - n_i0))`. Meme expression
-$\alpha\,(n - n_{i0})$, meme role (fond neutralisant, RHS a moyenne nulle sur domaine periodique
-grace au choix $n_{i0}=\overline{n_e}$, `run.py:173`). Le bloc se couple au Poisson de systeme via
-`set_poisson(rhs="charge_density")` (`run.py:158`), l'alias generique de la somme des seconds
-membres elliptiques de chaque bloc (ici l'unique `elliptic_rhs`).
+DSL formula (`run.py:98`): `m.elliptic_rhs(ALPHA * (n - n_i0))`. Same expression
+$\alpha\,(n - n_{i0})$, same role (neutralizing background, RHS with zero mean over a periodic
+domain thanks to the choice $n_{i0}=\overline{n_e}$, `run.py:173`). The block couples to the system
+Poisson via `set_poisson(rhs="charge_density")` (`run.py:158`), the generic alias for the sum of the
+elliptic right-hand sides of each block (here the single `elliptic_rhs`).
 
 ### Source
 
-`models.diocotron` utilise `adc.NoSource` ; cote DSL, `diocotron_dsl_model` n'appelle aucun
-`m.source(...)`, ce que `m.check()` (`run.py:100`) accepte (source optionnelle). Pas de terme
-source des deux cotes. `m.check()` verifie que toute variable referencee par
-`flux`/`eigenvalues`/`elliptic_rhs` est declaree (conservative ou aux) : c'est le garde-fou qui
-empeche d'emettre un C++ referencant un symbole fantome.
+`models.diocotron` uses `adc.NoSource`; on the DSL side, `diocotron_dsl_model` calls no
+`m.source(...)`, which `m.check()` (`run.py:100`) accepts (source optional). No source
+term on either side. `m.check()` verifies that every variable referenced by
+`flux`/`eigenvalues`/`elliptic_rhs` is declared (conservative or aux): this is the safeguard that
+prevents emitting C++ referencing a phantom symbol.
 
 ---
 
-## 4. Comment l'egalite bit est verifiee, et ce qu'une divergence trahirait
+## 4. How the bit equality is verified, and what a divergence would reveal
 
-`run.py:183-196` lance les deux chemins sur la meme configuration et compare l'etat final :
+`run.py:183-196` runs both paths on the same configuration and compares the final state:
 
 ```python
-dn, tn, mn = run_native(ne0, n_i0, n_steps)                    # oracle natif (run.py:183)
-dd, td, md, backend = run_dsl(ne0, n_i0, n_steps)              # chemin DSL (run.py:184)
+dn, tn, mn = run_native(ne0, n_i0, n_steps)                    # native oracle (run.py:183)
+dd, td, md, backend = run_dsl(ne0, n_i0, n_steps)              # DSL path (run.py:184)
 max_abs = float(np.max(np.abs(dd - dn)))                       # run.py:191
 identical = bool(np.array_equal(dd, dn))                       # run.py:192
 assert identical, "...une formule DSL diverge d'une brique du coeur..."   # run.py:194-196
 ```
 
-- `np.array_equal(dd, dn)` exige l'egalite element par element au bit : aucune tolerance, aucun
-  `isclose`. C'est l'observable juste pour ce cas : les deux chemins executent le meme assembleur
-  flottant dans le meme ordre d'operations, donc tout ecart non nul signalerait que les expressions
-  emises different (une convention de signe, un facteur $1/B_0$ manquant, un $n_{i0}$ oublie), pas
-  un simple bruit d'arrondi.
-- `assert td == tn` (`run.py:206`) et `assert md == mn` (`run.py:207`) verrouillent aussi le temps
-  et la masse au bit : le DSL ne doit pas seulement finir au meme etat, mais y arriver par la meme
-  sequence de pas (meme `step_cfl`, meme `dt` a chaque pas).
-- Ce qu'une divergence trahirait : si un seul element de `dd - dn` etait non nul, la cause
-  serait une formule DSL deviant d'une brique du coeur. Exemples cibles : `vx = grad_y/B0` (signe
-  inverse de `velocity`), `vy = grad_x` (facteur $1/B_0$ omis), ou `elliptic_rhs(ALPHA*n)` (fond
-  $n_{i0}$ oublie, qui casserait la moyenne nulle du RHS periodique). Chacune deplacerait l'etat et
-  ferait apparaitre une tache sur la carte de la section 5.
+- `np.array_equal(dd, dn)` requires element-by-element equality to the bit: no tolerance, no
+  `isclose`. This is the right observable for this case: both paths execute the same floating-point
+  assembler in the same order of operations, so any nonzero difference would signal that the emitted
+  expressions differ (a sign convention, a missing $1/B_0$ factor, a forgotten $n_{i0}$), not
+  mere rounding noise.
+- `assert td == tn` (`run.py:206`) and `assert md == mn` (`run.py:207`) also lock time
+  and mass to the bit: the DSL must not only finish in the same state, but reach it by the same
+  sequence of steps (same `step_cfl`, same `dt` at each step).
+- What a divergence would reveal: if a single element of `dd - dn` were nonzero, the cause
+  would be a DSL formula deviating from a core brick. Target examples: `vx = grad_y/B0` (sign
+  inverted from `velocity`), `vy = grad_x` (omitted $1/B_0$ factor), or `elliptic_rhs(ALPHA*n)`
+  (forgotten background $n_{i0}$, which would break the zero mean of the periodic RHS). Each would
+  shift the state and make a spot appear on the map in section 5.
 
-La masse est ensuite controlee dans l'absolu pour le seul chemin DSL : `mass_drift = relative_drift(
-md, mass0)` puis `assert mass_drift < 1e-6` (`run.py:208`). La tolerance $10^{-6}$ est lache : la
-derive mesuree vaut $1.813\times10^{-16}$ (provenance), au niveau machine, car le flux E x B est a
-divergence nulle (conservation exacte au flottant pres). Elle borne la masse loin du signal sans
-exiger l'egalite bit (deja couverte par `md == mn`).
+The mass is then checked in the absolute for the DSL path only: `mass_drift = relative_drift(
+md, mass0)` then `assert mass_drift < 1e-6` (`run.py:208`). The tolerance $10^{-6}$ is loose: the
+measured drift is $1.813\times10^{-16}$ (provenance), at machine level, because the E x B flux is
+divergence-free (exact conservation up to floating point). It bounds the mass far from the signal
+without requiring bit equality (already covered by `md == mn`).
 
 ---
 
-## 5. Figures (generees par `make_figures.py`, dans `figures/`)
+## 5. Figures (generated by `make_figures.py`, in `figures/`)
 
-Generees par `python make_figures.py` (meme configuration que `run.py`), versionnees avec
-`figures/provenance.json`. Commande exacte en section 6.
+Generated by `python make_figures.py` (same configuration as `run.py`), versioned with
+`figures/provenance.json`. Exact command in section 6.
 
-### `equivalence_heatmap.png` : trois panneaux (natif, DSL, ecart)
+### `equivalence_heatmap.png`: three panels (native, DSL, difference)
 
-![Trois panneaux cote a cote : densite finale natif, densite finale DSL (memes bandes ondulees), et la carte d'ecart entierement noire (max 0)](figures/equivalence_heatmap.png)
+![Three panels side by side: native final density, DSL final density (same wavy bands), and the fully black difference map (max 0)](figures/equivalence_heatmap.png)
 
-On montre les deux champs (panneaux 1 et 2) puis leur ecart (panneau 3), plutot qu'un
-carre noir seul qui aurait l'air vide ou casse.
+We show both fields (panels 1 and 2) then their difference (panel 3), rather than a
+lone black square that would look empty or broken.
 
-- Prouve / visible : les panneaux natif et DSL sont la meme bande ondulee (mode azimutal 2,
-  deux creux), densite de $1.0$ a $\approx 1.98$ ($\sigma\approx 0.23$, donc un champ structure,
-  pas uniforme). Le troisieme panneau ($\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, echelle
-  fixee $[0,\,10^{-15}]$) est identiquement noir : $\max=0.0\times10^{0}$, `np.array_equal` True
-  (asserte `run.py:194`). L'echelle au niveau machine garantit qu'un seul pixel different
-  ressortirait ; il n'y en a aucun. Le residu n'est pas "petit", il est exactement nul : meme
-  tableau bit pour bit.
-- Suggéré (non assere) : l'amplitude du mode a cru d'un facteur $1.5212$ ($amp_{0}=6.778\times
-  10^{-2}\to amp_{final}=1.031\times10^{-1}$, `run.py:202-203`) ; seul $amp_{final}>amp_{0}$ est
-  asserte (`run.py:209`). La phase non lineaire d'enroulement n'est pas atteinte sur 60 pas.
-- Non montré : l'egalite bit ne dit rien de la justesse physique. Un bug present dans
-  `ExBVelocity` et reproduit fidelement par la formule DSL donnerait aussi une carte noire. Elle
-  prouve la non-deviation DSL/natif, pas la correction du modele (validee ailleurs,
+- Proven / visible: the native and DSL panels are the same wavy band (azimuthal mode 2,
+  two troughs), density from $1.0$ to $\approx 1.98$ ($\sigma\approx 0.23$, so a structured field,
+  not uniform). The third panel ($\lvert n_{\mathrm{DSL}}-n_{\mathrm{natif}}\rvert$, fixed scale
+  $[0,\,10^{-15}]$) is identically black: $\max=0.0\times10^{0}$, `np.array_equal` True
+  (asserted `run.py:194`). The machine-level scale guarantees that a single different pixel
+  would stand out; there is none. The residual is not "small", it is exactly zero: the same
+  array bit for bit.
+- Suggested (not asserted): the mode amplitude grew by a factor $1.5212$ ($amp_{0}=6.778\times
+  10^{-2}\to amp_{final}=1.031\times10^{-1}$, `run.py:202-203`); only $amp_{final}>amp_{0}$ is
+  asserted (`run.py:209`). The nonlinear rollup phase is not reached in 60 steps.
+- Not shown: the bit equality says nothing about physical correctness. A bug present in
+  `ExBVelocity` and faithfully reproduced by the DSL formula would also give a black map. It
+  proves the DSL/native non-deviation, not the correctness of the model (validated elsewhere,
   [`../diocotron/`](../diocotron/)).
 
 ---
 
-## 6. Reproduire (justifie 14 de la checklist : commande + cout mesure)
+## 6. Reproduce (justifies item 14 of the checklist: command + measured cost)
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/diocotron_dsl
 PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
-  /opt/homebrew/anaconda3/bin/python3.12 run.py            # le cas : asserts, ~6 s (compile la .so au 1er run)
+  /opt/homebrew/anaconda3/bin/python3.12 run.py            # the case: asserts, ~6 s (compiles the .so on the 1st run)
 PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 2 figures + provenance.json
 ```
 
-Prerequis : `numpy`, un compilateur C++20 (`needs = ["cxx"]` : le DSL emet et compile une `.so`),
-et le module `adc` importe avec le meme interpreteur que celui qui l'a compile (suffixe ABI
-`cpython-312`). Le `.so` DSL est ecrit sous `out/diocotron_dsl/` via `case_output_dir`
-(`run.py:136`), repertoire git-ignore : aucun artefact jetable dans l'arbre source.
+Prerequisites: `numpy`, a C++20 compiler (`needs = ["cxx"]`: the DSL emits and compiles a `.so`),
+and the `adc` module imported with the same interpreter that compiled it (ABI suffix
+`cpython-312`). The DSL `.so` is written under `out/diocotron_dsl/` via `case_output_dir`
+(`run.py:136`), a git-ignored directory: no throwaway artifact in the source tree.
 
-Sortie attendue de `run.py` (capturee, machine de dev macOS arm64) :
+Expected output of `run.py` (captured, macOS arm64 dev machine):
 
 ```
 backend 'production' indisponible (RuntimeError), essai suivant
@@ -218,26 +218,26 @@ derive de masse relative (DSL) = 1.813e-16
 OK diocotron_dsl (equivalence DSL <-> natif bit-identique, backend 'aot')
 ```
 
-Le backend natif `production` echoue ici par une cle d'ABI : `_adc` a ete bati contre des en-tetes
-differents de `include/` (`run.py:140-147`), donc `model.compile(backend="production")` puis
-`add_native_block` levent un `RuntimeError` explicite (jamais d'UB silencieux). Le `try`/`except` du
-`for cand in ("production", "aot")` (`run.py:149-164`) rejoue alors tout en `aot`
-(`add_compiled_block`, host-marshale, numerique identique au natif) : c'est ce chemin que le run
-nominal exerce. Caveat plateforme : le verdict `OK`, l'egalite bit ($\max=0$) et l'ordre de
-grandeur (temps $\approx 6.2$, masse $\approx 10^{4}$) sont stables ; le backend retenu depend de la
-compatibilite ABI du module `_adc` charge (`production` quand `_adc` est bati contre `include/`,
-`aot` sinon), et les derniers chiffres de $t$/masse varient avec la BLAS et l'ordre de sommation
-(cf. `figures/provenance.json`). Sur un module `production`-compatible, le run prendrait le chemin
-natif et l'egalite bit `add_native_block` serait alors exercee.
+The native `production` backend fails here on an ABI key: `_adc` was built against headers
+different from `include/` (`run.py:140-147`), so `model.compile(backend="production")` then
+`add_native_block` raise an explicit `RuntimeError` (never silent UB). The `try`/`except` of the
+`for cand in ("production", "aot")` loop (`run.py:149-164`) then replays everything in `aot`
+(`add_compiled_block`, host-marshaled, numerically identical to native): this is the path the
+nominal run exercises. Platform caveat: the `OK` verdict, the bit equality ($\max=0$), and the order
+of magnitude (time $\approx 6.2$, mass $\approx 10^{4}$) are stable; the selected backend depends on
+the ABI compatibility of the loaded `_adc` module (`production` when `_adc` is built against
+`include/`, `aot` otherwise), and the last digits of $t$/mass vary with the BLAS and the summation
+order (see `figures/provenance.json`). On a `production`-compatible module, the run would take the
+native path and the `add_native_block` bit equality would then be exercised.
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | les deux chemins (natif vs DSL), egalite bit par `assert` (`np.array_equal`, temps, masse) |
-| `make_figures.py` | rejoue la config, ecrit `equivalence_heatmap.png` (3 panneaux) + `provenance.json` |
-| `figures/equivalence_heatmap.png` | 3 panneaux : densite natif, densite DSL, ecart (noir, max 0) |
-| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, $\max\lvert d\rvert$, temps, masses, amplitude |
-| [`../diocotron/`](../diocotron/) | physique du parent : mecanisme, taux $\gamma_l$, relation de dispersion (non recopiee ici) |
-| `adc_cpp/include/adc/physics/hyperbolic.hpp` | brique `ExBVelocity` reproduite par les formules DSL |
-| `adc_cpp/include/adc/physics/elliptic.hpp` | brique `BackgroundDensity` reproduite par `elliptic_rhs` |
+| `run.py` | both paths (native vs DSL), bit equality by `assert` (`np.array_equal`, time, mass) |
+| `make_figures.py` | replays the config, writes `equivalence_heatmap.png` (3 panels) + `provenance.json` |
+| `figures/equivalence_heatmap.png` | 3 panels: native density, DSL density, difference (black, max 0) |
+| `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, $\max\lvert d\rvert$, time, masses, amplitude |
+| [`../diocotron/`](../diocotron/) | parent physics: mechanism, rate $\gamma_l$, dispersion relation (not copied here) |
+| `adc_cpp/include/adc/physics/hyperbolic.hpp` | `ExBVelocity` brick reproduced by the DSL formulas |
+| `adc_cpp/include/adc/physics/elliptic.hpp` | `BackgroundDensity` brick reproduced by `elliptic_rhs` |

@@ -1,198 +1,196 @@
-# euler_poisson : Euler compressible couple a Poisson, attractif vs repulsif
+# euler_poisson: compressible Euler coupled to Poisson, attractive vs repulsive
 
-Deux runs Euler-Poisson 2D identiques au signe du couplage pres : `sign=+1` (auto-gravite,
-attractif) et `sign=-1` (charge d'espace, repulsif). Le cas verifie par `assert` trois invariants
-structurels (masse conservee, impulsion nette nulle, derive d'energie de signes opposes) et expose
-une prediction falsifiable de la linearisation : la derive d'energie suit $|dE|\propto\epsilon^2$.
-Ce n'est pas une reproduction d'un resultat publie.
+Two 2D Euler-Poisson runs that are identical up to the sign of the coupling: `sign=+1` (self-gravity,
+attractive) and `sign=-1` (space charge, repulsive). The case checks with `assert` three structural
+invariants (mass conserved, net momentum zero, energy drifts of opposite signs) and exposes a
+falsifiable prediction from the linearization: the energy drift follows $|dE|\propto\epsilon^2$.
+This is not a reproduction of a published result.
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `euler_poisson/run.py`, `ci = true`, `needs = []`) |
-| Entrees | grille $64^2$, $L=1$, periodique ; CI $\rho=\rho_0(1+\epsilon\cos(2\pi x/L))$, $\epsilon=0.01$, repos ($v=0$, $E=\rho/(\gamma-1)$) ; $\gamma=1.4$, $\rho_0=1$, $4\pi G=1$ (sans unites), $dt=0.004$, 20 pas ; van Leer + HLLC + SSPRK2, Poisson `geometric_mg` |
-| Sorties | etat `(4,n,n)=[\rho,\rho u,\rho v,E]` lu par `get_state("gas")` ; diagnostics globaux $E_{tot}=U[3].\mathrm{sum}()$, $p_x=U[1].\mathrm{sum}()$, $p_y=U[2].\mathrm{sum}()$ ; 3 figures dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | les 3 `assert` de `run.py` : masse `max_rel_mass < TOL_MASS=1e-9` ; impulsion `max_mom < TOL_MOM=1e-8` ; contraste `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` puis `dE_grav<0` et `dE_plas>0` (`run.py:150-180`) |
-| Prouve | masse conservee a $2.6\times10^{-14}$ relatif (les deux runs) ; impulsion nette $8.9\times10^{-16}$ ; $dE_{grav}=-5.857667\times10^{-4}<0$ et $dE_{plas}=+6.137105\times10^{-4}>0$ (signes opposes, magnitude $\gg$ TOL_DE) ; la pente $|dE|$ vs $\epsilon$ vaut 2.000 (figure 2) |
-| Ne prouve pas | pas une reproduction publiee : aucun nombre n'est confronte a un article (ni effondrement de Jeans, ni benchmark plasma). Le signe physique de $dE$ n'est pas deductible du travail $\int\rho\,v\cdot g$ (qui est positif des deux cotes, section 4.3) : il se lit sur l'assert qui passe. $E_{tot}=U[3].\mathrm{sum}()$ est l'energie fluide seule (sans potentiel de champ), c'est un proxy de signe, pas une integrale physique calibree. Regime quasi-lineaire ($\epsilon=0.01$, 20 pas) : aucune dynamique non lineaire |
-| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $64^2$, ~0.3 s 1 coeur CPU ; `figures/provenance.json` |
+| Category (manifest) | `validation` (`cases_manifest.toml`, `euler_poisson/run.py`, `ci = true`, `needs = []`) |
+| Inputs | grid $64^2$, $L=1$, periodic; IC $\rho=\rho_0(1+\epsilon\cos(2\pi x/L))$, $\epsilon=0.01$, at rest ($v=0$, $E=\rho/(\gamma-1)$); $\gamma=1.4$, $\rho_0=1$, $4\pi G=1$ (dimensionless), $dt=0.004$, 20 steps; van Leer + HLLC + SSPRK2, Poisson `geometric_mg` |
+| Outputs | state `(4,n,n)=[\rho,\rho u,\rho v,E]` read by `get_state("gas")`; global diagnostics $E_{tot}=U[3].\mathrm{sum}()$, $p_x=U[1].\mathrm{sum}()$, $p_y=U[2].\mathrm{sum}()$; 3 figures in `figures/` + `figures/provenance.json` |
+| Guaranteed invariants | the 3 `assert` in `run.py`: mass `max_rel_mass < TOL_MASS=1e-9`; momentum `max_mom < TOL_MOM=1e-8`; contrast `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` then `dE_grav<0` and `dE_plas>0` (`run.py:150-180`) |
+| Proves | mass conserved to $2.6\times10^{-14}$ relative (both runs); net momentum $8.9\times10^{-16}$; $dE_{grav}=-5.857667\times10^{-4}<0$ and $dE_{plas}=+6.137105\times10^{-4}>0$ (opposite signs, magnitude $\gg$ TOL_DE); the $|dE|$ vs $\epsilon$ slope equals 2.000 (figure 2) |
+| Does not prove | not a published reproduction: no number is compared against a paper (neither Jeans collapse nor a plasma benchmark). The physical sign of $dE$ is not deducible from the work $\int\rho\,v\cdot g$ (which is positive on both sides, section 4.3): you read it off the assert that passes. $E_{tot}=U[3].\mathrm{sum}()$ is the fluid energy alone (without the field potential), a sign proxy, not a calibrated physical integral. Quasi-linear regime ($\epsilon=0.01$, 20 steps): no nonlinear dynamics |
+| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native serial backend, $64^2$, ~0.3 s on 1 CPU core; `figures/provenance.json` |
 
-A la fin tu sauras : pourquoi le meme code donne deux signes de $dE$ opposes (mecanisme), pourquoi
-le travail de la force ne suffit pas a predire ce signe (le paradoxe de l'energie fluide), quelle
-est la prediction quantitative testable ($|dE|\propto\epsilon^2$), et ce que chaque assert
-etablit reellement.
-
----
-
-## 1. Le mecanisme physique (justifie Prouve : contraste de signe)
-
-Un fluide compressible au repos, de densite $\rho=\rho_0(1+\epsilon\cos kx)$ avec $k=2\pi/L$, cree
-son propre champ de force via Poisson. Trois ingredients enchaines :
-
-1. Champ propre. La perturbation de densite resout l'equation de Poisson de systeme
-   $\nabla^2\phi = \mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ (brique `GravityCoupling`). Le fond
-   $\rho_0$ rend le second membre de moyenne nulle, condition de compatibilite du Laplacien
-   periodique.
-2. Force. Le fluide ressent $g=-\nabla\phi$ (brique `GravityForce`), qui pousse la quantite de
-   mouvement : $\partial_t(\rho v)=\dots+\rho g$.
-3. Reponse opposee selon le signe. Pour la gravite ($\mathrm{sign}=+1$), la surdensite creuse
-   un puits de potentiel et $g$ pointe vers la crete (attractif). Pour le plasma
-   ($\mathrm{sign}=-1$), le second membre change de signe, $\phi$ s'inverse, et $g$ pointe loin
-   de la crete (repulsif). Les deux runs partent du meme etat au repos ; seul le signe du
-   couplage les separe.
-
-Ce que ce mecanisme ne dit pas tout seul : dans quel sens va l'energie fluide $E_{tot}$. On verra
-section 4 que le travail de la force est positif des deux cotes, et que le signe de $dE_{tot}$
-vient d'un autre canal (la compression/detente). C'est pour cela que le cas mesure et assere le
-signe au lieu de le deduire d'une formule de cours.
-
-Le systeme reduit ici est l'Euler-Poisson electrostatique non magnetise ; le systeme complet
-magnetise (force de Lorentz, etage Schur) est traite par
-[`hoffart_euler_poisson_dsl`](../hoffart_euler_poisson_dsl/). Ce cas ne couvre pas le couplage
-magnetique.
+By the end you will know: why the same code yields two opposite signs of $dE$ (the mechanism), why
+the work of the force is not enough to predict that sign (the fluid-energy paradox), what the
+testable quantitative prediction is ($|dE|\propto\epsilon^2$), and what each assert actually
+establishes.
 
 ---
 
-## 2. Les equations et qui les calcule (justifie : la physique est figee en C++)
+## 1. The physical mechanism (justifies Proves: sign contrast)
 
-Etat conservatif par cellule, 4 composantes : $U=(\rho,\rho u,\rho v,E)$.
+A compressible fluid at rest, with density $\rho=\rho_0(1+\epsilon\cos kx)$ where $k=2\pi/L$, creates
+its own force field through Poisson. Three chained ingredients:
 
-| Bloc | Equation | Brique `adc` |
+1. Self-field. The density perturbation solves the system Poisson equation
+   $\nabla^2\phi = \mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ (brick `GravityCoupling`). The
+   background $\rho_0$ makes the right-hand side zero-mean, the compatibility condition of the
+   periodic Laplacian.
+2. Force. The fluid feels $g=-\nabla\phi$ (brick `GravityForce`), which pushes the momentum:
+   $\partial_t(\rho v)=\dots+\rho g$.
+3. Opposite response by sign. For gravity ($\mathrm{sign}=+1$), the overdensity digs a potential
+   well and $g$ points toward the crest (attractive). For the plasma ($\mathrm{sign}=-1$), the
+   right-hand side flips sign, $\phi$ inverts, and $g$ points away from the crest (repulsive). The
+   two runs start from the same state at rest; only the sign of the coupling separates them.
+
+What this mechanism does not tell on its own: which way the fluid energy $E_{tot}$ goes. Section 4
+shows that the work of the force is positive on both sides, and that the sign of $dE_{tot}$ comes
+from another channel (compression/expansion). That is why the case measures and asserts the sign
+instead of deriving it from a textbook formula.
+
+The reduced system here is the unmagnetized electrostatic Euler-Poisson; the full magnetized system
+(Lorentz force, Schur stage) is handled by
+[`hoffart_euler_poisson_dsl`](../hoffart_euler_poisson_dsl/). This case does not cover the magnetic
+coupling.
+
+---
+
+## 2. The equations and who computes them (justifies: the physics is frozen in C++)
+
+Conservative state per cell, 4 components: $U=(\rho,\rho u,\rho v,E)$.
+
+| Block | Equation | `adc` brick |
 |---|---|---|
 | Transport | $\partial_t\rho+\nabla\cdot(\rho v)=0$, $\partial_t(\rho v)+\nabla\cdot(\rho v\otimes v+pI)=\rho g$, $\partial_t E+\nabla\cdot((E+p)v)=\rho\,v\cdot g$ | `CompressibleFlux` |
-| Etat / EOS | $p=(\gamma-1)(E-\tfrac12\rho|v|^2)$, $\gamma=1.4$ | `FluidState(kind="compressible")` |
-| Source | $g=-\nabla\phi$ ; $s[1]=\rho g_x$, $s[2]=\rho g_y$, $s[3]=\rho_u g_x+\rho_v g_y$ | `GravityForce` |
-| Elliptique | $\nabla^2\phi=\mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ | `GravityCoupling(sign, four_pi_G, rho0)` |
+| State / EOS | $p=(\gamma-1)(E-\tfrac12\rho|v|^2)$, $\gamma=1.4$ | `FluidState(kind="compressible")` |
+| Source | $g=-\nabla\phi$; $s[1]=\rho g_x$, $s[2]=\rho g_y$, $s[3]=\rho_u g_x+\rho_v g_y$ | `GravityForce` |
+| Elliptic | $\nabla^2\phi=\mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ | `GravityCoupling(sign, four_pi_G, rho0)` |
 
-C'est `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`models.py:48-55`), une
-composition `adc.Model(state, transport, source, elliptic)`. Le mot "euler_poisson" vit dans
-`adc_cases` ; cote coeur ce sont quatre briques generiques.
+It is `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`models.py:48-55`), a
+composition `adc.Model(state, transport, source, elliptic)`. The word "euler_poisson" lives in
+`adc_cases`; on the core side these are four generic bricks.
 
-Table 3 couches "qui calcule quoi", chaque ligne pinnee a une ligne reelle :
+A 3-layer "who computes what" table, each row pinned to a real line:
 
-| Ligne `run.py` | Couche | Ce qui se passe |
+| `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run.py:94-98`) | Python compose | choix du modele, du schema (MUSCL van Leer + HLLC), de l'integrateur (SSPRK2) |
-| `models.euler_poisson(sign=...)` -> `GravityForce` (`source.hpp:52-62`) / `GravityCoupling` (`elliptic.hpp:43-49`) | brique C++ fige | la formule exacte de la force ($g=-\nabla\phi$, travail sur l'energie a 4 variables) et du second membre ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |
-| `assemble_rhs<VanLeer, HLLC>` + Poisson de systeme (`GeometricMG`) (`run.py:99` `set_poisson(...)`) | noyau par cellule (device) | le calcul effectif, sans callback Python dans le hot path |
+| `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run.py:94-98`) | Python composes | choice of model, scheme (MUSCL van Leer + HLLC), integrator (SSPRK2) |
+| `models.euler_poisson(sign=...)` -> `GravityForce` (`source.hpp:52-62`) / `GravityCoupling` (`elliptic.hpp:43-49`) | C++ brick freezes | the exact formula of the force ($g=-\nabla\phi$, work on the 4-variable energy) and of the right-hand side ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |
+| `assemble_rhs<VanLeer, HLLC>` + system Poisson (`GeometricMG`) (`run.py:99` `set_poisson(...)`) | per-cell kernel (device) | the actual computation, with no Python callback in the hot path |
 
-La distinction natif/electrostatique : `euler_poisson` utilise `GravityForce`+`GravityCoupling`
-(signe porte par la brique elliptique), pas `PotentialForce`+`ChargeDensity` (signe porte par la
-charge $q$, utilises par `electron_euler`/`ion_isothermal` dans `models.py`). Les deux familles
-empruntent le meme chemin numerique cote coeur (somme generique des briques elliptiques) ; seul
-le second membre differe.
-
----
-
-## 3. La chaine de signe effective, ligne par ligne (justifie 7 de la checklist : signe par le comportement)
-
-Le guide interdit d'ecrire "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ donc attractif" sans verifier : le
-solveur Poisson a plusieurs couches de signe. Voici la chaine effective, telle qu'elle est codee :
-
-1. Operateur Poisson : `poisson_operator.hpp` resout $\nabla^2\phi=f$ (le stencil ecrit
-   $\mathrm{lap}=\sum/dx^2$ sans facteur, $\varepsilon=1$, cf. `elliptic_problem.hpp:24-25`). Donc
-   $f>0$ tend a rendre $\phi$ convexe (un minimum local).
-2. Second membre : `GravityCoupling::rhs` renvoie `sign * four_pi_G * (u[0] - rho0)`
-   (`elliptic.hpp:47`). Pour la gravite ($\mathrm{sign}=+1$), une surdensite ($\rho>\rho_0$) donne
-   $f>0$, donc $\phi$ a un puits sous la crete.
-3. Stockage du champ : le coupler stocke $aux=(\phi,+\partial_x\phi,+\partial_y\phi)$,
-   convention `GradSign::Plus` (`elliptic_problem.hpp:35-39`). C'est-a-dire `aux.grad_x = +d\phi/dx`.
-4. Force : `GravityForce::apply` pose `gx = -a.grad_x` (`source.hpp:55`), soit
-   $g=-\nabla\phi$. Sous la crete (puits de $\phi$), $g$ pointe vers la crete : attractif.
-
-Cette chaine donne le signe attendu, mais elle empile 4 conventions ; on ne s'y fie pas comme
-preuve. La reference est l'assert qui passe : `run.py:177` impose `dE_grav < 0`, `run.py:179`
-impose `dE_plas > 0`, et le run sort `OK` (section 6). C'est cela le signe physique du cas, pas la
-derivation ci-dessus, qui ne sert qu'a montrer que le code est coherent.
+The native/electrostatic distinction: `euler_poisson` uses `GravityForce`+`GravityCoupling` (sign
+carried by the elliptic brick), not `PotentialForce`+`ChargeDensity` (sign carried by the charge
+$q$, used by `electron_euler`/`ion_isothermal` in `models.py`). Both families take the same
+numerical path on the core side (generic sum of the elliptic bricks); only the right-hand side
+differs.
 
 ---
 
-## 4. Maths : pourquoi le signe de $dE$ ne se lit pas sur le travail (justifie Ne prouve pas)
+## 3. The effective sign chain, line by line (justifies item 7 of the checklist: sign by behavior)
 
-### 4.1 Ce que $E_{tot}$ est reellement
+The guide forbids writing "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ therefore attractive" without
+checking: the Poisson solver has several sign layers. Here is the effective chain, as coded:
 
-`run.py:85` : `E_tot = U[3].sum()`. La composante 3 de l'etat est l'energie fluide totale
-$E=\tfrac12\rho|v|^2+\dfrac{p}{\gamma-1}$ (cinetique + interne). Elle n'inclut pas l'energie
-potentielle du champ $\tfrac12\int\rho\phi$. $E_{tot}$ n'est donc pas une quantite conservee du
-systeme couple : c'est l'energie d'un des deux reservoirs (le fluide), et le champ peut lui en
-donner ou lui en prendre. Mesure a $t=0$ (repos) : $E_{tot}=1.024\times10^4$, purement interne
+1. Poisson operator: `poisson_operator.hpp` solves $\nabla^2\phi=f$ (the stencil writes
+   $\mathrm{lap}=\sum/dx^2$ without a factor, $\varepsilon=1$, see `elliptic_problem.hpp:24-25`). So
+   $f>0$ tends to make $\phi$ convex (a local minimum).
+2. Right-hand side: `GravityCoupling::rhs` returns `sign * four_pi_G * (u[0] - rho0)`
+   (`elliptic.hpp:47`). For gravity ($\mathrm{sign}=+1$), an overdensity ($\rho>\rho_0$) gives
+   $f>0$, so $\phi$ has a well under the crest.
+3. Field storage: the coupler stores $aux=(\phi,+\partial_x\phi,+\partial_y\phi)$, convention
+   `GradSign::Plus` (`elliptic_problem.hpp:35-39`). That is, `aux.grad_x = +d\phi/dx`.
+4. Force: `GravityForce::apply` sets `gx = -a.grad_x` (`source.hpp:55`), i.e. $g=-\nabla\phi$. Under
+   the crest (well of $\phi$), $g$ points toward the crest: attractive.
+
+This chain gives the expected sign, but it stacks 4 conventions; you do not rely on it as proof. The
+reference is the assert that passes: `run.py:177` requires `dE_grav < 0`, `run.py:179` requires
+`dE_plas > 0`, and the run prints `OK` (section 6). That is the physical sign of the case, not the
+derivation above, which only serves to show that the code is consistent.
+
+---
+
+## 4. Math: why the sign of $dE$ is not read off the work (justifies Does not prove)
+
+### 4.1 What $E_{tot}$ really is
+
+`run.py:85`: `E_tot = U[3].sum()`. Component 3 of the state is the total fluid energy
+$E=\tfrac12\rho|v|^2+\dfrac{p}{\gamma-1}$ (kinetic + internal). It does not include the field
+potential energy $\tfrac12\int\rho\phi$. So $E_{tot}$ is not a conserved quantity of the coupled
+system: it is the energy of one of the two reservoirs (the fluid), and the field can give energy to
+it or take energy from it. Measured at $t=0$ (at rest): $E_{tot}=1.024\times10^4$, purely internal
 (KE=0).
 
-### 4.2 La decomposition mesuree (le coeur du paradoxe)
+### 4.2 The measured decomposition (the heart of the paradox)
 
-On instrumente $E_{tot}=KE+E_{int}$ sur les 20 pas, $\epsilon=0.01$ (script de diagnostic, memes
-parametres que `run.py`) :
+You instrument $E_{tot}=KE+E_{int}$ over the 20 steps, $\epsilon=0.01$ (diagnostic script, same
+parameters as `run.py`):
 
 | sign | $dKE$ | $dE_{int}$ | $dE_{tot}=dKE+dE_{int}$ |
 |---|---|---|---|
-| $+1$ (gravite) | $+2.189\times10^{-2}$ | $-2.247\times10^{-2}$ | $-5.858\times10^{-4}$ |
+| $+1$ (gravity) | $+2.189\times10^{-2}$ | $-2.247\times10^{-2}$ | $-5.858\times10^{-4}$ |
 | $-1$ (plasma) | $+2.412\times10^{-2}$ | $-2.351\times10^{-2}$ | $+6.137\times10^{-4}$ |
 
-Lecture : l'energie cinetique augmente des deux cotes ($dKE>0$). La force, partant du repos,
-accelere le fluide quel que soit son signe : c'est le travail $\int\rho\,v\cdot g\,dt$, et il est
-positif gravite comme plasma. Le signe de $dE_{tot}$ n'est donc pas celui du travail : c'est le
-residu d'une quasi-annulation entre $dKE\sim+2\times10^{-2}$ et $dE_{int}\sim-2\times10^{-2}$
-(le fluide se comprime/detend differemment selon le sens de la force). Ce residu vaut $\sim6\times
-10^{-4}$ et c'est lui dont le signe distingue gravite de plasma.
+Reading: the kinetic energy increases on both sides ($dKE>0$). The force, starting from rest,
+accelerates the fluid whatever its sign: this is the work $\int\rho\,v\cdot g\,dt$, and it is
+positive for gravity as for plasma. The sign of $dE_{tot}$ is therefore not that of the work: it is
+the residual of a near-cancellation between $dKE\sim+2\times10^{-2}$ and $dE_{int}\sim-2\times
+10^{-2}$ (the fluid compresses/expands differently depending on the direction of the force). This
+residual is $\sim6\times10^{-4}$ and it is its sign that distinguishes gravity from plasma.
 
-### 4.3 Preuve que le travail est positif des deux cotes (verifiee par sympy)
+### 4.3 Proof that the work is positive on both sides (verified with sympy)
 
-Au premier ordre, $\rho\approx\rho_0=1$, $\phi$ resout $\nabla^2\phi=\mathrm{sign}\cdot\epsilon\cos
-kx$, soit $\phi=-\dfrac{\mathrm{sign}\cdot\epsilon}{k^2}\cos kx$, donc
+To first order, $\rho\approx\rho_0=1$, $\phi$ solves $\nabla^2\phi=\mathrm{sign}\cdot\epsilon\cos
+kx$, i.e. $\phi=-\dfrac{\mathrm{sign}\cdot\epsilon}{k^2}\cos kx$, hence
 
 $$g=-\partial_x\phi=-\frac{\mathrm{sign}\cdot\epsilon}{k}\sin kx,\qquad g^2=\frac{\epsilon^2}{k^2}\sin^2 kx.$$
 
-Partant du repos, $v\approx g\,t$ aux temps courts, et la puissance volumique
-$\rho\,v\cdot g\approx t\,g^2\ge 0$ est independante du signe ($g^2$ ne voit pas
-$\mathrm{sign}$). Le travail cumule $\int_0^T\!\!\int\rho\,v\cdot g\,dt$ est donc strictement positif
-pour $\mathrm{sign}=+1$ et $\mathrm{sign}=-1$. Ecrire "le travail $v\cdot g$ est negatif d'ou
-$dE<0$" est faux. Le cas le sait : il assere $dE_{grav}<0$ comme un fait mesure, pas comme
-une consequence du travail.
+Starting from rest, $v\approx g\,t$ at short times, and the volumetric power $\rho\,v\cdot g\approx
+t\,g^2\ge 0$ is independent of the sign ($g^2$ does not see $\mathrm{sign}$). The cumulative work
+$\int_0^T\!\!\int\rho\,v\cdot g\,dt$ is therefore strictly positive for both $\mathrm{sign}=+1$ and
+$\mathrm{sign}=-1$. Writing "the work $v\cdot g$ is negative hence $dE<0$" is wrong. The case knows
+it: it asserts $dE_{grav}<0$ as a measured fact, not as a consequence of the work.
 
-### 4.4 La prediction falsifiable : $|dE|\propto\epsilon^2$ (justifie Prouve : pente 2)
+### 4.4 The falsifiable prediction: $|dE|\propto\epsilon^2$ (justifies Proves: slope 2)
 
-A $\epsilon=0$, le second membre $f=\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$ est identiquement nul,
-la force est nulle, et $dE=0$ exactement (mesure : $dE_{grav}(\epsilon{=}0)=dE_{plas}
-(\epsilon{=}0)=0.0$, bit-machine). Pres de $\epsilon=0$, la force $g\propto\epsilon$ (4.3), la
-vitesse $v\propto\epsilon$, donc chaque canal energetique en $v\cdot g$ ou $v^2$ est en
-$\epsilon^2$. La linearisation predit donc $|dE|\propto\epsilon^2$ : doubler $\epsilon$ quadruple
-$|dE|$. C'est verifiable (figure 2) et transforme un assert booleen en courbe de convergence.
+At $\epsilon=0$, the right-hand side $f=\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$ is identically zero,
+the force is zero, and $dE=0$ exactly (measured: $dE_{grav}(\epsilon{=}0)=dE_{plas}(\epsilon{=}0)=
+0.0$, bit-exact). Near $\epsilon=0$, the force $g\propto\epsilon$ (4.3), the velocity
+$v\propto\epsilon$, so each energy channel in $v\cdot g$ or $v^2$ is in $\epsilon^2$. The
+linearization therefore predicts $|dE|\propto\epsilon^2$: doubling $\epsilon$ quadruples $|dE|$. This
+is verifiable (figure 2) and turns a boolean assert into a convergence curve.
 
-Ce qu'une pente differente trahirait : pente $\approx 1$ = terme lineaire parasite (fond $\rho_0$
-mal soustrait dans le second membre) ; pente $> 2$ aux grands $\epsilon$ = entree de la dynamique
-non lineaire (compression d'amplitude finie). On mesure 2.000 sur $\epsilon\in[0.005,0.08]$ : le
-regime est purement quadratique sur cette plage.
+What a different slope would betray: slope $\approx 1$ = spurious linear term (background $\rho_0$
+badly subtracted in the right-hand side); slope $> 2$ at large $\epsilon$ = onset of the nonlinear
+dynamics (finite-amplitude compression). You measure 2.000 over $\epsilon\in[0.005,0.08]$: the
+regime is purely quadratic over that range.
 
 ---
 
-## 5. Code, fonction par fonction (justifie : ancrage reel)
+## 5. Code, function by function (justifies: real anchoring)
 
-`run.py` se lit du haut vers le bas. On glose les lignes porteuses ; la plomberie (import,
-fallback `sys.path`) est liee, pas paraphrasee.
+`run.py` reads top to bottom. The load-bearing lines are glossed; the plumbing (imports, `sys.path`
+fallback) is linked, not paraphrased.
 
-Condition initiale `initial_density()` (`run.py:75-79`) :
+Initial condition `initial_density()` (`run.py:75-79`):
 
 ```python
 x = (np.arange(N) + 0.5) * L / N                     # centres de cellules (run.py:77)
 xx, _ = np.meshgrid(x, x, indexing="ij")
 return RHO0 * (1.0 + EPS * np.cos(2.0 * np.pi * xx / L))   # rho = rho0 (1 + eps cos kx) (run.py:79)
 ```
-- Perturbation cosinus de mode 1 selon $x$, invariante en $y$, amplitude $\epsilon=0.01$ autour
-  de $\rho_0=1$. `set_density("gas", rho)` (`run.py:100`) ecrit $\rho$ sur la composante 0, met
-  $v=0$ et $E=\rho/(\gamma-1)$ (repos thermique).
+- Mode-1 cosine perturbation along $x$, invariant in $y$, amplitude $\epsilon=0.01$ around
+  $\rho_0=1$. `set_density("gas", rho)` (`run.py:100`) writes $\rho$ onto component 0, sets $v=0$ and
+  $E=\rho/(\gamma-1)$ (thermal rest).
 
-Diagnostics globaux `energy_and_momentum(sim)` (`run.py:82-85`) :
+Global diagnostics `energy_and_momentum(sim)` (`run.py:82-85`):
 
 ```python
 U = sim.get_state("gas")                             # (4, n, n) = [rho, rho u, rho v, E]
 return U[3].sum(), U[1].sum(), U[2].sum()            # E_tot, p_x, p_y (run.py:85)
 ```
-- Sommes sur cellules des composantes conservatives, sans poids $dx^2$. Ce sont des proxys :
-  suffisants pour un invariant relatif (conservation de masse) et un invariant de signe
-  (contraste), insuffisants comme integrale physique absolue. Le cas ne teste que relatif et signe.
+- Cell-wise sums of the conservative components, without $dx^2$ weight. These are proxies:
+  sufficient for a relative invariant (mass conservation) and a sign invariant (contrast),
+  insufficient as an absolute physical integral. The case tests only the relative and the sign.
 
-Boucle d'integration `run_case(sign, label)` (`run.py:88-137`) :
+Integration loop `run_case(sign, label)` (`run.py:88-137`):
 
 ```python
 sim = adc.System(n=N, L=L, periodic=True)            # run.py:93
@@ -206,12 +204,12 @@ for step in range(1, NSTEPS + 1):
     max_rel_mass = max(max_rel_mass, rel_mass)      # pire derive sur tous les pas (run.py:120)
     max_mom = max(max_mom, abs(px), abs(py))        # pire impulsion (run.py:121)
 ```
-- `rhs="charge_density"` est l'alias generique du second membre compose (somme des briques
-  elliptiques de chaque bloc ; ici l'unique `GravityCoupling`). `relative_drift`
-  (`common/checks.py:11-13`) protege le denominateur contre zero. `mass("gas")` renvoie la somme de
-  $\rho$ : $64\times64\times1=4096$, conforme a la sortie.
+- `rhs="charge_density"` is the generic alias of the composed right-hand side (sum of the elliptic
+  bricks of each block; here the single `GravityCoupling`). `relative_drift`
+  (`common/checks.py:11-13`) guards the denominator against zero. `mass("gas")` returns the sum of
+  $\rho$: $64\times64\times1=4096$, matching the output.
 
-Verification `main()` (`run.py:140-183`) :
+Verification `main()` (`run.py:140-183`):
 
 ```python
 assert res["max_rel_mass"] < TOL_MASS               # masse conservee (run.py:150)
@@ -222,88 +220,88 @@ assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE, ...)   # signes opposes +
 assert dE_grav < 0.0                                # gravite attractive (run.py:177)
 assert dE_plas > 0.0                                # plasma repulsif (run.py:179)
 ```
-- `assert_opposite_sign` (`common/checks.py:43-54`) exige `|a| > min_mag AND |b| > min_mag` puis
-  `a*b < 0` : on ne valide pas trivialement deux quasi-zeros de produit negatif par accident.
+- `assert_opposite_sign` (`common/checks.py:43-54`) requires `|a| > min_mag AND |b| > min_mag` then
+  `a*b < 0`: you do not trivially validate two near-zeros whose product happens to be negative.
 
 ---
 
-## 6. Les tolerances, justifiees par un ordre de grandeur (justifie 8 de la checklist)
+## 6. The tolerances, justified by an order of magnitude (justifies item 8 of the checklist)
 
-| Tolerance | Valeur | Pourquoi cette valeur |
+| Tolerance | Value | Why this value |
 |---|---|---|
-| `TOL_MASS` | $10^{-9}$ | Le schema volumes finis est conservatif : la masse est un invariant exact, la seule derive est l'arithmetique flottante. Mesure : $2.6\times10^{-14}$ relatif, soit ~5 ordres sous la tolerance (`run.py:58`) |
-| `TOL_MOM` | $10^{-8}$ | La force de Poisson derive d'un potentiel periodique : sa somme spatiale est nulle, elle n'injecte aucune impulsion. Mesure : $8.9\times10^{-16}$, ~8 ordres sous la tolerance (`run.py:59`) |
-| `TOL_DE` | $10^{-5}$ | Borne basse : $dE=0$ exactement a $\epsilon=0$ (verifie). Borne haute : la magnitude physique attendue est $\sim6\times10^{-4}$ ($\epsilon=0.01$, 20 pas, `run.py:60-62`). $10^{-5}$ se situe entre le bruit (0) et le signal ($6\times10^{-4}$) : il rejette un signe non significatif sans rejeter le signal reel (`run.py:63`) |
+| `TOL_MASS` | $10^{-9}$ | The finite-volume scheme is conservative: mass is an exact invariant, the only drift is floating-point arithmetic. Measured: $2.6\times10^{-14}$ relative, ~5 orders below the tolerance (`run.py:58`) |
+| `TOL_MOM` | $10^{-8}$ | The Poisson force derives from a periodic potential: its spatial sum is zero, it injects no momentum. Measured: $8.9\times10^{-16}$, ~8 orders below the tolerance (`run.py:59`) |
+| `TOL_DE` | $10^{-5}$ | Lower bound: $dE=0$ exactly at $\epsilon=0$ (verified). Upper bound: the expected physical magnitude is $\sim6\times10^{-4}$ ($\epsilon=0.01$, 20 steps, `run.py:60-62`). $10^{-5}$ sits between the noise (0) and the signal ($6\times10^{-4}$): it rejects an insignificant sign without rejecting the real signal (`run.py:63`) |
 
 ---
 
-## 7. Figures (generees par `make_figures.py`, dans `figures/`)
+## 7. Figures (generated by `make_figures.py`, in `figures/`)
 
-Generees par `python make_figures.py` (memes parametres que `run.py`), versionnees avec
-`figures/provenance.json`. Commande exacte en section 9.
+Generated by `python make_figures.py` (same parameters as `run.py`), versioned with
+`figures/provenance.json`. Exact command in section 9.
 
-### `energy_vs_t.png` : le contraste de signe
+### `energy_vs_t.png`: the sign contrast
 
-![E_tot(t) - E_tot(0) pour gravite (descend) et plasma (monte), cote a cote](figures/energy_vs_t.png)
+![E_tot(t) - E_tot(0) for gravity (descends) and plasma (rises), side by side](figures/energy_vs_t.png)
 
-- Prouve (asserte `run.py:177-180`) : $E_{tot}$ diminue pour la gravite
-  ($dE_{grav}=-5.858\times10^{-4}$) et augmente pour le plasma ($dE_{plas}=+6.137\times10^{-4}$).
-  Les deux courbes partent de 0 (meme etat au repos) et divergent en sens opposes : signes
-  strictement opposes, magnitudes $\gg$ TOL_DE.
-- Suggéré (non assere) : la quasi-symetrie miroir des deux courbes (gravite et plasma ont des
-  $|dE|$ proches a ~5 %) est visible mais aucun assert ne la verifie ; elle n'est pas exacte (la
-  reponse compressible n'est pas lineaire en $\mathrm{sign}$).
-- Non montré : ce graphe ne dit rien du travail de la force (positif des deux cotes, section
-  4.3) ; le titre rappelle que le signe est asserte, pas deduit de $v\cdot g$.
+- Proves (asserted `run.py:177-180`): $E_{tot}$ decreases for gravity
+  ($dE_{grav}=-5.858\times10^{-4}$) and increases for the plasma ($dE_{plas}=+6.137\times10^{-4}$).
+  The two curves start from 0 (same state at rest) and diverge in opposite directions: strictly
+  opposite signs, magnitudes $\gg$ TOL_DE.
+- Suggested (not asserted): the near mirror symmetry of the two curves (gravity and plasma have
+  $|dE|$ close to ~5%) is visible but no assert checks it; it is not exact (the compressible response
+  is not linear in $\mathrm{sign}$).
+- Not shown: this plot says nothing about the work of the force (positive on both sides, section
+  4.3); the title reminds you that the sign is asserted, not deduced from $v\cdot g$.
 
-### `de_vs_eps.png` : la prediction $|dE|\propto\epsilon^2$
+### `de_vs_eps.png`: the prediction $|dE|\propto\epsilon^2$
 
-![|dE| vs epsilon en log-log : droites de pente 2 pour gravite et plasma, superposees a la reference](figures/de_vs_eps.png)
+![|dE| vs epsilon in log-log: slope-2 lines for gravity and plasma, overlaid on the reference](figures/de_vs_eps.png)
 
-- Prouve : sur $\epsilon\in\{0.005,0.01,0.02,0.04,0.08\}$, la regression log-log donne une pente
-  2.000 (gravite 1.99998, plasma 1.99998), confondue avec la droite de reference $\propto
-  \epsilon^2$. Doubler $\epsilon$ quadruple $|dE|$ : $1.46\times10^{-4}\to5.86\times10^{-4}\to
-  2.34\times10^{-3}$, chaque pas $\times 4$. La linearisation (section 4.4) est confirmee.
-- Suggéré : gravite et plasma ont des $|dE|$ tres proches (les deux droites se chevauchent) ;
-  l'asymetrie est du second ordre et non testee.
-- Non montré : aucune deviation de pente n'apparait jusqu'a $\epsilon=0.08$, donc on ne voit pas
-  l'entree du regime non lineaire (qui donnerait pente $>2$ aux plus grands $\epsilon$). Le controle
-  $dE(\epsilon{=}0)=0.0$ (bit-machine) borne la tolerance par le bas mais n'est pas sur l'axe log.
+- Proves: over $\epsilon\in\{0.005,0.01,0.02,0.04,0.08\}$, the log-log regression gives a slope of
+  2.000 (gravity 1.99998, plasma 1.99998), indistinguishable from the reference line $\propto
+  \epsilon^2$. Doubling $\epsilon$ quadruples $|dE|$: $1.46\times10^{-4}\to5.86\times10^{-4}\to
+  2.34\times10^{-3}$, each step $\times 4$. The linearization (section 4.4) is confirmed.
+- Suggested: gravity and plasma have very close $|dE|$ (the two lines overlap); the asymmetry is
+  second order and untested.
+- Not shown: no slope deviation appears up to $\epsilon=0.08$, so you do not see the onset of the
+  nonlinear regime (which would give slope $>2$ at the largest $\epsilon$). The control
+  $dE(\epsilon{=}0)=0.0$ (bit-exact) bounds the tolerance from below but is not on the log axis.
 
-### `density_map.png` : la perturbation reste 1D
+### `density_map.png`: the perturbation stays 1D
 
-![Cartes de densite : CI, gravite finale, plasma finale, perturbation en bandes verticales](figures/density_map.png)
+![Density maps: IC, final gravity, final plasma, perturbation in vertical bands](figures/density_map.png)
 
-- Prouve / mesure : la perturbation reste 1D selon $x$ (ecart-type en $y$ : $3.8\times
-  10^{-16}$, bit-machine) ; aucune structure transverse n'apparait. L'amplitude max-min passe de
-  $2.00\times10^{-2}$ (CI) a $1.76\times10^{-2}$ (gravite) et $1.75\times10^{-2}$ (plasma) : les
-  deux s'aplatissent legerement sur 20 pas.
-- Non montré : a $\epsilon=0.01$, le contraste gravite/plasma n'est pas visible a l'oeil sur
-  la densite (les deux panneaux sont quasi identiques) ; le contraste de signe vit dans l'energie
-  integree $dE\sim6\times10^{-4}$, pas dans la carte de densite. Aucun effondrement ni formation de
-  structure : le regime est quasi-lineaire et a horizon court.
-
----
-
-## 8. Ce que l'invariant ne capture pas (analyse honnete des limites)
-
-- Pas une reproduction publiee. Categorie `validation` : on teste des invariants structurels
-  (conservation, signe, pente $\epsilon^2$), pas une courbe d'article. Ne pas presenter comme
-  effondrement de Jeans, formation de structure ou benchmark plasma.
-- $E_{tot}$ est un proxy, pas l'energie totale du systeme couple. C'est l'energie fluide
-  (cinetique+interne) sans le potentiel de champ $\tfrac12\int\rho\phi$ ; son signe distingue les
-  regimes, sa valeur absolue n'est comparee a rien. Les diagnostics sont des sommes sur cellules
-  sans poids $dx^2$ : seuls le relatif (masse) et le signe (energie) sont significatifs.
-- $4\pi G=1$, $\rho_0=1$, sans unites. Choix de lisibilite, pas un calibrage gravitationnel.
-- Regime quasi-lineaire, horizon court ($\epsilon=0.01$, 20 pas, $dt=0.004$, $t_{fin}=0.08$) : on
-  observe la tendance energetique (travail + compression), pas de dynamique non lineaire.
-- Domaine periodique homogene : c'est ce qui garantit l'impulsion nette nulle et la
-  compatibilite du Poisson (second membre de moyenne nulle grace au fond $\rho_0$). Des parois ou un
-  second membre non centre casseraient ces deux invariants.
+- Proves / measured: the perturbation stays 1D along $x$ (standard deviation in $y$: $3.8\times
+  10^{-16}$, bit-exact); no transverse structure appears. The max-min amplitude goes from
+  $2.00\times10^{-2}$ (IC) to $1.76\times10^{-2}$ (gravity) and $1.75\times10^{-2}$ (plasma): both
+  flatten slightly over 20 steps.
+- Not shown: at $\epsilon=0.01$, the gravity/plasma contrast is not visible to the eye on the
+  density (the two panels are nearly identical); the sign contrast lives in the integrated energy
+  $dE\sim6\times10^{-4}$, not in the density map. No collapse and no structure formation: the regime
+  is quasi-linear and short-horizon.
 
 ---
 
-## 9. Reproduire (justifie 14 de la checklist : commande + cout mesure)
+## 8. What the invariant does not capture (honest analysis of the limits)
+
+- Not a published reproduction. Category `validation`: you test structural invariants
+  (conservation, sign, $\epsilon^2$ slope), not a paper curve. Do not present it as Jeans collapse,
+  structure formation, or a plasma benchmark.
+- $E_{tot}$ is a proxy, not the total energy of the coupled system. It is the fluid energy
+  (kinetic+internal) without the field potential $\tfrac12\int\rho\phi$; its sign distinguishes the
+  regimes, its absolute value is compared to nothing. The diagnostics are cell-wise sums without
+  $dx^2$ weight: only the relative (mass) and the sign (energy) are meaningful.
+- $4\pi G=1$, $\rho_0=1$, dimensionless. A readability choice, not a gravitational calibration.
+- Quasi-linear regime, short horizon ($\epsilon=0.01$, 20 steps, $dt=0.004$, $t_{fin}=0.08$): you
+  observe the energy trend (work + compression), not nonlinear dynamics.
+- Homogeneous periodic domain: this is what guarantees net momentum zero and Poisson compatibility
+  (zero-mean right-hand side thanks to the background $\rho_0$). Walls or a non-centered right-hand
+  side would break both invariants.
+
+---
+
+## 9. Reproduce (justifies item 14 of the checklist: command + measured cost)
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/euler_poisson
@@ -313,12 +311,12 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py   # 3 figures + provenance.json
 ```
 
-Prerequis : `numpy` (et `matplotlib` pour les figures, hors `needs` du cas lui-meme), module `adc`
-compile et importe avec le meme interpreteur que celui qui l'a compile (suffixe ABI
-`cpython-312`). Le premier chemin du `PYTHONPATH` fournit le module C++ ; le second rend `adc_cases`
-importable sans installation (le cas a aussi un fallback `sys.path`, `run.py:48-53`).
+Prerequisites: `numpy` (and `matplotlib` for the figures, outside the case's own `needs`), the `adc`
+module compiled and imported with the same interpreter that compiled it (ABI suffix `cpython-312`).
+The first path of the `PYTHONPATH` provides the C++ module; the second makes `adc_cases` importable
+without installation (the case also has a `sys.path` fallback, `run.py:48-53`).
 
-Sortie attendue de `run.py` (capturee, machine de dev macOS arm64) :
+Expected output of `run.py` (captured, macOS arm64 dev machine):
 
 ```
 Contraste energetique (attractif vs repulsif) :
@@ -327,20 +325,19 @@ Contraste energetique (attractif vs repulsif) :
 OK euler_poisson
 ```
 
-avec `max derive masse relative = 2.598e-14` (gravité) / `2.098e-14` (plasma), `max |p| =
-8.882e-16`. Cout : ~0.3 s temps mur (import numpy inclus), 2 runs $\times$ 20 pas $\times$ grille
-$64^2$ + un Poisson multigrille par etage. Caveat plateforme : les signes, l'ordre de grandeur
-($\sim6\times10^{-4}$), la pente (2.000) et le verdict `OK` sont stables d'une plateforme a l'autre ;
-les derniers chiffres de $dE$ varient avec la BLAS et l'ordre de sommation (cf.
-`figures/provenance.json`).
+with `max derive masse relative = 2.598e-14` (gravity) / `2.098e-14` (plasma), `max |p| =
+8.882e-16`. Cost: ~0.3 s wall time (numpy import included), 2 runs $\times$ 20 steps $\times$ grid
+$64^2$ + one multigrid Poisson per stage. Platform caveat: the signs, the order of magnitude
+($\sim6\times10^{-4}$), the slope (2.000), and the `OK` verdict are stable across platforms; the last
+digits of $dE$ vary with the BLAS and the summation order (see `figures/provenance.json`).
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | le cas : 2 runs (signe $\pm$), invariants par `assert` (masse, impulsion, contraste de signe) |
-| `make_figures.py` | re-joue la physique + balayage $\epsilon$ ; ecrit les 3 figures + `provenance.json` |
-| `figures/*.png` | `energy_vs_t.png`, `de_vs_eps.png`, `density_map.png` (versionnees, regenerees en place) |
-| `figures/provenance.json` | SHA adc_cpp/adc_cases, backend, resolution, nombres mesures ($dE$, pentes, derives) |
-| `../adc_cases/models.py` | `euler_poisson(sign,...)` = composition des 4 briques natives (`l.48-55`) |
-| `../adc_cases/common/checks.py` | `relative_drift`, `assert_opposite_sign` (utilises par le cas) |
+| `run.py` | the case: 2 runs (sign $\pm$), invariants by `assert` (mass, momentum, sign contrast) |
+| `make_figures.py` | replays the physics + $\epsilon$ sweep; writes the 3 figures + `provenance.json` |
+| `figures/*.png` | `energy_vs_t.png`, `de_vs_eps.png`, `density_map.png` (versioned, regenerated in place) |
+| `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured numbers ($dE$, slopes, drifts) |
+| `../adc_cases/models.py` | `euler_poisson(sign,...)` = composition of the 4 native bricks (`l.48-55`) |
+| `../adc_cases/common/checks.py` | `relative_drift`, `assert_opposite_sign` (used by the case) |

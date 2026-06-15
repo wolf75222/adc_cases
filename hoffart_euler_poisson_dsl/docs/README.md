@@ -1,11 +1,11 @@
-# docs/ — notes d'analyse et d'audit
+# docs/: analysis and audit notes
 
-Documentation d'approfondissement du cas `hoffart_euler_poisson_dsl`. Ces fichiers ne sont pas
-exécutables : ils consignent le raisonnement, les audits de normalisation et les résultats
-détaillés. La synthèse lisible est dans le [README du cas](../README.md).
+In-depth documentation for the `hoffart_euler_poisson_dsl` case. These files are not
+executable: they record the reasoning, the normalization audits, and the detailed results.
+The readable summary lives in the [case README](../README.md).
 
-| Fichier | Contenu |
+| File | Contents |
 |---|---|
-| `NORMALIZATION.md` | La normalisation `2π/rhobar` du chemin polaire réduit E×B : origine du facteur 2π, validation l=4 exacte du chemin polaire réduit. |
-| `T2_NORMALIZATION_AUDIT.md` | Audit dimensionnel détaillé : échelles, candidats de normalisation, décomposition `fenêtre × 2π × résidu de grille`. Clôt la question « géométrie vs métrologie » (le déficit était de la métrologie, pas la géométrie). |
-| `RESULTS_SYSTEM_SCHUR.md` | Journal complet : table des taux `system-schur`, audit T2, code T3, convergence, et l'historique des renversements (déficit « −95 % » → reproduit à moins de 10 %). |
+| `NORMALIZATION.md` | The `2pi/rhobar` normalization of the reduced ExB polar path: where the 2pi factor comes from, and the exact l=4 validation of the reduced polar path. |
+| `T2_NORMALIZATION_AUDIT.md` | Detailed dimensional audit: scales, normalization candidates, and the `window x 2pi x grid residual` decomposition. Settles the "geometry vs metrology" question (the deficit was metrology, not geometry). |
+| `RESULTS_SYSTEM_SCHUR.md` | Full log: the `system-schur` growth-rate table, the T2 audit, the T3 code, convergence, and the history of the reversals (the "-95%" deficit -> reproduced to within 10%). |

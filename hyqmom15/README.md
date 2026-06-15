@@ -1,42 +1,43 @@
-# hyqmom15 : Vlasov-Poisson 2D à 15 moments (fermeture HyQMOM)
+# hyqmom15: 2D Vlasov-Poisson with 15 moments (HyQMOM closure)
 
-Modèle cinétique 2D : on transporte les moments en vitesse `M_pq = ∫ f v_x^p v_y^q dv`
-d'ordre p+q ≤ 4 (15 composantes) de l'équation de Vlasov, couplés au Poisson du système.
-Pour chaque moment,
+A 2D kinetic model: you transport the velocity moments `M_pq = integral f v_x^p v_y^q dv`
+of order p+q <= 4 (15 components) of the Vlasov equation, coupled to the system's Poisson
+equation. For each moment,
 
 ```
 ∂t M_pq + ∂x M_{p+1,q} + ∂y M_{p,q+1} = q/m (p Ex M_{p-1,q} + q Ey M_{p,q-1})
                                         + Ωc (p M_{p-1,q+1} − q M_{p+1,q-1})
 ```
 
-Le flux du dernier ordre fait apparaître des moments d'ordre 5 absents du vecteur d'état :
-c'est le problème de fermeture. La fermeture HyQMOM (Bryngelson, Fox & Laurent 2025,
-hal-05398171) exprime les six moments standardisés d'ordre 5 en fonction des ordres
-inférieurs et rend le système hyperbolique.
+The flux at the highest order brings in order-5 moments that are absent from the state
+vector: this is the closure problem. The HyQMOM closure (Bryngelson, Fox & Laurent 2025,
+hal-05398171) expresses the six standardized order-5 moments as functions of the lower
+orders and makes the system hyperbolic.
 
-État (ordre des composantes partagé avec la référence MATLAB RIEMOM2D) :
+State (component order shared with the MATLAB reference RIEMOM2D):
 
 ```
 U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
 ```
 
-## Démarrage rapide
+## Quick start
 
 ```bash
-# depuis la racine d'adc_cases, module adc construit (PYTHONPATH vers build-*/python)
-python hyqmom15/run.py            # flux vs goldens MATLAB + oracle gaussien
-python hyqmom15/run_waves.py      # vitesses d'onde exactes vs goldens
-python hyqmom15/run_crossing.py   # sources E/B, rotation de Larmor, croisement de jets
-python hyqmom15/run_diocotron.py  # Vlasov-Poisson complet : anneau diocotron
-python hyqmom15/run_relaxation.py # projection de réalisabilité + crossing Ma=20
-mpirun -np 2 python hyqmom15/run_mpi.py  # smoke MPI multi-rang (Poisson geometric_mg) ; cf. section
+# from the adc_cases root, with the adc module built (PYTHONPATH pointing at build-*/python)
+python hyqmom15/run.py            # flux vs MATLAB goldens + Gaussian oracle
+python hyqmom15/run_waves.py      # exact wave speeds vs goldens
+python hyqmom15/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
+python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring
+python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
+mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```
 
-## Composer le modèle
+## Composing the model
 
-Tout passe par `build_moment_model` ([model.py](model.py)), qui délègue l'algèbre des
-moments au générateur générique `adc.moments` d'adc_cpp. La seule physique écrite ici est
-la fermeture, un callable qui reçoit les moments standardisés et rend ceux d'ordre 5 :
+Everything goes through `build_moment_model` ([model.py](model.py)), which delegates the
+moment algebra to the generic generator `adc.moments` in adc_cpp. The only physics written
+here is the closure, a callable that receives the standardized moments and returns the
+order-5 ones:
 
 ```python
 from model import build_moment_model, hyqmom_closure
@@ -57,29 +58,29 @@ sim.add_equation("mom", model=compiled,
 sim.set_poisson(rhs="charge_density", solver="fft")
 ```
 
-Écrire un autre système de moments = fournir un autre callable de fermeture (même
-contrat) et, si on veut les vitesses exactes par sous-blocs, une partition du jacobien
-(`HYQMOM_BLOCKS` pour celui-ci).
+Writing another moment system = supplying another closure callable (same contract) and, if
+you want exact per-block wave speeds, a partition of the Jacobian (`HYQMOM_BLOCKS` for this
+one).
 
-### Options utiles
+### Useful options
 
-| Option | Effet |
+| Option | Effect |
 |---|---|
-| `robust=True` | planchers lisses sur M00, C20, C02 (divisions et racines protégées). Le défaut `False` reproduit le MATLAB, qui ne protège rien. |
-| `exact_speeds=False` | borne de vitesse `u ± 3·√C` au lieu des valeurs propres exactes. Suffit pour démarrer en Rusanov ; des états réalisables la dépassent (vérifié par run.py), donc jamais pour HLL. |
-| `solver=` (drivers) | `fft` (direct périodique), `fft_spectral` (symbole continu, exact sur les sinusoïdes), `geometric_mg` (général, requis en MPI). |
+| `robust=True` | smooth floors on M00, C20, C02 (protected divisions and roots). The default `False` reproduces the MATLAB, which protects nothing. |
+| `exact_speeds=False` | speed bound `u +- 3*sqrt(C)` instead of the exact eigenvalues. Good enough to start in Rusanov; realizable states exceed it (checked by run.py), so never for HLL. |
+| `solver=` (drivers) | `fft` (direct periodic), `fft_spectral` (continuous symbol, exact on sinusoids), `geometric_mg` (general, required under MPI). |
 
-## Réalisabilité : le point qui pique
+## Realizability: the sharp edge
 
-Un vecteur de moments doit rester celui d'une distribution positive (réalisabilité,
-testée par la plus petite valeur propre de la matrice `p2p2`). Le schéma ne la préserve
-pas : sans correction, l'état dérive hors de l'ensemble réalisable, les valeurs propres
-du jacobien explosent et le pas CFL s'effondre (mesuré : dt ÷ 200 sur un run diocotron).
+A moment vector must stay that of a positive distribution (realizability, tested by the
+smallest eigenvalue of the `p2p2` matrix). The scheme does not preserve it: without
+correction, the state drifts out of the realizable set, the Jacobian eigenvalues blow up,
+and the CFL step collapses (measured: dt / 200 on a diocotron run).
 
-La parade est la projection `relaxation15` ([relaxation.py](relaxation.py)), appliquée à
-chaque pas : clamps des moments standardisés puis relaxation vers une cible réalisable.
-Le portage suit le MATLAB branche à branche ; le test « valeurs propres complexes »
-utilise le jacobien autodiff du modèle. Usage par champ :
+The fix is the `relaxation15` projection ([relaxation.py](relaxation.py)), applied at every
+step: clamp the standardized moments, then relax toward a realizable target. The port
+follows the MATLAB branch by branch; the "complex eigenvalues" test uses the model's
+autodiff Jacobian. Per-field usage:
 
 ```python
 from relaxation import make_corner_eigs, relax_field
@@ -87,13 +88,13 @@ fn = make_corner_eigs()
 U = relax_field(U, lamin=1e-12, Ma=4.0, corner_eigs=fn)   # (15, ny, nx) -> projeté
 ```
 
-C'est une boucle Python par cellule : adapté à la validation et aux runs modérés,
-pas aux campagnes GPU (chemin compilé à venir côté adc_cpp).
+This is a per-cell Python loop: suited to validation and moderate runs, not to GPU
+campaigns (a compiled path is coming on the adc_cpp side).
 
 ## Validation
 
-Les références sont générées en exécutant le vrai code MATLAB (RIEMOM2D) sous Octave ;
-jamais re-transcrites :
+The references are generated by running the real MATLAB code (RIEMOM2D) under Octave; they
+are never re-transcribed:
 
 ```bash
 python3 gen_states.py
@@ -102,59 +103,59 @@ octave --no-gui --path /chemin/vers/RIEMOM2D golden_hll_gen.m    # trajectoire H
 octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m  # relaxation15 (5 branches)
 ```
 
-Ce que les drivers garantissent, chiffres en CI :
+What the drivers guarantee, with the numbers checked in CI:
 
-- flux ≡ `Flux_closure15_2D.m` à 1e-12 sur 10 états (gaussiennes, mélanges, quasi-dégénéré),
-  et fermeture exacte sur les gaussiennes (oracle d'Isserlis indépendant) ;
-- vitesses d'onde ≡ `eigenvalues15_2D.m` à ~1e-11 (l'état quasi-dégénéré est jugé à
-  l'aune de son conditionnement, mesuré dans le test) ;
-- sources ≡ les équations explicites du document de référence à 1e-14 ; rotation de
-  Larmor ≡ analytique ;
-- trajectoire : en rejouant les pas de temps du golden HLL avec `time='euler'`, l'écart
-  L2 au MATLAB après 20 pas est ~1e-16 (le schéma MATLAB, split additif + Euler, est
-  algébriquement l'Euler non-splitté) ; en ssprk2 l'écart est 4 %, c'est l'ordre 2 ;
-- Poisson : φ ≡ analytique sur sinusoïde (1e-14 en `fft_spectral`), champ E de la source
-  ≡ −∇φ centré à 1e-16, checkpoint/restart bit-identique ;
-- `relaxation15` ≡ Octave à 4e-14 sur 12 états couvrant les 5 branches ; à Ma=20 le
-  contraste projeté/nu se mesure en réalisabilité (13 % vs 52 % de cellules violées).
+- flux === `Flux_closure15_2D.m` to 1e-12 on 10 states (Gaussians, mixtures,
+  near-degenerate), and exact closure on the Gaussians (independent Isserlis oracle);
+- wave speeds === `eigenvalues15_2D.m` to ~1e-11 (the near-degenerate state is judged
+  against its conditioning, measured in the test);
+- sources === the explicit equations of the reference document to 1e-14; Larmor rotation
+  === analytic;
+- trajectory: replaying the time steps of the HLL golden with `time='euler'`, the L2 gap
+  to MATLAB after 20 steps is ~1e-16 (the MATLAB scheme, additive split + Euler, is
+  algebraically the unsplit Euler); in ssprk2 the gap is 4%, which is the second order;
+- Poisson: phi === analytic on a sinusoid (1e-14 in `fft_spectral`), the source's E field
+  === -grad phi centered to 1e-16, checkpoint/restart bit-identical;
+- `relaxation15` === Octave to 4e-14 on 12 states covering the 5 branches; at Ma=20 the
+  projected/raw contrast is measured in realizability (13% vs 52% of cells violated).
 
-## Smoke MPI multi-rang (geometric_mg)
+## Multi-rank MPI smoke (geometric_mg)
 
-[run_mpi.py](run_mpi.py) rejoue le diocotron Vlasov-Poisson sous `mpirun` (np=2 et 4) avec le
-solveur de Poisson multigrille géométrique (`solver="geometric_mg"`). Le solveur FFT direct est
-mono-rang par conception (il déroule une seule boîte en round-robin) et le cœur le refuse
-explicitement quand `n_ranks>1` ; le MG est le seul chemin elliptique distribué.
+[run_mpi.py](run_mpi.py) replays the Vlasov-Poisson diocotron under `mpirun` (np=2 and 4)
+with the geometric multigrid Poisson solver (`solver="geometric_mg"`). The direct FFT
+solver is single-rank by design (it unrolls a single box round-robin) and the core rejects
+it explicitly when `n_ranks>1`; the MG is the only distributed elliptic path.
 
 ```bash
-# mpi4py compilé contre la MÊME libmpi qu'_adc est requis : son import appelle MPI_Init, après
-# quoi le cœur lit le rang via _adc.my_rank()/n_ranks(). Lancer 1 thread on-node pour la parité.
-OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/run_mpi.py   # référence série (écrit l'état np=1)
-OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/run_mpi.py   # np=2 : checks + parité + rejet FFT
-OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/run_mpi.py   # np=4 : idem
+# mpi4py built against the SAME libmpi as _adc is required: its import calls MPI_Init, after
+# which the core reads the rank via _adc.my_rank()/n_ranks(). Run 1 on-node thread for parity.
+OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/run_mpi.py   # serial reference (writes the np=1 state)
+OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/run_mpi.py   # np=2: checks + parity + FFT rejection
+OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/run_mpi.py   # np=4: same
 ```
 
-Topologie (mesurée, pas supposée) : le `adc.System` cartésien est MONO-BOÎTE (une boîte couvre
-tout le domaine) ; sous MPI la `DistributionMapping(1, n_ranks)` l'attribue au seul rang 0. Le
-smoke exerce donc la sûreté collective du Poisson MG et des réductions (CFL max, masse) sous MPI,
-plus le garde-fou FFT, mais pas l'échange de halos entre boîtes disjointes (il n'y en a qu'une ;
-le multi-boîtes cartésien distribué relève d'AMR).
+Topology (measured, not assumed): the Cartesian `adc.System` is SINGLE-BOX (one box covers
+the whole domain); under MPI the `DistributionMapping(1, n_ranks)` assigns it to rank 0
+alone. The smoke therefore exercises the collective safety of the MG Poisson and of the
+reductions (max CFL, mass) under MPI, plus the FFT guard, but not the halo exchange between
+disjoint boxes (there is only one; distributed multi-box Cartesian belongs to AMR).
 
-Mesuré (n=64, 12 pas, 1 thread on-node, Mac M1, build MPI+Kokkos Serial) :
+Measured (n=64, 12 steps, 1 on-node thread, Mac M1, MPI+Kokkos Serial build):
 
-- np=1/2/4 : 12 pas finis, masse conservée à 2.6e-16, φ fini ; `solver="fft"` rejeté par le message
-  cœur « solveur fft non supporté en MPI (n_ranks>1) », `solver="fft_spectral"` rejeté comme solveur
-  inconnu (non implémenté dans cette révision du cœur), tous deux en RuntimeError propre sans
-  interblocage ni segfault ;
-- parité np=2 et np=4 vs np=1 : BIT-IDENTIQUE (dU_max = dφ_max = 0), halos déterministes ;
-- coût/scaling indicatif : boucle de 12 pas ~0.11 s (np=1), ~0.21 s (np=2), ~0.19 s (np=4) ; aucun
-  speedup, c'est attendu (la grille tient dans une boîte sur le rang 0, les autres rangs ne font que
-  les collectifs) : ce smoke valide la justesse MPI, pas l'équilibrage de charge.
+- np=1/2/4: 12 steps finished, mass conserved to 2.6e-16, phi finite; `solver="fft"`
+  rejected by the core message "solveur fft non supporte en MPI (n_ranks>1)",
+  `solver="fft_spectral"` rejected as an unknown solver (not implemented in this revision of
+  the core), both as a clean RuntimeError with no deadlock or segfault;
+- np=2 and np=4 parity vs np=1: BIT-IDENTICAL (dU_max = dphi_max = 0), deterministic halos;
+- indicative cost/scaling: the 12-step loop ~0.11 s (np=1), ~0.21 s (np=2), ~0.19 s (np=4);
+  no speedup, which is expected (the grid fits in one box on rank 0, the other ranks only do
+  the collectives): this smoke validates MPI correctness, not load balancing.
 
-## Limites
+## Limitations
 
-- La fermeture est exacte sur les gaussiennes mais le schéma ne préserve pas la
-  réalisabilité : runs longs ⇒ projeter (section ci-dessus).
-- `riemann="hllc"`/`"roe"` indisponibles : pas d'onde de contact ni d'eigenstructure
-  fermée pour ce système.
-- La collision BGK du MATLAB (`collision15.m`) n'est pas portée.
-- Taux de croissance diocotron vs un golden MATLAB long : campagne dédiée, hors CI.
+- The closure is exact on Gaussians, but the scheme does not preserve realizability: long
+  runs => project (section above).
+- `riemann="hllc"`/`"roe"` unavailable: no contact wave nor closed eigenstructure for this
+  system.
+- The MATLAB BGK collision (`collision15.m`) is not ported.
+- Diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.

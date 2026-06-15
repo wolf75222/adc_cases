@@ -1,116 +1,116 @@
-# plasma : trois especes (e + i + n) couplees par Poisson, ionisation et collision
+# plasma: three species (e + i + n) coupled by Poisson, ionization, and collision
 
-Validation de la plomberie de couplage multi-especes de `adc.System` : trois fluides (electrons
-Euler compressible, ions et neutres isothermes) partagent un Poisson de systeme et echangent de la
-masse par ionisation ($n_g \to n_i + n_e$) et de l'impulsion par friction ion-neutre. Le cas ne
-reproduit aucun plasma publie : il mesure trois invariants structurels (champ non nul, masse
-$n_i + n_g$ conservee au transfert, densites finies et positives) et les assere. La prediction
-falsifiable est un invariant exact, pas un nombre physique cible.
+Validation of the multi-species coupling plumbing in `adc.System`: three fluids (compressible
+Euler electrons, isothermal ions and neutrals) share one system Poisson solve and exchange mass
+through ionization ($n_g \to n_i + n_e$) and momentum through ion-neutral friction. The case does
+not reproduce any published plasma: it measures three structural invariants (nonzero field, mass
+$n_i + n_g$ conserved under transfer, finite and positive densities) and asserts them. The
+falsifiable prediction is an exact invariant, not a target physical number.
 
-## Contrat
+## Contract
 
-| Champ | Contenu |
+| Field | Content |
 |---|---|
-| Categorie (manifeste) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). Ce n'est pas une reproduction publiee : on verifie des invariants, pas une courbe d'un papier. |
-| Entrees | grille $48^2$, $L=1$, periodique ; CI : $n_e = 1 + 0.05\cos(2\pi x)$ (faible separation de charge), $n_i = n_g = 1$, toutes au repos ; $q_e=-1$, $q_i=+1$, $q_g=0$ ; $\gamma_e=5/3$, $c_s^2=1$ ; $k_{ion}=0.3$, $k_{col}=0.5$ ; 20 macro-pas a CFL $0.3$ |
-| Sorties | $\lvert\phi\rvert_{max}$ initial ; masses $M_i, M_g$ avant/apres ; min des trois densites ; 3 figures de diagnostic dans `figures/` + `figures/provenance.json` |
-| Invariants garantis | les 4 `assert` de `run.py:66-69` : (1) $\lvert\phi\rvert_{max}>10^{-8}$ ; (2) $M_g$ baisse et $M_i$ monte (chacun $>10^{-6}$) ; (3) derive relative de $M_i+M_g$ sous $10^{-7}$ ; (4) densites finies et $>0$ |
-| Prouve | (1) le Poisson de systeme est actif : $\lvert\phi\rvert_{max}=1.266\times10^{-3}$ ; (2) l'ionisation transfere la masse du neutre vers l'ion : $M_g\!:2304\to2237.32$, $M_i\!:2304\to2370.68$ ; (3) ce transfert conserve $M_i+M_g$ a $2.37\times10^{-15}$ (precision machine) ; (4) les trois densites restent finies et $>0$ (min $e=0.986$, $i=1.028$, $n=0.970$) |
-| Ne prouve pas | l'ionisation n'agit que sur la densite (comp 0) : le transfert de quantite de mouvement et d'energie des particules creees est une simplification du coeur (`system.cpp:719-733`), aucun assert ne le teste. La friction neglige l'echauffement (`system.cpp:754-757`). Aucune energie totale, aucun taux de croissance, aucune section efficace physique : $k_{ion}, k_{col}$ sont des constantes de demonstration. Pas de magnetisation, pas de derive ExB (cf. [`../diocotron/`](../diocotron/)). $48^2$/20 pas : aucune convergence |
-| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, backend natif serie, $48^2$, ~0.2 s 1 coeur CPU ; `figures/provenance.json` |
+| Category (manifest) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). This is not a published reproduction: you verify invariants, not a curve from a paper. |
+| Inputs | grid $48^2$, $L=1$, periodic; IC: $n_e = 1 + 0.05\cos(2\pi x)$ (weak charge separation), $n_i = n_g = 1$, all at rest; $q_e=-1$, $q_i=+1$, $q_g=0$; $\gamma_e=5/3$, $c_s^2=1$; $k_{ion}=0.3$, $k_{col}=0.5$; 20 macro-steps at CFL $0.3$ |
+| Outputs | initial $\lvert\phi\rvert_{max}$; masses $M_i, M_g$ before/after; min of the three densities; 3 diagnostic figures in `figures/` + `figures/provenance.json` |
+| Guaranteed invariants | the 4 `assert`s in `run.py:66-69`: (1) $\lvert\phi\rvert_{max}>10^{-8}$; (2) $M_g$ drops and $M_i$ rises (each $>10^{-6}$); (3) relative drift of $M_i+M_g$ below $10^{-7}$; (4) finite densities $>0$ |
+| Proves | (1) the system Poisson solve is active: $\lvert\phi\rvert_{max}=1.266\times10^{-3}$; (2) ionization transfers mass from neutral to ion: $M_g\!:2304\to2237.32$, $M_i\!:2304\to2370.68$; (3) this transfer conserves $M_i+M_g$ to $2.37\times10^{-15}$ (machine precision); (4) the three densities stay finite and $>0$ (min $e=0.986$, $i=1.028$, $n=0.970$) |
+| Does not prove | ionization only acts on density (comp 0): the momentum and energy transfer of the created particles is a core simplification (`system.cpp:719-733`), no assert tests it. Friction neglects heating (`system.cpp:754-757`). No total energy, no growth rate, no physical cross-section: $k_{ion}, k_{col}$ are demonstration constants. No magnetization, no ExB drift (see [`../diocotron/`](../diocotron/)). $48^2$/20 steps: no convergence |
+| Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native serial backend, $48^2$, ~0.2 s on 1 CPU core; `figures/provenance.json` |
 
-A la fin tu sauras : pourquoi un Poisson de systeme couple trois fluides charges differemment,
-pourquoi l'ionisation conserve $n_i+n_g$ exactement (le terme source est antisymetrique a la
-precision machine), comment la friction conserve l'impulsion du couple ion-neutre, et ce que le
-modele ne capture pas (momentum/energie des particules ionisees, echauffement de friction).
-
----
-
-## 1. Le mecanisme physique
-
-Trois fluides occupent le meme carre periodique. Ce qui les lie n'est pas le transport (chaque
-espece advecte sa propre densite), mais trois couplages appliques apres le transport :
-
-1. **Champ self-consistant.** Electrons ($q_e=-1$) et ions ($q_i=+1$) sont des sources du potentiel
-   par $-\nabla^2\phi = f = q_e n_e + q_i n_i$. Les neutres ($q_g=0$) n'y entrent pas. A l'instant
-   initial, $n_e$ est module ($1+0.05\cos 2\pi x$) et $n_i$ uniforme : $f=-n_e+n_i=-0.05\cos 2\pi x$
-   n'est pas nul, donc $\phi$ non plus. C'est la separation de charge qui allume le Poisson.
-
-2. **Ionisation $n_g \to n_i + n_e$.** Un neutre heurte un electron, perd un electron et devient un
-   ion ; il y a desormais un ion et un electron de plus, un neutre de moins. Le taux local est
-   $r = k_{ion}\,n_e\,n_g$ (proportionnel a la densite des deux reactifs). La masse passe du
-   reservoir neutre au reservoir ionise : $n_g$ descend, $n_i$ et $n_e$ montent du meme montant.
-
-3. **Friction ion-neutre.** Les ions et les neutres s'echangent de l'impulsion par collisions :
-   une force $\mathbf{F}=k_{col}(\mathbf{u}_i-\mathbf{u}_g)$ freine l'espece rapide et accelere la
-   lente, opposee sur chaque fluide. C'est un transfert interne : l'impulsion totale du couple
-   ion-neutre est conservee par la friction seule.
-
-Le coeur de ce cas est le couplage 2 : son invariant ($n_i+n_g$ conserve) est exact parce que
-le terme source est ecrit antisymetrique (ce qui sort de $n_g$ entre dans $n_i$, voir section 4).
-C'est cet invariant que les figures de la section 6 confrontent. Le couplage 3 est cable et
-actif mais son invariant d'impulsion n'est pas asseré ici (justifie en section 7).
+By the end you will know: why a system Poisson solve couples three charged fluids differently, why
+ionization conserves $n_i+n_g$ exactly (the source term is antisymmetric to machine precision), how
+friction conserves the momentum of the ion-neutral pair, and what the model does not capture
+(momentum/energy of the ionized particles, friction heating).
 
 ---
 
-## 2. Les equations et qui les calcule
+## 1. The physical mechanism
 
-Trois fluides sur $[0,L]^2$ periodique. Transport (chaque espece) puis couplages (operator-split) :
+Three fluids occupy the same periodic square. What links them is not transport (each species
+advects its own density), but three couplings applied after transport:
 
-| Espece | Transport | Source champ | Couplages subis |
+1. **Self-consistent field.** Electrons ($q_e=-1$) and ions ($q_i=+1$) are sources of the potential
+   through $-\nabla^2\phi = f = q_e n_e + q_i n_i$. Neutrals ($q_g=0$) do not enter it. At the
+   initial instant, $n_e$ is modulated ($1+0.05\cos 2\pi x$) and $n_i$ is uniform:
+   $f=-n_e+n_i=-0.05\cos 2\pi x$ is nonzero, so $\phi$ is nonzero too. The charge separation is what
+   turns on the Poisson solve.
+
+2. **Ionization $n_g \to n_i + n_e$.** A neutral hits an electron, loses an electron, and becomes an
+   ion; there is now one more ion and one more electron, one fewer neutral. The local rate is
+   $r = k_{ion}\,n_e\,n_g$ (proportional to the density of both reactants). Mass moves from the
+   neutral reservoir to the ionized reservoir: $n_g$ drops, $n_i$ and $n_e$ rise by the same amount.
+
+3. **Ion-neutral friction.** Ions and neutrals exchange momentum through collisions: a force
+   $\mathbf{F}=k_{col}(\mathbf{u}_i-\mathbf{u}_g)$ slows the fast species and accelerates the slow
+   one, opposite on each fluid. This is an internal transfer: the total momentum of the ion-neutral
+   pair is conserved by friction alone.
+
+The core of this case is coupling 2: its invariant ($n_i+n_g$ conserved) is exact because the
+source term is written antisymmetric (what leaves $n_g$ enters $n_i$, see section 4). It is this
+invariant that the figures in section 6 confront. Coupling 3 is wired and active but its momentum
+invariant is not asserted here (justified in section 7).
+
+---
+
+## 2. The equations and who computes them
+
+Three fluids on periodic $[0,L]^2$. Transport (each species) then couplings (operator-split):
+
+| Species | Transport | Field source | Couplings applied |
 |---|---|---|---|
-| electrons (Euler, $\gamma=5/3$) | $\partial_t U_e + \nabla\cdot F(U_e) = 0$, $U_e=(\rho_e,\rho_e\mathbf{u}_e,E_e)$ | $\tfrac{q_e}{m}\rho_e\mathbf{E}$ (+ travail) | ionisation (gain de densite) |
-| ions (isotherme, $c_s^2=1$) | $\partial_t U_i + \nabla\cdot F(U_i) = 0$, $U_i=(\rho_i,\rho_i\mathbf{u}_i)$ | $\tfrac{q_i}{m}\rho_i\mathbf{E}$ | ionisation (gain), friction |
-| neutres (isotherme, $c_s^2=1$) | $\partial_t U_g + \nabla\cdot F(U_g) = 0$, $U_g=(\rho_g,\rho_g\mathbf{u}_g)$ | aucune ($q_g=0$) | ionisation (perte), friction |
+| electrons (Euler, $\gamma=5/3$) | $\partial_t U_e + \nabla\cdot F(U_e) = 0$, $U_e=(\rho_e,\rho_e\mathbf{u}_e,E_e)$ | $\tfrac{q_e}{m}\rho_e\mathbf{E}$ (+ work) | ionization (density gain) |
+| ions (isothermal, $c_s^2=1$) | $\partial_t U_i + \nabla\cdot F(U_i) = 0$, $U_i=(\rho_i,\rho_i\mathbf{u}_i)$ | $\tfrac{q_i}{m}\rho_i\mathbf{E}$ | ionization (gain), friction |
+| neutrals (isothermal, $c_s^2=1$) | $\partial_t U_g + \nabla\cdot F(U_g) = 0$, $U_g=(\rho_g,\rho_g\mathbf{u}_g)$ | none ($q_g=0$) | ionization (loss), friction |
 
-Couplage elliptique partage : $-\nabla^2\phi = q_e n_e + q_i n_i$, $\mathbf{E}=-\nabla\phi$,
-periodique. Chaque espece est un modele nomme cote application (`adc_cases.models`), compose de
-briques generiques par `adc.Model(state, transport, source, elliptic)` :
+Shared elliptic coupling: $-\nabla^2\phi = q_e n_e + q_i n_i$, $\mathbf{E}=-\nabla\phi$, periodic.
+Each species is a named model on the application side (`adc_cases.models`), composed of generic
+bricks by `adc.Model(state, transport, source, elliptic)`:
 
-| Espece | `models.*` (`models.py`) | Etat | Transport | Source | Elliptique |
+| Species | `models.*` (`models.py`) | State | Transport | Source | Elliptic |
 |---|---|---|---|---|---|
 | electrons | `electron_euler` (l.28-35) | `FluidState(compressible, gamma=5/3)` | `CompressibleFlux` | `PotentialForce(q=-1)` | `ChargeDensity(q=-1)` |
 | ions | `ion_isothermal` (l.38-45) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `PotentialForce(q=+1)` | `ChargeDensity(q=+1)` |
-| neutres | `neutral_isothermal` (l.69-77) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `NoSource` | `ChargeDensity(q=0)` |
+| neutrals | `neutral_isothermal` (l.69-77) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `NoSource` | `ChargeDensity(q=0)` |
 
-`ChargeDensity(q=0)` est presente mais nulle sur les neutres : ils sont declares au Poisson avec
-un poids zero, donc n'y contribuent pas. Qui calcule quoi (table 3 couches, ancree sur les lignes
-reelles de `recipes.plasma`, `recipes.py:32-51`, declenchee par `run.py:43-44`) :
+`ChargeDensity(q=0)` is present but null on the neutrals: they are declared to the Poisson solve
+with a zero weight, so they do not contribute to it. Who computes what (3-layer table, anchored on
+the actual lines of `recipes.plasma`, `recipes.py:32-51`, triggered by `run.py:43-44`):
 
-| Ligne | Couche | Ce qui se passe |
+| Line | Layer | What happens |
 |---|---|---|
-| `recipes.plasma(sim, ne, ni, ng, ...)` (`run.py:43`) -> `add_block` x3 + `set_poisson` + `add_ionization` + `add_collision` (`recipes.py:37-47`) | Python compose | choix des 3 modeles, des schemas (electrons HLLC+vanleer+primitif ; ions/neutres minmod), du Poisson de systeme, des 2 couplages |
-| `models.electron_euler/ion_isothermal/neutral_isothermal` -> briques `CompressibleFlux` / `IsothermalFlux` / `PotentialForce` / `ChargeDensity` (`include/adc/physics/*.hpp`) | brique C++ fige | la convention exacte du flux, de la force $q\rho\mathbf{E}$, du second membre de Poisson $\sum_b q_b n_b$ |
-| `assemble_rhs<Limiter,Flux>` par bloc + `GeometricMG` (Poisson) + foncteurs ionisation/collision (`system.cpp:723-733`, `758-767`) | noyau par cellule (device) | le transport reel et les deux couplages, sans callback Python dans le hot path |
+| `recipes.plasma(sim, ne, ni, ng, ...)` (`run.py:43`) -> `add_block` x3 + `set_poisson` + `add_ionization` + `add_collision` (`recipes.py:37-47`) | Python composes | choice of the 3 models, of the schemes (electrons HLLC+vanleer+primitive; ions/neutrals minmod), of the system Poisson solve, of the 2 couplings |
+| `models.electron_euler/ion_isothermal/neutral_isothermal` -> bricks `CompressibleFlux` / `IsothermalFlux` / `PotentialForce` / `ChargeDensity` (`include/adc/physics/*.hpp`) | C++ brick fixes | the exact convention of the flux, of the force $q\rho\mathbf{E}$, of the Poisson right-hand side $\sum_b q_b n_b$ |
+| `assemble_rhs<Limiter,Flux>` per block + `GeometricMG` (Poisson) + ionization/collision functors (`system.cpp:723-733`, `758-767`) | per-cell kernel (device) | the actual transport and the two couplings, with no Python callback in the hot path |
 
-Le mot "plasma" vit dans `recipes.py`, jamais cote coeur : c'est une composition de briques
-generiques, pas un scenario code en dur.
+The word "plasma" lives in `recipes.py`, never on the core side: it is a composition of generic
+bricks, not a hard-coded scenario.
 
 ---
 
-## 3. La prediction falsifiable : l'invariant $n_i + n_g = \text{cste}$
+## 3. The falsifiable prediction: the invariant $n_i + n_g = \text{const}$
 
-Ce cas etant `validation`, sa prediction n'est pas un taux mais un invariant exact : tout neutre
-ionise devient exactement un ion, donc
+Since this case is `validation`, its prediction is not a rate but an exact invariant: every ionized
+neutral becomes exactly one ion, so
 
 $$\frac{d}{dt}\big(M_i + M_g\big) = 0, \qquad M_s \equiv \sum_{\text{cell}} n_s .$$
 
-La derivation (section 4) montre pourquoi : le terme source est antisymetrique entre $n_i$ et
-$n_g$ a la precision machine. L'artefact qui confronte cette prediction est `ionization.png`
-(section 6) : la courbe noire $M_i+M_g$ doit etre plate, et la derive relative doit plafonner
-sous la tolerance $10^{-7}$ de l'assert. C'est la clause Prouve (3). La clause Prouve (2) (sens du
-transfert) et Prouve (1) (Poisson actif) sont confrontees par les memes figures. La clause
-Ne prouve pas (momentum/energie ignores) est justifiee en section 4 (ce que le foncteur n'ecrit pas)
-et en section 7.
+The derivation (section 4) shows why: the source term is antisymmetric between $n_i$ and $n_g$ to
+machine precision. The artifact that confronts this prediction is `ionization.png` (section 6): the
+black curve $M_i+M_g$ must be flat, and the relative drift must stay below the assert tolerance
+$10^{-7}$. This is the Proves (3) clause. The Proves (2) clause (direction of transfer) and Proves
+(1) (Poisson active) are confronted by the same figures. The Does not prove clause (momentum/energy
+ignored) is justified in section 4 (what the functor does not write) and in section 7.
 
 ---
 
-## 4. Maths : pourquoi l'ionisation conserve $n_i+n_g$ et pas l'energie
+## 4. Math: why ionization conserves $n_i+n_g$ and not energy
 
-### 4.1 Le terme source d'ionisation est antisymetrique par construction
+### 4.1 The ionization source term is antisymmetric by construction
 
-L'ionisation est appliquee en operator-split apres le transport. Le foncteur C++ (`system.cpp:723-733`)
-calcule, par cellule, un seul scalaire $\delta n = \Delta t\,k_{ion}\,n_e\,n_g$ puis le distribue :
+Ionization is applied operator-split after transport. The C++ functor (`system.cpp:723-733`)
+computes, per cell, a single scalar $\delta n = \Delta t\,k_{ion}\,n_e\,n_g$ then distributes it:
 
 ```cpp
 const Real dn = dt * k * ue(i, j, de) * ug(i, j, dg);   // delta_n = dt k n_e n_g  (system.cpp:728)
@@ -119,64 +119,64 @@ ui(i, j, di) += dn;                                      // ion    : +delta_n   
 ue(i, j, de) += dn;                                      // electron: +delta_n     (system.cpp:731)
 ```
 
-- `de`, `di`, `dg` sont les indices de la composante densite de chaque bloc, resolus par role
-  (`role_index(..., Density, 0)`, `system.cpp:716-718`) : un bloc qui range sa densite ailleurs que
-  l'indice 0 reste correctement couple.
-- $n_g$ perd exactement ce que $n_i$ gagne : le meme $\delta n$ est soustrait a l'un et ajoute a
-  l'autre. La somme cellule par cellule $n_i+n_g$ est donc invariante a l'arithmetique flottante
-  pres ; en sommant sur toutes les cellules, $M_i+M_g$ est conservee. C'est l'origine du
-  $2.37\times10^{-15}$ mesure (somme de $48^2$ annulations flottantes, pas un zero exact).
-- $n_e$ gagne aussi $\delta n$ (l'electron arrache n'est pas detruit) : $n_e$ et $n_i$ croissent
-  du meme montant. C'est verifiable : les masses finales electrons et ions sont identiques a
-  $10^{-13}$ pres ($2370.677033292462$ vs $2370.677033292496$, `provenance.json`). $M_e$ n'est donc
-  pas conservee (les electrons sont crees, pas advectes seulement) ; seul le couple $M_i+M_g$ l'est.
+- `de`, `di`, `dg` are the density component indices of each block, resolved by role
+  (`role_index(..., Density, 0)`, `system.cpp:716-718`): a block that stores its density somewhere
+  other than index 0 stays correctly coupled.
+- $n_g$ loses exactly what $n_i$ gains: the same $\delta n$ is subtracted from one and added to the
+  other. The cell-by-cell sum $n_i+n_g$ is therefore invariant up to floating-point arithmetic;
+  summing over all cells, $M_i+M_g$ is conserved. This is the origin of the measured
+  $2.37\times10^{-15}$ (sum of $48^2$ floating-point cancellations, not an exact zero).
+- $n_e$ also gains $\delta n$ (the freed electron is not destroyed): $n_e$ and $n_i$ grow by the
+  same amount. This is checkable: the final electron and ion masses are identical to $10^{-13}$
+  ($2370.677033292462$ vs $2370.677033292496$, `provenance.json`). $M_e$ is therefore not conserved
+  (electrons are created, not just advected); only the pair $M_i+M_g$ is.
 
-### 4.2 Ce que le foncteur n'ecrit pas (la simplification, clause Ne prouve pas)
+### 4.2 What the functor does not write (the simplification, Does-not-prove clause)
 
-Les trois lignes ci-dessus touchent uniquement la composante densite (comp 0). Elles n'ecrivent
-ni la quantite de mouvement (comp 1, 2) ni l'energie (comp 3 des electrons). Physiquement, un ion
-cree devrait naitre avec la quantite de mouvement du neutre dont il provient, et l'electron arrache
-emporte une energie ; ici rien de tout cela n'est transfere. Le commentaire du coeur le dit :
-"le transfert de quantite de mouvement / energie (especes fluides) est un raffinement ulterieur"
-(`system.cpp:721-722`). Consequence concrete : l'energie totale n'est ni definie ni controlee, et
-aucun assert ne porte dessus. La conservation que l'on assere (`drel < 1e-7`) est uniquement une
-conservation de masse $n_i+n_g$, pas de momentum ni d'energie.
+The three lines above touch only the density component (comp 0). They write neither the momentum
+(comp 1, 2) nor the energy (comp 3 of the electrons). Physically, a created ion should be born with
+the momentum of the neutral it came from, and the freed electron carries away an energy; here none
+of that is transferred. The core comment says so: "the momentum / energy transfer (fluid species) is
+a later refinement" (`system.cpp:721-722`). Concrete consequence: the total energy is neither
+defined nor controlled, and no assert bears on it. The conservation we assert (`drel < 1e-7`) is
+only a mass conservation of $n_i+n_g$, not of momentum or energy.
 
-### 4.3 La friction conserve l'impulsion du couple, pas l'energie
+### 4.3 Friction conserves the pair's momentum, not the energy
 
-Le foncteur de collision (`system.cpp:758-767`) calcule la force de friction par cellule et l'oppose
-sur chaque espece :
+The collision functor (`system.cpp:758-767`) computes the friction force per cell and opposes it on
+each species:
 
 ```cpp
 const Real fx = dt * k * (ua(i,j,mxa)/ua(i,j,da) - ub(i,j,mxb)/ub(i,j,db));  // dt k (u_a - u_b)
 ua(i, j, mxa) -= fx;  ub(i, j, mxb) += fx;                                   // opposee (system.cpp:763)
 ```
 
-- `mxa`, `mxb` (et `mya`, `myb`) sont les composantes quantite de mouvement $\rho u$ resolues
-  par role (`system.cpp:748-753`) ; `da`, `db` les densites (pour reconstruire $u=\rho u/\rho$).
-- La force est $\mathbf{F}=k_{col}(\mathbf{u}_a-\mathbf{u}_b)$, retiree a $a$, ajoutee a $b$ : la
-  somme $\rho_a\mathbf{u}_a + \rho_b\mathbf{u}_b$ change de $-fx + fx = 0$. L'impulsion totale du
-  couple ion-neutre est conservee par la friction. Mesure : $\Delta(P_x^{ion}+P_x^{neutre})$ final
-  $=-1.7\times10^{-17}$, le zero machine (figure `ionization.png`, panneau 3).
-- L'echauffement par friction (la chaleur dissipee, $\propto k_{col}|\mathbf{u}_a-\mathbf{u}_b|^2$)
-  n'est pas rendu a l'energie : "l'echauffement par friction (energie) est un raffinement
-  ulterieur" (`system.cpp:756-757`). C'est coherent pour des especes isothermes (sans equation
-  d'energie), mais c'est une simplification a nommer.
+- `mxa`, `mxb` (and `mya`, `myb`) are the momentum components $\rho u$ resolved by role
+  (`system.cpp:748-753`); `da`, `db` are the densities (to reconstruct $u=\rho u/\rho$).
+- The force is $\mathbf{F}=k_{col}(\mathbf{u}_a-\mathbf{u}_b)$, removed from $a$, added to $b$: the
+  sum $\rho_a\mathbf{u}_a + \rho_b\mathbf{u}_b$ changes by $-fx + fx = 0$. The total momentum of the
+  ion-neutral pair is conserved by friction. Measured: final
+  $\Delta(P_x^{ion}+P_x^{neutre})=-1.7\times10^{-17}$, the machine zero (figure `ionization.png`,
+  panel 3).
+- The friction heating (the dissipated heat, $\propto k_{col}|\mathbf{u}_a-\mathbf{u}_b|^2$) is not
+  returned to the energy: "friction heating (energy) is a later refinement" (`system.cpp:756-757`).
+  This is consistent for isothermal species (without an energy equation), but it is a simplification
+  to name.
 
-### 4.4 Pourquoi la tolerance $10^{-7}$
+### 4.4 Why the tolerance $10^{-7}$
 
-`assert drel < 1e-7` (`run.py:68`) se situe entre deux echelles : le bruit de l'antisymetrie
-flottante (mesure $2.37\times10^{-15}$, soit la somme de $48^2$ annulations) et toute violation
-structurelle qui trahirait un bug de distribution (si le foncteur soustrayait a $n_g$ autre
-chose qu'il n'ajoute a $n_i$, la derive serait de l'ordre de la fraction ionisee, $\sim 3\times10^{-2}$
-ici). $10^{-7}$ est largement au-dessus du bruit et tres en-dessous d'une fuite de masse reelle :
-sept ordres de grandeur de marge. La tolerance n'est pas posee, elle separe deux regimes mesures.
+`assert drel < 1e-7` (`run.py:68`) sits between two scales: the noise of the floating-point
+antisymmetry (measured $2.37\times10^{-15}$, i.e. the sum of $48^2$ cancellations) and any
+structural violation that would betray a distribution bug (if the functor subtracted from $n_g$
+something other than what it adds to $n_i$, the drift would be of the order of the ionized fraction,
+$\sim 3\times10^{-2}$ here). $10^{-7}$ is well above the noise and far below a real mass leak: seven
+orders of magnitude of margin. The tolerance is not posited, it separates two measured regimes.
 
 ---
 
-## 5. Conditions initiales (`run.py:38-44`)
+## 5. Initial conditions (`run.py:38-44`)
 
-Posees en numpy (la physique du scenario vit cote application, jamais en C++ par cas) :
+Set in numpy (the scenario physics lives on the application side, never in C++ per case):
 
 ```python
 n, L = 48, 1.0
@@ -186,108 +186,107 @@ recipes.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
                ionization_rate=0.3, collision_rate=0.5)           # ions/neutres uniformes (run.py:43-44)
 ```
 
-- **Electrons** : $1+0.05\cos(2\pi x)$, modulation 5 % le long de $x$, constante en $y$. C'est
-  l'unique source de non-trivialite du Poisson : $f=-n_e+n_i=-0.05\cos 2\pi x$.
-- **Ions, neutres** : uniformes a $1$. Tous les fluides demarrent au repos : `set_density` ne
-  pose que la densite, le reste de l'etat conservatif est complete au repos par le modele du bloc.
-- Convention de grille (`adc_cases.common.grid`) : `field[j, i]`, centre $x=(i+0.5)/n\,L$. La
-  modulation ne depend que de la colonne $i$ (axe $x$), d'ou des cartes finales **striees en $x$**
-  (section 6).
+- **Electrons**: $1+0.05\cos(2\pi x)$, 5% modulation along $x$, constant in $y$. This is the only
+  source of nontriviality for the Poisson solve: $f=-n_e+n_i=-0.05\cos 2\pi x$.
+- **Ions, neutrals**: uniform at $1$. All fluids start at rest: `set_density` only sets the density,
+  the rest of the conservative state is completed at rest by the block's model.
+- Grid convention (`adc_cases.common.grid`): `field[j, i]`, center $x=(i+0.5)/n\,L$. The modulation
+  depends only on column $i$ (the $x$ axis), hence final maps **striped in $x$** (section 6).
 
-L'avance : `sim.step_cfl(0.3)` x20 (`run.py:53-54`), $dt$ choisi a CFL $0.3$ a chaque macro-pas.
-Le temps final mesure est $t=0.0965$ (`provenance.json`). Schemas : electrons
-`Spatial(vanleer, hllc, primitive)` (recon primitive = positivite de $\rho,p$ pour Euler) ;
-ions/neutres `Spatial(minmod)` (flux rusanov par defaut). Integrateur SSPRK2 par defaut.
-
----
-
-## 6. Figures (diagnostic, `figures/`, generees par `make_figures.py`)
-
-`make_figures.py` re-joue les memes CI, recette, nombre de pas et CFL que `run.py`, mais
-instrumente la boucle pour enregistrer l'historique. Commande en section 8.
-
-### `densities.png` : densites moyennes des trois especes vs t
-
-![Densites moyennes e/i/n vs t : ions et electrons montent, neutres descendent](figures/densities.png)
-
-- **Prouve** (clause 2) : la densite moyenne des ions monte ($\bar n_i\!:1\to1.0289$) et celle des
-  neutres descend ($\bar n_g\!:1\to0.9711$) de maniere exactement opposee : l'ionisation vide le
-  reservoir neutre dans le reservoir ionise. Pentes initiales egales et de signe oppose (asserte par
-  $M_g<M_{g,0}$ et $M_i>M_{i,0}$, `run.py:67`).
-- **Suggéré (non assere)** : la courbe electron (bleu) est invisible, masquee sous la courbe ion
-  (rouge) : $\bar n_e=\bar n_i$ a $10^{-13}$ pres (section 4.1, $n_e$ et $n_i$ gagnent le meme
-  $\delta n$). Visible a l'oeil, mais aucun assert ne compare $M_e$ a $M_i$.
-- **Non montré** : la courbure tres legere (le taux $k n_e n_g$ depend de $n_e n_g$ qui evolue) ;
-  sur $t<0.1$ et une fraction ionisee de 3 %, l'evolution reste quasi lineaire. Pas de saturation
-  (le neutre n'est pas epuise).
-
-### `ionization.png` : bilan d'ionisation, conservation et impulsion
-
-![Trois panneaux : transfert n_g vers n_i, derive de masse, impulsion totale](figures/ionization.png)
-
-- **Prouve** (clause 3), panneau gauche : $M_i$ (rouge) et $M_g$ (vert) divergent en miroir, mais
-  leur somme $M_i+M_g$ (noir) est rigoureusement plate a $4608=2\times2304$. Le transfert ne
-  cree ni ne detruit de masse $i\!+\!g$.
-- **Prouve** (clause 3), panneau central : la derive relative de $M_i+M_g$ plafonne autour de
-  $10^{-15}$ (precision machine), huit ordres de grandeur sous la tolerance d'assert $10^{-7}$
-  (ligne grise) : l'antisymetrie du foncteur (section 4.1) tient au bit pres. C'est l'observable qui
-  Prouve l'invariant, pas seulement le rend plausible.
-- **Suggéré / Non montré**, panneau droit : la variation d'impulsion totale du couple ion-neutre
-  reste au zero machine ($\sim10^{-17}$). La friction conserve cette impulsion (section 4.3) ;
-  ici elle est de toute facon quasi nulle car les vitesses partent de zero et restent faibles. Le
-  panneau suggere la conservation mais ne la prouve pas (aucun assert sur l'impulsion dans ce
-  cas ; voir section 7) : a vitesse nulle, c'est un test peu exigeant.
-
-### `density_map.png` : cartes de densite a l'etat final
-
-![Cartes 2D n_e, n_i, n_g a t final : striees en x, ions/neutres modules par l'ionisation](figures/density_map.png)
-
-- **Prouve** (clause 4) : les trois cartes sont finies et partout positives (min $e=0.986$,
-  $i=1.028$, $n=0.970$ ; asserte `run.py:69`). Aucun creux negatif, le primitif electron et le minmod
-  isotherme tiennent la positivite.
-- **Suggéré (non assere)** : ions et neutres, partis uniformes, ont developpe une modulation en
-  $x$ qui copie le motif electron (ion : maximum la ou $n_e$ est dense ; neutre : photographie
-  negative). Cause : le taux local $k\,n_e\,n_g$ est proportionnel a $n_e$, donc on ionise plus la ou
-  les electrons sont denses. C'est une consequence directe (et correcte) du couplage, mais aucun
-  assert ne la verifie : signature, pas garantie.
-- **Non montré** : aucune dynamique en $y$ (CI invariante en $y$, advection au repos) ; aucune
-  structure non lineaire (run trop court, gradients trop faibles).
+The time advance: `sim.step_cfl(0.3)` x20 (`run.py:53-54`), $dt$ chosen at CFL $0.3$ at each
+macro-step. The measured final time is $t=0.0965$ (`provenance.json`). Schemes: electrons
+`Spatial(vanleer, hllc, primitive)` (primitive reconstruction = positivity of $\rho,p$ for Euler);
+ions/neutrals `Spatial(minmod)` (rusanov flux by default). SSPRK2 integrator by default.
 
 ---
 
-## 7. Ce que les invariants ne capturent pas
+## 6. Figures (diagnostic, `figures/`, generated by `make_figures.py`)
 
-L'oracle de ce cas est la plomberie, pas une physique de reference. Les ecarts au "vrai" plasma
-sont structurels et assumes :
+`make_figures.py` replays the same IC, recipe, number of steps, and CFL as `run.py`, but
+instruments the loop to record the history. Command in section 8.
 
-1. **Ionisation sans momentum ni energie** (section 4.2). Le foncteur n'ecrit que la densite. Un ion
-   cree devrait heriter de l'impulsion du neutre source et l'electron d'une energie ; ici les
-   particules creees apparaissent au repos thermodynamique du fluide receveur. La conservation
-   asseree ne porte donc que sur $n_i+n_g$.
+### `densities.png`: mean densities of the three species vs t
 
-2. **Friction sans echauffement** (section 4.3). La chaleur de friction n'est pas rendue a l'energie.
-   Coherent pour des especes isothermes, mais ce serait faux si on activait l'energie des ions.
+![Mean densities e/i/n vs t: ions and electrons rise, neutrals fall](figures/densities.png)
 
-3. **Impulsion de collision non asseree ici.** Le panneau droit de `ionization.png` montre une
-   impulsion au zero machine, mais (a) les vitesses partent de zero, donc le test est peu exigeant,
-   et (b) le champ $\mathbf{E}$ agit aussi sur les ions ($q_i\rho_i\mathbf{E}$), si bien que
-   l'impulsion des ions seuls n'est pas conservee : seule la friction, isolement, conserve le couple.
-   La conservation d'impulsion de la friction pure est verifiee a part dans le test des bindings de
-   `adc_cpp`, pas dans ce cas assemble.
+- **Proves** (clause 2): the mean ion density rises ($\bar n_i\!:1\to1.0289$) and that of the
+  neutrals falls ($\bar n_g\!:1\to0.9711$) in exactly opposite fashion: ionization empties the
+  neutral reservoir into the ionized reservoir. Equal and opposite-sign initial slopes (asserted by
+  $M_g<M_{g,0}$ and $M_i>M_{i,0}$, `run.py:67`).
+- **Suggested (not asserted)**: the electron curve (blue) is invisible, hidden under the ion curve
+  (red): $\bar n_e=\bar n_i$ to $10^{-13}$ (section 4.1, $n_e$ and $n_i$ gain the same $\delta n$).
+  Visible to the eye, but no assert compares $M_e$ with $M_i$.
+- **Not shown**: the very slight curvature (the rate $k n_e n_g$ depends on $n_e n_g$, which
+  evolves); over $t<0.1$ and a 3% ionized fraction, the evolution stays nearly linear. No saturation
+  (the neutral is not depleted).
 
-4. **Taux non physiques.** $k_{ion}=0.3$, $k_{col}=0.5$ sont des constantes de demonstration, sans
-   section efficace ni dependance en temperature. La fraction ionisee de 3 % en $t=0.0965$ n'a pas de
-   sens calibre.
+### `ionization.png`: ionization balance, conservation, and momentum
 
-5. **Pas de magnetisation, geometrie cartesienne, run court.** Aucun champ $B$, aucune derive ExB
-   (pour cela voir [`../diocotron/`](../diocotron/), la limite de derive d'une densite scalaire) ;
-   $48^2$/20 pas exerce le couplage, ne mesure aucune convergence.
+![Three panels: transfer n_g to n_i, mass drift, total momentum](figures/ionization.png)
+
+- **Proves** (clause 3), left panel: $M_i$ (red) and $M_g$ (green) diverge mirror-wise, but their
+  sum $M_i+M_g$ (black) is rigorously flat at $4608=2\times2304$. The transfer neither creates nor
+  destroys $i\!+\!g$ mass.
+- **Proves** (clause 3), center panel: the relative drift of $M_i+M_g$ stays around $10^{-15}$
+  (machine precision), eight orders of magnitude below the assert tolerance $10^{-7}$ (gray line):
+  the functor antisymmetry (section 4.1) holds to the bit. This is the observable that proves the
+  invariant, not just makes it plausible.
+- **Suggested / Not shown**, right panel: the change in total momentum of the ion-neutral pair stays
+  at the machine zero ($\sim10^{-17}$). Friction conserves this momentum (section 4.3); here it is
+  nearly null anyway because the velocities start from zero and stay small. The panel suggests
+  conservation but does not prove it (no assert on momentum in this case; see section 7): at zero
+  velocity, it is an undemanding test.
+
+### `density_map.png`: density maps at the final state
+
+![2D maps n_e, n_i, n_g at final t: striped in x, ions/neutrals modulated by ionization](figures/density_map.png)
+
+- **Proves** (clause 4): the three maps are finite and everywhere positive (min $e=0.986$,
+  $i=1.028$, $n=0.970$; asserted `run.py:69`). No negative trough, the electron primitive and the
+  isothermal minmod hold positivity.
+- **Suggested (not asserted)**: ions and neutrals, started uniform, have developed an $x$ modulation
+  that copies the electron pattern (ion: maximum where $n_e$ is dense; neutral: negative
+  photograph). Cause: the local rate $k\,n_e\,n_g$ is proportional to $n_e$, so you ionize more
+  where electrons are dense. This is a direct (and correct) consequence of the coupling, but no
+  assert verifies it: a signature, not a guarantee.
+- **Not shown**: no dynamics in $y$ (IC invariant in $y$, advection at rest); no nonlinear structure
+  (run too short, gradients too weak).
 
 ---
 
-## 8. Reproduire
+## 7. What the invariants do not capture
 
-Le cas (asserts, ~0.2 s) :
+The oracle of this case is the plumbing, not a reference physics. The departures from the "true"
+plasma are structural and assumed:
+
+1. **Ionization without momentum or energy** (section 4.2). The functor only writes the density. A
+   created ion should inherit the source neutral's momentum and the electron an energy; here the
+   created particles appear at the thermodynamic rest of the receiving fluid. The asserted
+   conservation therefore bears only on $n_i+n_g$.
+
+2. **Friction without heating** (section 4.3). The friction heat is not returned to the energy.
+   Consistent for isothermal species, but it would be wrong if you activated the ion energy.
+
+3. **Collision momentum not asserted here.** The right panel of `ionization.png` shows a momentum at
+   the machine zero, but (a) the velocities start from zero, so the test is undemanding, and (b) the
+   field $\mathbf{E}$ also acts on the ions ($q_i\rho_i\mathbf{E}$), so that the momentum of the ions
+   alone is not conserved: only friction, in isolation, conserves the pair. The momentum
+   conservation of pure friction is verified separately in the `adc_cpp` bindings test, not in this
+   assembled case.
+
+4. **Non-physical rates.** $k_{ion}=0.3$, $k_{col}=0.5$ are demonstration constants, with no cross
+   section and no temperature dependence. The 3% ionized fraction at $t=0.0965$ has no calibrated
+   meaning.
+
+5. **No magnetization, Cartesian geometry, short run.** No $B$ field, no ExB drift (for that see
+   [`../diocotron/`](../diocotron/), the drift limit of a scalar density); $48^2$/20 steps exercises
+   the coupling, measures no convergence.
+
+---
+
+## 8. Reproduce
+
+The case (asserts, ~0.2 s):
 
 ```bash
 cd /private/tmp/adc_cases-deeptut/plasma
@@ -295,8 +294,8 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
   /opt/homebrew/anaconda3/bin/python3.12 run.py
 ```
 
-Sortie attendue (deterministe, re-execute a l'identique ; les derniers chiffres varient avec la BLAS
-et l'ordre de sommation flottante, mais signes et ordres de grandeur sont stables) :
+Expected output (deterministic, re-runs identically; the last digits vary with the BLAS and the
+floating-point summation order, but signs and orders of magnitude are stable):
 
 ```
 == plasma : electrons + ions + neutres (Poisson + ionisation + collision) ==
@@ -306,25 +305,25 @@ et l'ordre de sommation flottante, mais signes et ordres de grandeur sont stable
 OK plasma
 ```
 
-Les figures de diagnostic (re-joue la physique, ~0.5 s, ecrit `figures/*.png` + `provenance.json`) :
+The diagnostic figures (replays the physics, ~0.5 s, writes `figures/*.png` + `provenance.json`):
 
 ```bash
 PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/python:/private/tmp/adc_cases-deeptut \
   /opt/homebrew/anaconda3/bin/python3.12 make_figures.py
 ```
 
-Prerequis : `numpy`, `matplotlib` (figures uniquement ; le cas `run.py` n'a besoin que de `numpy`),
-et le module `adc` compile, importe **avec le meme interpreteur** que celui qui l'a compile (suffixe
-ABI `cpython-3XY`). En CI, seul `run.py` tourne (`category="validation"`, `ci=true`, `needs=[]`) ;
-les figures sont hors CI.
+Prerequisites: `numpy`, `matplotlib` (figures only; the `run.py` case needs only `numpy`), and the
+`adc` module compiled, imported **with the same interpreter** that compiled it (ABI suffix
+`cpython-3XY`). In CI, only `run.py` runs (`category="validation"`, `ci=true`, `needs=[]`); the
+figures are out of CI.
 
-## Carte des fichiers
+## File map
 
-| Fichier | Role |
+| File | Role |
 |---|---|
-| `run.py` | le cas : pose les CI, cable `recipes.plasma`, 20 pas, 4 asserts (sec. 4, 6) |
-| `make_figures.py` | re-joue la physique instrumentee, trace les 3 figures + `provenance.json` |
-| `figures/*.png`, `figures/provenance.json` | diagnostics du tutoriel (hors CI) + nombres mesures |
-| `../adc_cases/recipes.py` (`plasma`) | recette systeme : 3 blocs + Poisson + ionisation + collision |
-| `../adc_cases/models.py` | modeles d'espece : `electron_euler`, `ion_isothermal`, `neutral_isothermal` |
-| `../adc_cases/common/checks.py` (`relative_drift`) | derive relative protegee, invariant de masse |
+| `run.py` | the case: sets the IC, wires `recipes.plasma`, 20 steps, 4 asserts (sec. 4, 6) |
+| `make_figures.py` | replays the instrumented physics, plots the 3 figures + `provenance.json` |
+| `figures/*.png`, `figures/provenance.json` | tutorial diagnostics (out of CI) + measured numbers |
+| `../adc_cases/recipes.py` (`plasma`) | system recipe: 3 blocks + Poisson + ionization + collision |
+| `../adc_cases/models.py` | species models: `electron_euler`, `ion_isothermal`, `neutral_isothermal` |
+| `../adc_cases/common/checks.py` (`relative_drift`) | protected relative drift, mass invariant |

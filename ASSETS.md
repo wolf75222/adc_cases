@@ -1,45 +1,45 @@
-# Manifeste des assets (adc_cases)
+# Asset manifest (adc_cases)
 
-Provenance et reproductibilite de chaque figure/GIF **versionne** du depot. Regle : tout asset
-committe doit porter un `provenance.json` a cote (SHA `adc_cpp` + SHA `adc_cases`, backend,
-resolution, commande, parametres) et etre regenerable **en place** par sa commande.
+Provenance and reproducibility of every **versioned** figure/GIF in the repo. Rule: every committed
+asset must carry a `provenance.json` next to it (`adc_cpp` SHA + `adc_cases` SHA, backend,
+resolution, command, parameters) and be regenerable **in place** by its command.
 
-## Assets versionnes (committes)
+## Versioned assets (committed)
 
-| Asset | Producteur | Provenance | Regenerer |
+| Asset | Producer | Provenance | Regenerate |
 |---|---|---|---|
-| `diocotron/figures/dispersion.png` | `diocotron/run.py` (analytique Petri + mesure adc) | `diocotron/figures/provenance.json` | `python diocotron/run.py` |
-| `diocotron/figures/amplitude.png` | `diocotron/run.py` (\|c_l\|(t), modes 3/4/5) | idem | idem |
-| `diocotron/figures/snapshots.png` | `diocotron/run.py` (4 instantanes, mode l=4) | idem | idem |
-| `diocotron/figures/diocotron.gif` | `diocotron/run.py` (`run_evolution(l=4)`) | idem | idem |
+| `diocotron/figures/dispersion.png` | `diocotron/run.py` (analytic Petri + adc measurement) | `diocotron/figures/provenance.json` | `python diocotron/run.py` |
+| `diocotron/figures/amplitude.png` | `diocotron/run.py` (\|c_l\|(t), modes 3/4/5) | same | same |
+| `diocotron/figures/snapshots.png` | `diocotron/run.py` (4 snapshots, mode l=4) | same | same |
+| `diocotron/figures/diocotron.gif` | `diocotron/run.py` (`run_evolution(l=4)`) | same | same |
 
-`diocotron/run.py` ecrit desormais ses figures directement dans `diocotron/figures/` (tracke) et
-depose `provenance.json` a cote : une re-execution **rafraichit les assets en place** (plus de copie
-manuelle depuis `out/`, qui etait la source de derive). Cout ~60 s (n=192, modes 3/4/5, CPU serie).
-Le `provenance.json` courant enregistre notamment : `adc_cpp_sha`, `adc_cases_sha`, `backend = natif
-serie`, `resolution = 192x192`, et les taux mesures `gamma_num` (l=3 ~0.599, l=4 ~0.662, l=5 ~0.652,
-soit -22/-27/-5 % vs l'oracle analytique, cf. `diocotron/README.md`, section « Limites »).
+`diocotron/run.py` now writes its figures directly into `diocotron/figures/` (tracked) and drops a
+`provenance.json` next to them: a re-run **refreshes the assets in place** (no more manual copy from
+`out/`, which was the source of drift). Cost ~60 s (n=192, modes 3/4/5, serial CPU). The current
+`provenance.json` records in particular: `adc_cpp_sha`, `adc_cases_sha`, `backend = native serial`,
+`resolution = 192x192`, and the measured rates `gamma_num` (l=3 ~0.599, l=4 ~0.662, l=5 ~0.652,
+that is -22/-27/-5 % vs the analytic oracle, see `diocotron/README.md`, "Limitations" section).
 
-## Assets ephemeres (non committes, ecrits sous `out/`, gitignore)
+## Ephemeral assets (not committed, written under `out/`, gitignored)
 
-- **`hoffart_euler_poisson_dsl/run.py`** ecrit ses figures (amplitude, snapshots, growth_rates, gif)
-  sous `out/<engine>/...`. Elles ne sont **pas committees** et ne doivent pas l'etre : ce cas est
-  `reproduction-candidate` **pending** (la reproduction quantitative d'arXiv:2510.11808 n'est pas
-  etablie, cf. `hoffart_euler_poisson_dsl/README.md` et `adc_cpp/docs/HOFFART_FIDELITY.md`).
-  Committer ces figures laisserait croire a une reproduction validee. La variante `amr-imex` exige
-  en plus un build MPI / multi-GPU (ROMEO/GH200), hors de portee d'un poste local (Kokkos lui-meme,
-  desormais obligatoire, reste accessible en local via une install Kokkos Serial).
-- Les cas DSL et de validation (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`,
-  `two_fluid_ap`, `schur_magnetized_cartesian`, ...) ecrivent leurs `.so`/`.csv` sous `out/`
-  (gitignore) : artefacts de build/mesure, non versionnes.
+- **`hoffart_euler_poisson_dsl/run.py`** writes its figures (amplitude, snapshots, growth_rates, gif)
+  under `out/<engine>/...`. They are **not committed** and must not be: this case is
+  `reproduction-candidate` **pending** (the quantitative reproduction of arXiv:2510.11808 is not
+  established, see `hoffart_euler_poisson_dsl/README.md` and `adc_cpp/docs/HOFFART_FIDELITY.md`).
+  Committing these figures would suggest a validated reproduction. The `amr-imex` variant also
+  requires an MPI / multi-GPU build (ROMEO/GH200), out of reach for a local machine (Kokkos itself,
+  now mandatory, stays accessible locally through a Kokkos Serial install).
+- The DSL and validation cases (`diocotron_dsl`, `two_species_dsl`, `magnetic_isothermal_dsl`,
+  `two_fluid_ap`, `schur_magnetized_cartesian`, ...) write their `.so`/`.csv` under `out/`
+  (gitignored): build/measurement artifacts, not versioned.
 
-## Cas sans asset
+## Cases without assets
 
 `composition`, `custom_scheme`, `diocotron_amr`, `dsl_euler`, `euler_poisson`, `multispecies`,
-`plasma`, `two_euler` produisent des **diagnostics textuels** (invariants par `assert`), pas de
-figure. Voir leur `README.md` (section « Sorties attendues »).
+`plasma`, `two_euler` produce **textual diagnostics** (invariants via `assert`), no figure. See their
+`README.md` ("Expected outputs" section).
 
-## Cote `adc_cpp`
+## On the `adc_cpp` side
 
-Le tutoriel `adc_cpp` (`docs/sphinx/tutorials/diocotron_tutorial.py`) produit ses propres assets
-(`docs/sphinx/tutorials/_assets/`) avec leur `provenance.json` ; voir `adc_cpp/docs/ASSETS.md`.
+The `adc_cpp` tutorial (`docs/sphinx/tutorials/diocotron_tutorial.py`) produces its own assets
+(`docs/sphinx/tutorials/_assets/`) with their `provenance.json`; see `adc_cpp/docs/ASSETS.md`.
