@@ -64,6 +64,18 @@ PASSTHROUGH_FX = {0: "M10", 1: "M20", 2: "M30", 3: "M40", 5: "M11", 6: "M21", 7:
 PASSTHROUGH_FY = {0: "M01", 1: "M11", 2: "M21", 3: "M31", 5: "M02", 6: "M12", 7: "M22",
                   9: "M03", 10: "M13", 12: "M04"}
 
+# rtol par-etat du golden de flux (check_matlab_golden). Mesure (eval_flux vs golden, atol
+# proportionnel a l'echelle) : l'ecart requis vaut <= 1.1e-16 sur 9 etats sur 10 et 6.4e-13
+# sur le seul etat 8 (quasi-degenere C20 ~ 1e-6 : la standardisation divise par sqrt(C20),
+# annulation catastrophique). Un rtol GLOBAL 1e-12 calibre sur l'etat 8 laisse une regression
+# x80 invisible sur les 9 autres. Seuils :
+#   - defaut 1e-14 : ~90x de marge sur l'ecart mesure des etats sains (<= 1.1e-16), serre assez
+#     pour voir une derive x80 que le 1e-12 global masquait ;
+#   - etat 8 : 1e-12 (ecart mesure 6.4e-13, marge 1.6x) -- LACHE et DOCUMENTE, la borne du
+#     conditionnement de l'etat lui-meme, pas du schema.
+RTOL_GOLDEN_DEFAULT = 1e-14
+RTOL_GOLDEN_LOOSE = {8: 1e-12}
+
 
 
 def load_goldens():
@@ -86,18 +98,24 @@ def load_goldens():
 
 
 def check_matlab_golden(m, states, gold_fx, gold_fy):
-    """(1) eval_flux == Flux_closure15_2D.m sur chaque etat. Tolerance mixte : rtol 1e-12 +
-    atol proportionnel a l'echelle des moments de l'etat (les formes algebriques different
-    legerement du MATLAB -- regroupements ux/uy -- donc egalite a l'arrondi pres, pas au bit)."""
+    """(1) eval_flux == Flux_closure15_2D.m sur chaque etat. Tolerance mixte PAR-ETAT : rtol
+    serre (RTOL_GOLDEN_DEFAULT = 1e-14, lache et documente sur l'etat 8 quasi-degenere via
+    RTOL_GOLDEN_LOOSE) + atol proportionnel a l'echelle des moments de l'etat (les formes
+    algebriques different legerement du MATLAB -- regroupements ux/uy -- donc egalite a
+    l'arrondi pres, pas au bit). Le rtol par-etat remplace l'ancien 1e-12 global, calibre sur
+    le seul etat 8 : sur les 9 autres il laissait une regression x80 invisible."""
     U = states.T  # (15, N)
     for d, gold in ((0, gold_fx), (1, gold_fy)):
         F = m.eval_flux(U, {}, d)  # (15, N)
         for i in range(states.shape[0]):
             scale = np.max(np.abs(states[i]))
+            rtol = RTOL_GOLDEN_LOOSE.get(i, RTOL_GOLDEN_DEFAULT)
             np.testing.assert_allclose(
-                F[:, i], gold[i], rtol=1e-12, atol=1e-13 * scale,
-                err_msg="flux %s, etat golden #%d" % ("xy"[d], i))
-    print("(1) golden MATLAB : 10 etats x {Fx, Fy} reproduits (rtol 1e-12) -- OK")
+                F[:, i], gold[i], rtol=rtol, atol=1e-13 * scale,
+                err_msg="flux %s, etat golden #%d (rtol %.0e)" % ("xy"[d], i, rtol))
+    print("(1) golden MATLAB : 10 etats x {Fx, Fy} reproduits (rtol par-etat : %.0e, "
+          "etat 8 quasi-degenere a %.0e) -- OK"
+          % (RTOL_GOLDEN_DEFAULT, RTOL_GOLDEN_LOOSE[8]))
 
 
 def check_gaussian_oracle(m):
@@ -115,6 +133,58 @@ def check_gaussian_oracle(m):
                     "oracle gaussien : F%s[%d] = M%d%d : %r != exact %r"
                     % ("xy"[d], k, p, q, F[k], exact))
     print("(2) oracle gaussien (Isserlis) : 4 etats x 6 moments d'ordre 5 exacts -- OK")
+
+
+# Moments bruts d'ordre 5 d'une gaussienne, CODES EN DUR (oracle INDEPENDANT de model.py).
+# check_gaussian_oracle ci-dessus tire son oracle de gaussian_raw_moment, qui repose sur
+# _gaussian_central : la MEME table sert a fabriquer l'etat gaussien ET a le verifier (angle
+# mort correle -- une coquille dans _gaussian_central corromprait entree et oracle ensemble).
+# Les valeurs ci-dessous sont calculees A LA MAIN par Isserlis en arithmetique rationnelle
+# exacte (fractions), hors de tout chemin model.py, puis figees en litteraux. Une derive de
+# _gaussian_central qui passerait check_gaussian_oracle echoue ICI.
+#
+# Recette (M_pq = rho * somme_ij C(p,i) C(q,j) ux^(p-i) uy^(q-j) Cent_ij ; Cent gaussien :
+# Cent_00=1, Cent_20=c20, Cent_11=c11, Cent_02=c02, Cent_40=3 c20^2, Cent_31=3 c20 c11,
+# Cent_22=c20 c02 + 2 c11^2, Cent_13=3 c02 c11, Cent_04=3 c02^2, tout ordre impair = 0).
+# Etat A = GAUSSIAN_PARAMS[1] = (2, 1/2, -3/10, 1, 0, 2) ; etat B = GAUSSIAN_PARAMS[2] =
+# (3/2, -1/5, 2/5, 1, 9/20, 1/2). Exemple M50(A) = 2*(ux^5 + 10 ux^3 c20 + 15 ux c20^2)
+# = 2*(1/32 + 10/8 + 15/2) = 2*281/32 = 281/16 = 17.5625.
+ISSERLIS_LITERALS = {
+    (2.0, 0.5, -0.3, 1.0, 0.0, 2.0): {                     # etat A (GAUSSIAN_PARAMS[1])
+        (5, 0): 281.0 / 16.0,        (4, 1): -219.0 / 80.0,     (3, 2): 2717.0 / 400.0,
+        (2, 3): -1827.0 / 400.0,     (1, 4): 130881.0 / 10000.0, (0, 5): -1854243.0 / 50000.0,
+    },
+    (1.5, -0.2, 0.4, 1.0, 0.45, 0.5): {                    # etat B (GAUSSIAN_PARAMS[2], c11 != 0)
+        (5, 0): -14439.0 / 3125.0,   (4, 1): 948.0 / 3125.0,    (3, 2): 35919.0 / 50000.0,
+        (2, 3): 7689.0 / 6250.0,     (1, 4): 35403.0 / 25000.0, (0, 5): 34317.0 / 12500.0,
+    },
+}
+
+
+def check_isserlis_literals(m):
+    """(2b) spot-check de l'oracle d'Isserlis sur des LITTERAUX (ISSERLIS_LITERALS), sans passer
+    par _gaussian_central : casse l'angle mort correle (model.py fabrique l'etat ET fournit
+    l'oracle d'ordre 5). Les 6 moments d'ordre 5 sont couverts sur 2 etats (un correle)."""
+    seen = set()
+    n_lit = 0
+    for params, lits in ISSERLIS_LITERALS.items():
+        Uvec = gaussian_state(*params)
+        U = Uvec[:, None]
+        for d, closure_map in ((0, CLOSURE_FX), (1, CLOSURE_FY)):
+            F = m.eval_flux(U, {}, d)[:, 0]
+            for k, (p, q) in closure_map.items():
+                want = lits[(p, q)]
+                scale = max(abs(want), np.max(np.abs(Uvec)))
+                assert abs(F[k] - want) <= 1e-13 * scale, (
+                    "oracle litteral : F%s[%d] = M%d%d : %r != litteral %r (params %r)"
+                    % ("xy"[d], k, p, q, F[k], want, params))
+                seen.add((p, q))
+                n_lit += 1
+    assert seen == {(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)}, (
+        "couverture litterale incomplete : %s (les 6 moments d'ordre 5 doivent etre verifies)"
+        % sorted(seen))
+    print("(2b) oracle litteral (Isserlis a la main, hors _gaussian_central) : %d verifications, "
+          "6 moments d'ordre 5 couverts sur 2 etats -- OK" % n_lit)
 
 
 def check_passthrough(m, states):
@@ -218,6 +288,7 @@ def main():
     states, gold_fx, gold_fy, gold_vp = load_goldens()
     check_matlab_golden(m, states, gold_fx, gold_fy)
     check_gaussian_oracle(m)
+    check_isserlis_literals(m)
     check_passthrough(m, states)
     backends = check_compile_and_model(m, states)
     check_robust_smoke()
