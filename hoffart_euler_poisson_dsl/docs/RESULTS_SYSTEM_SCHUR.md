@@ -227,7 +227,7 @@ scalar ExB on a square grid.
 > below is **SUPERSEDED** by 7ter (reversal) and section 8 (T2 audit). Kept for
 > history. The deficit is NOT a fundamental geometric limitation; it decomposes into
 > DIMENSIONAL factors (fit window + `2pi = T_d`), cf. `T2_NORMALIZATION_AUDIT.md`.
-- **2pi normalization** (`diag/diag_polar_omega.py:35`: rhobar=rho_max=1 -> factor = 2pi ~= 6.28
+- **2pi normalization** (`g_2pi` in diag_polar_omega.py: rhobar=rho_max=1 -> factor = 2pi ~= 6.28
   exactly, no more). Raw cartesian 0.032 x 2pi = 0.20 -> still ~3.8x below 0.772.
 - ~~**Cartesian vs polar geometry**: ... the square grid does not capture the azimuthal dynamics ...
   fundamental limitation of cartesian FV.~~ RETRACTED (7ter: the same ExB on a cartesian grid in

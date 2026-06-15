@@ -19,10 +19,10 @@ would reveal.
 
 | Field | Content |
 |---|---|
-| Category (manifest) | `validation` (`ci = true`, `needs = ["cxx"]`, [`cases_manifest.toml:94-99`](../cases_manifest.toml)). Not a published reproduction: you verify a path equivalence, not a paper curve. |
+| Category (manifest) | `validation` (`ci = true`, `needs = ["cxx"]`, the `two_species_dsl` entry in [`cases_manifest.toml`](../cases_manifest.toml)). Not a published reproduction: you verify a path equivalence, not a paper curve. |
 | Inputs | grid $48^2$, $L=1$, periodic; electrons $n_e=1+0.02\cos(2\pi x)$, ions $n_i=1$ (charge separation, so a non-trivial Poisson); charges $q_e=-1$, $q_i=+1$; $\gamma_e=5/3$, $c_{s,i}^2=1$; 15 steps, CFL = 0.4 (`step_cfl(0.4)`), SSPRK2 + minmod + Rusanov for both blocks, Poisson `geometric_mg`, RHS `charge_density` |
 | Outputs | states `get_state("electrons")` $(4,n,n)$ and `get_state("ions")` $(3,n,n)$ from both paths (native and DSL); `print` of the per-species $\max\lvert\text{DSL}-\text{native}\rvert$ + the `np.array_equal` verdict; 2 figures `figures/equivalence_{electrons,ions}.png` (3 panels per species: native $\rho$, DSL $\rho$, difference) + `figures/provenance.json` |
-| Guaranteed invariants | the `assert`s in `run.py`: (1) electrons $\max\lvert\text{DSL}-\text{native}\rvert<10^{-24}$ (`run.py:227`); (2) ions `np.array_equal` or $<10^{-24}$ (`run.py:229`); (3) per-species mass `relative_drift < 1e-9` (`run.py:242-243`); (4) finite states and densities $>0$ (`run.py:238-241`) |
+| Guaranteed invariants | the `assert`s in `main` (in run.py): (1) electrons $\max\lvert\text{DSL}-\text{native}\rvert<10^{-24}$; (2) ions `np.array_equal` or $<10^{-24}$; (3) per-species mass `relative_drift < 1e-9`; (4) finite states and densities $>0$ |
 | Proves | ions bit-identical: $\max\lvert\text{DSL}-\text{native}\rvert=0.000\times10^{0}$ exactly, across all 3 components (`np.array_equal == True`); electrons below machine tolerance: $\max\lvert\text{DSL}-\text{native}\rvert=4.930\times10^{-32}$, confined to the single $\rho v$ component ($\rho$, $\rho u$, $E$ at $0.0$ exactly); mass conserved per species (relative drift $1.20\times10^{-14}$ electrons, $1.16\times10^{-14}$ ions) |
 | Does not prove | no physical result: the same toy cosine IC as `multispecies`, 15 steps, no Debye length nor plasma frequency, no rate. The electron equality is not bit-exact ($4.93\times10^{-32}\ne0$): it is an FP reassociation of the shared Poisson RHS, not a strict equality; you assert it below $10^{-24}$, not at `array_equal`. The $4.93\times10^{-32}$ is platform-dependent (BLAS, MG reduction order); only the confinement to $\rho v$ and the $\ll10^{-24}$ order of magnitude are stable. Actual backend = `aot` (the ABI guard rejects `production` on a pre-built module) |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, DSL backend `aot` (fallback; `production` rejected by the ABI), native backend serial, $48^2$, Apple clang 21.0.0, Python 3.12.2, macOS arm64; numbers in `figures/provenance.json` |
@@ -56,25 +56,25 @@ The heart of the DSL cases: each symbolic formula must reproduce identically the
 the corresponding native brick, otherwise the equality breaks. Table of reproduced conventions, anchored
 to the `include/adc/physics/*.hpp` headers (left = native brick, right = DSL formula `run.py`):
 
-### Electrons (`electron_dsl_model`, `run.py:76-108`) reproduce `models.electron_euler`
+### Electrons (`electron_dsl_model` in run.py) reproduce `models.electron_euler`
 
 | Quantity | Native brick (header) | DSL formula (`run.py`) |
 |---|---|---|
-| Pressure / EOS | `Euler::pressure` $p=(\gamma-1)(E-\tfrac12\rho\lvert v\rvert^2)$ ([`euler.hpp:42-47`](../../adc_cpp/include/adc/physics/euler.hpp)) | `p = (g-1)*(E - 0.5*rho*(u*u+v*v))` (`run.py:87`) |
-| Convective flux $x$ | `Euler::flux` $(\rho u,\ \rho u^2+p,\ \rho u v,\ (E+p)u)$ ([`euler.hpp:94-104`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[rhou, rhou*u+p, rhou*v, (E+p)*u]` (`run.py:91`) |
-| Spectrum $x$ | `Euler::eigenvalues` $(u-c,\ u,\ u,\ u+c)$, $c=\sqrt{\gamma p/\rho}$ ([`euler.hpp:108-118`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[u-c, u, u, u+c]`, `c=sqrt(g*p/rho)` (`run.py:88,93`) |
-| Electrostatic force | `PotentialForce::apply` $s[1{:}3]=q\rho\mathbf{E}$, $s[3]=q(\rho_u E_x+\rho_v E_y)$, $\mathbf{E}=-(\text{grad\_x},\text{grad\_y})$ ([`source.hpp:33-44`](../../adc_cpp/include/adc/physics/source.hpp)) | `source([0, Q_E*rho*e_x, Q_E*rho*e_y, Q_E*(rhou*e_x+rhov*e_y)])`, `e_x=-grad_x`, `e_y=-grad_y` (`run.py:101-103`) |
-| Charge density | `ChargeDensity::rhs` $f=q\,u[0]=q n$ ([`elliptic.hpp:19-25`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_E * rho)` (`run.py:105`) |
+| Pressure / EOS | `Euler::pressure` $p=(\gamma-1)(E-\tfrac12\rho\lvert v\rvert^2)$ ([`euler.hpp`](../../adc_cpp/include/adc/physics/euler.hpp)) | `p = (g-1)*(E - 0.5*rho*(u*u+v*v))` |
+| Convective flux $x$ | `Euler::flux` $(\rho u,\ \rho u^2+p,\ \rho u v,\ (E+p)u)$ ([`euler.hpp`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[rhou, rhou*u+p, rhou*v, (E+p)*u]` |
+| Spectrum $x$ | `Euler::eigenvalues` $(u-c,\ u,\ u,\ u+c)$, $c=\sqrt{\gamma p/\rho}$ ([`euler.hpp`](../../adc_cpp/include/adc/physics/euler.hpp)) | `x=[u-c, u, u, u+c]`, `c=sqrt(g*p/rho)` |
+| Electrostatic force | `PotentialForce::apply` $s[1{:}3]=q\rho\mathbf{E}$, $s[3]=q(\rho_u E_x+\rho_v E_y)$, $\mathbf{E}=-(\text{grad\_x},\text{grad\_y})$ ([`source.hpp`](../../adc_cpp/include/adc/physics/source.hpp)) | `source([0, Q_E*rho*e_x, Q_E*rho*e_y, Q_E*(rhou*e_x+rhov*e_y)])`, `e_x=-grad_x`, `e_y=-grad_y` |
+| Charge density | `ChargeDensity::rhs` $f=q\,u[0]=q n$ ([`elliptic.hpp`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_E * rho)` |
 
-### Ions (`ion_dsl_model`, `run.py:111-137`) reproduce `models.ion_isothermal`
+### Ions (`ion_dsl_model` in run.py) reproduce `models.ion_isothermal`
 
 | Quantity | Native brick (header) | DSL formula (`run.py`) |
 |---|---|---|
-| Pressure / closure | `IsothermalFlux` $p=c_s^2\rho$ ([`hyperbolic.hpp:132-140`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `p = cs2 * rho` (`run.py:122`) |
-| Convective flux $x$ | `IsothermalFlux::flux` $(\rho u,\ \rho u^2+p,\ \rho u v)$ ([`hyperbolic.hpp:132-141`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[rhou, rhou*u+p, rhou*v]` (`run.py:125`) |
-| Spectrum $x$ | `IsothermalFlux::eigenvalues` $(u-c,\ u,\ u+c)$, $c=\sqrt{c_s^2}$ ([`hyperbolic.hpp:165-174`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[u-c, u, u+c]`, `c=sqrt(cs2)` (`run.py:123,126`) |
-| Electrostatic force | `PotentialForce::apply` (3 var: no energy term, the `if constexpr (size()==4)` of [`source.hpp:41`](../../adc_cpp/include/adc/physics/source.hpp) is false) | `source([0, Q_I*rho*e_x, Q_I*rho*e_y])` (3 components, `run.py:133`) |
-| Charge density | `ChargeDensity::rhs` $f=q n$ ([`elliptic.hpp:19-25`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_I * rho)` (`run.py:134`) |
+| Pressure / closure | `IsothermalFlux` $p=c_s^2\rho$ ([`hyperbolic.hpp`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `p = cs2 * rho` |
+| Convective flux $x$ | `IsothermalFlux::flux` $(\rho u,\ \rho u^2+p,\ \rho u v)$ ([`hyperbolic.hpp`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[rhou, rhou*u+p, rhou*v]` |
+| Spectrum $x$ | `IsothermalFlux::eigenvalues` $(u-c,\ u,\ u+c)$, $c=\sqrt{c_s^2}$ ([`hyperbolic.hpp`](../../adc_cpp/include/adc/physics/hyperbolic.hpp)) | `x=[u-c, u, u+c]`, `c=sqrt(cs2)` |
+| Electrostatic force | `PotentialForce::apply` (3 var: no energy term, the `if constexpr (State::size()==4)` of [`source.hpp`](../../adc_cpp/include/adc/physics/source.hpp) is false) | `source([0, Q_I*rho*e_x, Q_I*rho*e_y])` (3 components) |
+| Charge density | `ChargeDensity::rhs` $f=q n$ ([`elliptic.hpp`](../../adc_cpp/include/adc/physics/elliptic.hpp)) | `elliptic_rhs(Q_I * rho)` |
 
 Two convention subtleties the formulas must honor for the equality to hold:
 
@@ -87,7 +87,7 @@ Two convention subtleties the formulas must honor for the equality to hold:
 - **The energy component exists only for the electrons.** The work term $q(\rho_u E_x+\rho_v E_y)$
   is the 4th component of the electron source; the ions, with 3 variables, have no energy
   equation (isothermal closure), hence no work term. The core's `if constexpr (State::size()==4)`
-  ([`source.hpp:41`](../../adc_cpp/include/adc/physics/source.hpp)) is reproduced on the DSL side
+  (in [`source.hpp`](../../adc_cpp/include/adc/physics/source.hpp), `PotentialForce::apply`) is reproduced on the DSL side
   by the length of the list passed to `m.source(...)`: 4 terms for electrons, 3 terms for ions.
 
 3-layer "who computes what" table (the middle layer is no longer a named brick but the
@@ -95,8 +95,8 @@ expressions that `adc.dsl` compiles):
 
 | `run.py` line | Layer | What happens |
 |---|---|---|
-| `add_equation("electrons", model=ce, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` (`run.py:187-189`); same for ions (`run.py:190-192`) | Python composes and diagnoses | choice of scheme (MUSCL minmod + Rusanov, SSPRK2); reading the states to compare against native |
-| `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` (`run.py:91-105`, `125-134`) that `m.compile(..., backend)` translates into C++ | frozen DSL expressions | the exact convention (flux, spectrum, force $q\rho\mathbf{E}$, RHS $q n$) compiled into a `.so`, cse'd at codegen |
+| `add_equation("electrons", model=ce, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` (in `run_dsl`); same for ions | Python composes and diagnoses | choice of scheme (MUSCL minmod + Rusanov, SSPRK2); reading the states to compare against native |
+| `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` (in `electron_dsl_model`/`ion_dsl_model`) that `m.compile(..., backend)` translates into C++ | frozen DSL expressions | the exact convention (flux, spectrum, force $q\rho\mathbf{E}$, RHS $q n$) compiled into a `.so`, cse'd at codegen |
 | `assemble_rhs<minmod, rusanov>` + system Poisson `geometric_mg` (RHS $\sum_b q_b n_b$), inlined by the `aot`/`production` backend | per-cell kernel (device) | the actual computation, with no Python callback in the hot path: the same path as native, which makes bit-level equality possible |
 
 This justifies the Proves clause: it is because these expressions reproduce the bricks exactly
@@ -104,17 +104,17 @@ and the backend inlines the same numerical path that the equality is expected, n
 
 ---
 
-## 3. How the bit-level equality is checked (`main`, `run.py:207-245`)
+## 3. How the bit-level equality is checked (`main` in run.py)
 
 The case plays two runs on the same grid, same IC, same Poisson, same scheme, same number of steps:
-`run_native` (native composition `models.electron_euler`/`ion_isothermal`, `run.py:150-163`) then
-`run_dsl` (compiled DSL models, `run.py:175-204`). The comparison:
+`run_native` (native composition `models.electron_euler`/`ion_isothermal`) then
+`run_dsl` (compiled DSL models). The comparison:
 
 ```python
-de = float(np.max(np.abs(ed - en)))                       # electrons : max|DSL - natif| (run.py:219)
-di = float(np.max(np.abs(idd - inn)))                     # ions      : idem (run.py:220)
-assert de < 1e-24, "..."                                  # electrons sous tolerance machine (run.py:227)
-assert np.array_equal(idd, inn) or di < 1e-24, "..."      # ions bit-identiques (run.py:229)
+de = float(np.max(np.abs(ed - en)))                       # electrons : max|DSL - natif|
+di = float(np.max(np.abs(idd - inn)))                     # ions      : idem
+assert de < 1e-24, "..."                                  # electrons sous tolerance machine
+assert np.array_equal(idd, inn) or di < 1e-24, "..."      # ions bit-identiques
 ```
 
 - `np.array_equal(a, b)` is `True` only if every bit matches: no tolerance.
@@ -174,7 +174,7 @@ Exact command in section 5.
 
 ![Three ion panels: native rho and DSL rho (structured field, ~1e-4 modulation visible in viridis), then |rho_DSL - rho_natif| black, max=0](figures/equivalence_ions.png)
 
-- **Proves** (asserted `run.py:229`): panels 1 and 2 = the ion density (induced modulation
+- **Proves** (asserted in `main`): panels 1 and 2 = the ion density (induced modulation
   $\sim10^{-4}$ around $n_i=1$, advected), identical by eye between native and DSL; panel 3 =
   uniformly black difference, $\max\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert=0.000\times10^{0}$,
   and the whole ion state is `np.array_equal == True`. A single non-black pixel in the difference panel
@@ -189,7 +189,7 @@ Exact command in section 5.
 
 ![Three electron panels: native rho and DSL rho (cosine +/-1.6 % structure in viridis), then |rho_DSL - rho_natif| black, max rho=0, full state 4.93e-32 annotated](figures/equivalence_electrons.png)
 
-- **Proves** (asserted `run.py:227`): panels 1 and 2 = the electron density (cosine
+- **Proves** (asserted in `main`): panels 1 and 2 = the electron density (cosine
   $1\pm1.6\,\%$ in $x$, $\approx0.984$ to $1.016$, advected), identical by eye between native and DSL;
   panel 3 = difference on $\rho$ uniformly black, $\max\lvert\rho_{\text{DSL}}-\rho_{\text{natif}}\rvert=0.000\times10^{0}$
   exactly. The electron density is therefore bit-identical between the two paths.
@@ -221,7 +221,7 @@ Prerequisites: Python 3.12 + numpy (matplotlib only for `make_figures.py`), the 
 compiled and imported with the same interpreter (ABI suffix `cpython-312`), and a C++20 compiler
 (`needs = ["cxx"]`): the DSL compiles a `.so` on the fly under `out/two_species_dsl/`. The first
 entry of the `PYTHONPATH` provides the C++ module; the second makes `adc_cases` importable (the case has a
-`sys.path` fallback, `run.py:59-64`).
+`sys.path` fallback in run.py).
 
 Output of `run.py` (macOS arm64, Apple clang 21.0.0):
 
@@ -254,6 +254,6 @@ multigrid reduction order (see `figures/provenance.json`).
 | [`make_figures.py`](make_figures.py) | re-plays `run.py`, plots `equivalence_{electrons,ions}.png` (3 panels per species: native $\rho$, DSL $\rho$, difference) + `provenance.json` (outside CI) |
 | `figures/*.png`, `figures/provenance.json` | versioned diagnostics: adc_cpp/adc_cases SHA, backend, per-component $\max\lvert d\rvert$, mass drifts |
 | [`../multispecies/`](../multispecies/) | the same physics in native bricks: derivation of the equations, the Poisson coupling and mass conservation |
-| [`adc_cases/models.py`](../adc_cases/models.py) | `electron_euler()`, `ion_isothermal()` = native reference oracle (`l.28-45`) |
+| [`adc_cases/models.py`](../adc_cases/models.py) | `electron_euler()`, `ion_isothermal()` = native reference oracle |
 | [`include/adc/physics/`](../../adc_cpp/include/adc/physics/) | `euler.hpp`, `hyperbolic.hpp`, `source.hpp`, `elliptic.hpp`: the bricks whose conventions the DSL formulas reproduce (sec. 2) |
 | [`cases_manifest.toml`](../cases_manifest.toml) | declares the case: `validation`, `ci = true`, `needs = ["cxx"]` |

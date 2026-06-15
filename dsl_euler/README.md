@@ -14,7 +14,7 @@ expands; the case checks for a finite, coherent state, not a target number.
 | Category (manifest) | `experimental` (`cases_manifest.toml`, `dsl_euler/run.py`, `ci = false`, `needs = []`). Interpreted CPU prototype, kept out of CI as a precaution. |
 | Inputs | $64^2$ grid, $L=1$, periodic; IC gas at rest $\rho=1$, $v=0$, centered Gaussian bubble $p=1+0.4\,e^{-r^2/0.01}$, $E=p/(\gamma-1)$; $\gamma=1.4$; first-order Rusanov scheme + forward Euler, CFL $0.4$, 120 steps (dt re-evaluated each step) |
 | Outputs | state $(4,n,n)=[\rho,\rho u,\rho v,E]$ in numpy memory; console diagnostics `drho_max`, `|v|_max`, `drel`, `max|dp|`; 2 figures in `figures/` + `figures/provenance.json` (written by `make_figures.py`, not by `run.py`) |
-| Guaranteed invariants | the 4 `assert`s in `run.py:90-93`: `assert_finite(U)`; `U[0].min()>0 and pressure(U).min()>0`; `drel < 1e-9`; `moved > 1e-3` |
+| Guaranteed invariants | the 4 `assert`s in `main` (in run.py): `assert_finite(U)`; `U[0].min()>0 and pressure(U).min()>0`; `drel < 1e-9`; `moved > 1e-3` |
 | Proves | the symbolic tree declared as formulas produces a finite, positive ($\rho_{\min}=0.9222>0$, $p_{\min}=0.9752>0$) and non-trivial state (the bubble expands: `moved`$=0.3939 \gg 10^{-3}$); mass is conserved exactly (`drel`$=0.0$, bit-exact, conservative flux + periodic `np.roll`) |
 | Does not prove | prototype, not production: interpreted numpy backend (`PythonFlux`), no compiled path, no GPU/MPI/AMR. No equality against the native path is checked here (`np.array_equal` absent): this is the only `*_dsl` that neither compiles nor compares (see [`diocotron_dsl`](../diocotron_dsl/)). First-order dissipative scheme: energy and momentum are not asserted, fronts are smeared. No published target, no tolerance on any physical value. Out of CI |
 | Provenance | adc_cpp `01873299`, adc_cases `1affec1d`, interpreted numpy backend, $64^2$, ~0.2-0.4 s on 1 CPU core; `figures/provenance.json` |
@@ -30,28 +30,28 @@ prototype to the status of the other `*_dsl` cases.
 
 No derivation of Euler-Poisson: this is pure compressible Euler (no source, no Poisson;
 `set_source`/`set_elliptic_rhs` are never called, so `source_value` returns zeros,
-`dsl.py:484-489`). The content of the case is the declaration itself. `make_euler` (`run.py:34-52`)
+in dsl.py). The content of the case is the declaration itself. `make_euler` (in run.py)
 writes the entire system as symbolic expressions:
 
 ```python
-e = dsl.HyperbolicModel("euler")                                       # run.py:36
-rho, rhou, rhov, E = e.conservative_vars("rho","rho_u","rho_v","E")     # run.py:37 -> 4 noeuds Var(cons)
-u = e.primitive("u", rhou / rho)                                       # run.py:39 primitive = noeud Expr
-v = e.primitive("v", rhov / rho)                                       # run.py:40
-p = e.primitive("p", (GAMMA-1.0)*(E - 0.5*rho*(u*u+v*v)))              # run.py:41 EOS gaz parfait
-H = (E + p) / rho                                                      # run.py:43 enthalpie totale (Expr pur Python)
-c = dsl.sqrt(GAMMA * p / rho)                                          # run.py:44 vitesse du son (noeud Sqrt)
-e.set_flux(x=[rhou, rhou*u+p, rhou*v, rho*H*u],                        # run.py:46-49 F_x : 4 composantes
-           y=[rhov, rhov*u, rhov*v+p, rho*H*v])                       #              F_y : 4 composantes
-e.set_eigenvalues(x=[u-c, u, u+c], y=[v-c, v, v+c])                    # run.py:50 vitesses caracteristiques
-e.check()                                                             # run.py:51 toute var referencee declaree ?
+e = dsl.HyperbolicModel("euler")
+rho, rhou, rhov, E = e.conservative_vars("rho","rho_u","rho_v","E")     # 4 noeuds Var(cons)
+u = e.primitive("u", rhou / rho)                                       # primitive = noeud Expr
+v = e.primitive("v", rhov / rho)
+p = e.primitive("p", (GAMMA-1.0)*(E - 0.5*rho*(u*u+v*v)))              # EOS gaz parfait
+H = (E + p) / rho                                                      # enthalpie totale (Expr pur Python)
+c = dsl.sqrt(GAMMA * p / rho)                                          # vitesse du son (noeud Sqrt)
+e.set_flux(x=[rhou, rhou*u+p, rhou*v, rho*H*u],                        # F_x : 4 composantes
+           y=[rhov, rhov*u, rhov*v+p, rho*H*v])                       # F_y : 4 composantes
+e.set_eigenvalues(x=[u-c, u, u+c], y=[v-c, v, v+c])                    # vitesses caracteristiques
+e.check()                                                             # toute var referencee declaree ?
 ```
 
 - Each `/`, `*`, `-`, `+` builds a tree node (`Div`, `Mul`, `Sub`, `Add`; operator overloading on
-  `Expr`). `u`, `v`, `p` are registered as primitives (`primitive`, `dsl.py:419-422`): at evaluation
-  time they are derived from `U` in dependency order (`_env`, `dsl.py:462-470`). `H` and `c` are
+  `Expr`). `u`, `v`, `p` are registered as primitives (`primitive` in dsl.py): at evaluation
+  time they are derived from `U` in dependency order (`_env` in dsl.py). `H` and `c` are
   reused subtrees, not named primitives.
-- `check()` (`dsl.py:500-517`) verifies that every variable used in fluxes / eigenvalues /
+- `check()` (in dsl.py) verifies that every variable used in fluxes / eigenvalues /
   primitives is declared as cons/prim/aux; otherwise `ValueError`. This is the only static
   validation: there is no compiler behind it, the tree is the specification.
 
@@ -68,18 +68,18 @@ interprets. Here, the third layer = numpy host (not a device kernel).
 
 | `run.py` line | Layer | What happens |
 |---|---|---|
-| `for _ in range(120): U = U + pf.cfl_dt(U,h,0.4)*pf.residual(U,h)` (`run.py:79-80`) | Python composes and integrates | choice of scheme (first-order Rusanov), integrator (forward Euler), step size (CFL 0.4 re-evaluated each step) |
-| `e.set_flux(...)` / `e.set_eigenvalues(...)` -> `HyperbolicModel.flux` / `.max_wave_speed` (`dsl.py:472-482`) | interpreted tree | `Expr.eval(env)` evaluates $F_x,F_y,\lambda$ in numpy over the whole array; no C++ |
-| `adc.PythonFlux.residual` (`__init__.py:1263-1275`) | numpy host kernel | assembles $-\nabla\cdot F^*$ (Rusanov, periodic `np.roll`); no device, no MPI |
+| `for _ in range(120): U = U + pf.cfl_dt(U,h,0.4)*pf.residual(U,h)` (`main` in run.py) | Python composes and integrates | choice of scheme (first-order Rusanov), integrator (forward Euler), step size (CFL 0.4 re-evaluated each step) |
+| `e.set_flux(...)` / `e.set_eigenvalues(...)` -> `HyperbolicModel.flux` / `.max_wave_speed` (in dsl.py) | interpreted tree | `Expr.eval(env)` evaluates $F_x,F_y,\lambda$ in numpy over the whole array; no C++ |
+| `adc.PythonFlux.residual` (in __init__.py) | numpy host kernel | assembles $-\nabla\cdot F^*$ (Rusanov, periodic `np.roll`); no device, no MPI |
 
 Contrast with the middle layer of the other `*_dsl` cases: they call `emit_cpp_brick` /
-`emit_cpp_source` -> `add_compiled_model` (`dsl.py:560-806`), so the middle layer becomes a generated
-C++ brick wired to the `assemble_rhs` device path. Here `to_python_flux` (`run.py:77`,
-`dsl.py:491-498`) short-circuits all of that: the tree feeds `PythonFlux` directly.
+`emit_cpp_source` -> `add_compiled_model` (in dsl.py), so the middle layer becomes a generated
+C++ brick wired to the `assemble_rhs` device path. Here `to_python_flux` (in run.py and dsl.py)
+short-circuits all of that: the tree feeds `PythonFlux` directly.
 
 ## 3. The scheme, line by line (justifies Proves: mass conserved bit-exact)
 
-`PythonFlux.residual` (`__init__.py:1263-1275`) assembles the Rusanov (local Lax-Friedrichs) flux:
+`PythonFlux.residual` (in __init__.py) assembles the Rusanov (local Lax-Friedrichs) flux:
 
 ```python
 a = float(self.max_wave_speed(U))                    # une vitesse globale a = max_k max_cell |lambda_k|
@@ -90,26 +90,26 @@ for axis, h, d in ((2, dx, 0), (1, dy, 1)):          # x = axe 2, y = axe 1 du t
     res -= (face - np.roll(face,1,axis=axis)) / h    # -div : (F_{i+1/2} - F_{i-1/2}) / h
 ```
 
-- `a` is a single global speed ($\max$ over both directions, `to_python_flux`, `dsl.py:498`),
+- `a` is a single global speed ($\max$ over both directions, `to_python_flux` in dsl.py),
   recomputed on each call: maximal diffusion, the simplest scheme. No MUSCL, no limiter, first order.
 - Mass is conserved exactly. The first flux component is $\rho u$ / $\rho v$ (conservative form), and
   `np.roll` is a circular permutation: the telescoping sum of `face - roll(face)` over a periodic axis
   is identically zero line by line. The total mass $\sum\rho$ therefore moves only at floating-point
   roundoff; measured: `drel`$=0.0$ (the boundary fluxes cancel by construction, no residual roundoff
-  error at $64^2$). This is the reason for `TOL_MASS`$=10^{-9}$ (`run.py:92`): an upper bound, a
+  error at $64^2$). This is the reason for `TOL_MASS`$=10^{-9}$ (the `drel < 1e-9` assert in `main`, run.py): an upper bound, a
   conservative scheme must not drift beyond machine noise; measured $0.0$, well under the tolerance.
-- `assert moved > 1e-3` (`run.py:93`, `moved`$=$`max|p - p_init|`, `run.py:83`): a lower bound at
+- `assert moved > 1e-3` (in `main`, run.py; `moved`$=$`max|p - p_init|`): a lower bound at
   $10^{-3}$, three orders below the expected magnitude ($p$ varies by $\approx 0.4$); it rejects a
   frozen state (nothing moves) without rejecting the real dynamics. Measured: `moved`$=0.3939$.
 
 ## 4. Initial conditions (justifies: the expanding bubble)
 
-`run.py:63-72`: $64^2$ periodic grid, gas at rest, centered Gaussian overpressure.
+The IC (in `main`, run.py): $64^2$ periodic grid, gas at rest, centered Gaussian overpressure.
 
 ```python
-r2 = (gx - 0.5)**2 + (gy - 0.5)**2                   # run.py:66
-p0 = 1.0 + 0.4*np.exp(-r2 / 0.01)                    # run.py:69 bulle +40%, ecart-type ~0.07
-U[0] = 1.0;  U[3] = p0 / (GAMMA - 1.0)               # run.py:71-72 rho=1, v=0, E = p/(gamma-1) (repos)
+r2 = (gx - 0.5)**2 + (gy - 0.5)**2
+p0 = 1.0 + 0.4*np.exp(-r2 / 0.01)                    # bulle +40%, ecart-type ~0.07
+U[0] = 1.0;  U[3] = p0 / (GAMMA - 1.0)               # rho=1, v=0, E = p/(gamma-1) (repos)
 ```
 
 Uniform density, zero velocities, peak pressure $1.4$ (central cell: $p_c(0)=1.395$). The expansion of
@@ -125,7 +125,7 @@ section 7.
 
 ![Final density (rarefied core) and final pressure (radial ring), 64x64 periodic at t=0.589](figures/final_state.png)
 
-- **Proves** (asserted `run.py:90-91`): the final state is finite and positive across the whole
+- **Proves** (asserted in `main`, run.py): the final state is finite and positive across the whole
   domain: $\rho\in[0.9222,1.0452]$, $p\in[0.9752,1.0638]$, no NaN/Inf. The core has rarefied
   ($\rho\approx 0.94$ at the center: the bubble has emptied), surrounded by an outgoing radial ring.
 - **Suggested** (not asserted): the acoustic signature (radial front moving away from the center) is
@@ -155,10 +155,10 @@ section 7.
   call `emit_cpp_brick`/`add_compiled_model` and assert `np.array_equal` against the native path.
   This case stops at `to_python_flux`: it generates no C++ and compares to nothing. To promote it, you
   would emit the brick (`make_euler().emit_cpp_brick(...)`), compile it, and add the equality assert
-  against the native path (`adc.CompressibleFlux`, available via [`models.euler`](../adc_cases/models.py)
-  `l.58-66`).
+  against the native path (`adc.CompressibleFlux`, available via [`models.euler`](../adc_cases/models.py),
+  the `euler` function in models.py).
 - **Host numpy backend, not device.** `PythonFlux` is documented as "off the GPU/MPI hot path: pure
-  host path" (`__init__.py:1250`). No GPU, no MPI, no multi-box/AMR; a single $(4,64,64)$ array.
+  host path" (the `PythonFlux` docstring in __init__.py). No GPU, no MPI, no multi-box/AMR; a single $(4,64,64)$ array.
 - **First-order dissipative scheme.** Rusanov + forward Euler: energy and momentum are not conserved
   and not asserted (only mass, positivity, finiteness, and dynamics are). Suited to a qualitative
   demo, not to a quantitative acoustic study.
@@ -179,7 +179,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Prerequisites: `numpy` (`matplotlib` for the figures, outside the case's `needs`); the `adc` module
 imported with the same interpreter that compiled it (ABI suffix `cpython-312`). The first `PYTHONPATH`
 entry provides `adc` (including `dsl` and `PythonFlux`); the second makes `adc_cases` importable (the
-case also has a `sys.path` fallback, `run.py:21-26`). No C++ compiler required (`needs = []`), which
+case also has a `sys.path` fallback, in run.py). No C++ compiler required (`needs = []`), which
 is the key difference from the other `*_dsl` cases (`needs = ["cxx"]`).
 
 Expected output of `run.py` (captured, macOS arm64, identical across 3 runs):
@@ -207,4 +207,4 @@ summation order (cf. `figures/provenance.json`).
 | `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured numbers |
 | `<build>/python/adc/dsl.py` | `HyperbolicModel` (tree, numpy interpreter, `to_python_flux`), `sqrt`; provided by the adc_cpp build |
 | `<build>/python/adc/__init__.py` | `adc` facade; `PythonFlux` (Rusanov + `np.roll` periodicity + `residual`/`cfl_dt`) |
-| `../adc_cases/models.py` | `euler(gamma)` = native brick `adc.CompressibleFlux` (the compiled counterpart, `l.58-66`) |
+| `../adc_cases/models.py` | `euler(gamma)` = native brick `adc.CompressibleFlux` (the compiled counterpart, `euler` in models.py) |

@@ -13,7 +13,7 @@ This is not a reproduction of a published result.
 | Category (manifest) | `validation` (`cases_manifest.toml`, `euler_poisson/run.py`, `ci = true`, `needs = []`) |
 | Inputs | grid $64^2$, $L=1$, periodic; IC $\rho=\rho_0(1+\epsilon\cos(2\pi x/L))$, $\epsilon=0.01$, at rest ($v=0$, $E=\rho/(\gamma-1)$); $\gamma=1.4$, $\rho_0=1$, $4\pi G=1$ (dimensionless), $dt=0.004$, 20 steps; van Leer + HLLC + SSPRK2, Poisson `geometric_mg` |
 | Outputs | state `(4,n,n)=[\rho,\rho u,\rho v,E]` read by `get_state("gas")`; global diagnostics $E_{tot}=U[3].\mathrm{sum}()$, $p_x=U[1].\mathrm{sum}()$, $p_y=U[2].\mathrm{sum}()$; 3 figures in `figures/` + `figures/provenance.json` |
-| Guaranteed invariants | the 3 `assert` in `run.py`: mass `max_rel_mass < TOL_MASS=1e-9`; momentum `max_mom < TOL_MOM=1e-8`; contrast `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` then `dE_grav<0` and `dE_plas>0` (`run.py:150-180`) |
+| Guaranteed invariants | the 3 `assert` in `run.py`: mass `max_rel_mass < TOL_MASS=1e-9`; momentum `max_mom < TOL_MOM=1e-8`; contrast `assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE=1e-5)` then `dE_grav<0` and `dE_plas>0` (`main` in run.py) |
 | Proves | mass conserved to $2.6\times10^{-14}$ relative (both runs); net momentum $8.9\times10^{-16}$; $dE_{grav}=-5.857667\times10^{-4}<0$ and $dE_{plas}=+6.137105\times10^{-4}>0$ (opposite signs, magnitude $\gg$ TOL_DE); the $|dE|$ vs $\epsilon$ slope equals 2.000 (figure 2) |
 | Does not prove | not a published reproduction: no number is compared against a paper (neither Jeans collapse nor a plasma benchmark). The physical sign of $dE$ is not deducible from the work $\int\rho\,v\cdot g$ (which is positive on both sides, section 4.3): you read it off the assert that passes. $E_{tot}=U[3].\mathrm{sum}()$ is the fluid energy alone (without the field potential), a sign proxy, not a calibrated physical integral. Quasi-linear regime ($\epsilon=0.01$, 20 steps): no nonlinear dynamics |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native serial backend, $64^2$, ~0.3 s on 1 CPU core; `figures/provenance.json` |
@@ -64,7 +64,7 @@ Conservative state per cell, 4 components: $U=(\rho,\rho u,\rho v,E)$.
 | Source | $g=-\nabla\phi$; $s[1]=\rho g_x$, $s[2]=\rho g_y$, $s[3]=\rho_u g_x+\rho_v g_y$ | `GravityForce` |
 | Elliptic | $\nabla^2\phi=\mathrm{sign}\cdot 4\pi G\,(\rho-\rho_0)$ | `GravityCoupling(sign, four_pi_G, rho0)` |
 
-It is `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`models.py:48-55`), a
+It is `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`euler_poisson` in models.py), a
 composition `adc.Model(state, transport, source, elliptic)`. The word "euler_poisson" lives in
 `adc_cases`; on the core side these are four generic bricks.
 
@@ -72,9 +72,9 @@ A 3-layer "who computes what" table, each row pinned to a real line:
 
 | `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run.py:94-98`) | Python composes | choice of model, scheme (MUSCL van Leer + HLLC), integrator (SSPRK2) |
-| `models.euler_poisson(sign=...)` -> `GravityForce` (`source.hpp:52-62`) / `GravityCoupling` (`elliptic.hpp:43-49`) | C++ brick freezes | the exact formula of the force ($g=-\nabla\phi$, work on the 4-variable energy) and of the right-hand side ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |
-| `assemble_rhs<VanLeer, HLLC>` + system Poisson (`GeometricMG`) (`run.py:99` `set_poisson(...)`) | per-cell kernel (device) | the actual computation, with no Python callback in the hot path |
+| `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run_case` in run.py) | Python composes | choice of model, scheme (MUSCL van Leer + HLLC), integrator (SSPRK2) |
+| `models.euler_poisson(sign=...)` -> `GravityForce` (in source.hpp) / `GravityCoupling` (in elliptic.hpp) | C++ brick freezes | the exact formula of the force ($g=-\nabla\phi$, work on the 4-variable energy) and of the right-hand side ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |
+| `assemble_rhs<VanLeer, HLLC>` + system Poisson (`GeometricMG`) (`set_poisson(...)` in `run_case`, run.py) | per-cell kernel (device) | the actual computation, with no Python callback in the hot path |
 
 The native/electrostatic distinction: `euler_poisson` uses `GravityForce`+`GravityCoupling` (sign
 carried by the elliptic brick), not `PotentialForce`+`ChargeDensity` (sign carried by the charge
@@ -90,18 +90,18 @@ The guide forbids writing "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ therefore attrac
 checking: the Poisson solver has several sign layers. Here is the effective chain, as coded:
 
 1. Poisson operator: `poisson_operator.hpp` solves $\nabla^2\phi=f$ (the stencil writes
-   $\mathrm{lap}=\sum/dx^2$ without a factor, $\varepsilon=1$, see `elliptic_problem.hpp:24-25`). So
+   $\mathrm{lap}=\sum/dx^2$ without a factor, $\varepsilon=1$, see `EllipticProblem::eps` in elliptic_problem.hpp). So
    $f>0$ tends to make $\phi$ convex (a local minimum).
 2. Right-hand side: `GravityCoupling::rhs` returns `sign * four_pi_G * (u[0] - rho0)`
-   (`elliptic.hpp:47`). For gravity ($\mathrm{sign}=+1$), an overdensity ($\rho>\rho_0$) gives
+   (in elliptic.hpp). For gravity ($\mathrm{sign}=+1$), an overdensity ($\rho>\rho_0$) gives
    $f>0$, so $\phi$ has a well under the crest.
 3. Field storage: the coupler stores $aux=(\phi,+\partial_x\phi,+\partial_y\phi)$, convention
-   `GradSign::Plus` (`elliptic_problem.hpp:35-39`). That is, `aux.grad_x = +d\phi/dx`.
-4. Force: `GravityForce::apply` sets `gx = -a.grad_x` (`source.hpp:55`), i.e. $g=-\nabla\phi$. Under
+   `GradSign::Plus` (in elliptic_problem.hpp). That is, `aux.grad_x = +d\phi/dx`.
+4. Force: `GravityForce::apply` sets `gx = -a.grad_x` (in source.hpp), i.e. $g=-\nabla\phi$. Under
    the crest (well of $\phi$), $g$ points toward the crest: attractive.
 
 This chain gives the expected sign, but it stacks 4 conventions; you do not rely on it as proof. The
-reference is the assert that passes: `run.py:177` requires `dE_grav < 0`, `run.py:179` requires
+reference is the assert that passes in `main` (run.py): it requires `dE_grav < 0` and
 `dE_plas > 0`, and the run prints `OK` (section 6). That is the physical sign of the case, not the
 derivation above, which only serves to show that the code is consistent.
 
@@ -111,7 +111,7 @@ derivation above, which only serves to show that the code is consistent.
 
 ### 4.1 What $E_{tot}$ really is
 
-`run.py:85`: `E_tot = U[3].sum()`. Component 3 of the state is the total fluid energy
+`energy_and_momentum` in run.py: `E_tot = U[3].sum()`. Component 3 of the state is the total fluid energy
 $E=\tfrac12\rho|v|^2+\dfrac{p}{\gamma-1}$ (kinetic + internal). It does not include the field
 potential energy $\tfrac12\int\rho\phi$. So $E_{tot}$ is not a conserved quantity of the coupled
 system: it is the energy of one of the two reservoirs (the fluid), and the field can give energy to
@@ -169,58 +169,58 @@ regime is purely quadratic over that range.
 `run.py` reads top to bottom. The load-bearing lines are glossed; the plumbing (imports, `sys.path`
 fallback) is linked, not paraphrased.
 
-Initial condition `initial_density()` (`run.py:75-79`):
+Initial condition `initial_density()` (in run.py):
 
 ```python
-x = (np.arange(N) + 0.5) * L / N                     # centres de cellules (run.py:77)
+x = (np.arange(N) + 0.5) * L / N                     # centres de cellules
 xx, _ = np.meshgrid(x, x, indexing="ij")
-return RHO0 * (1.0 + EPS * np.cos(2.0 * np.pi * xx / L))   # rho = rho0 (1 + eps cos kx) (run.py:79)
+return RHO0 * (1.0 + EPS * np.cos(2.0 * np.pi * xx / L))   # rho = rho0 (1 + eps cos kx)
 ```
 - Mode-1 cosine perturbation along $x$, invariant in $y$, amplitude $\epsilon=0.01$ around
-  $\rho_0=1$. `set_density("gas", rho)` (`run.py:100`) writes $\rho$ onto component 0, sets $v=0$ and
+  $\rho_0=1$. `set_density("gas", rho)` (`run_case` in run.py) writes $\rho$ onto component 0, sets $v=0$ and
   $E=\rho/(\gamma-1)$ (thermal rest).
 
-Global diagnostics `energy_and_momentum(sim)` (`run.py:82-85`):
+Global diagnostics `energy_and_momentum(sim)` (in run.py):
 
 ```python
 U = sim.get_state("gas")                             # (4, n, n) = [rho, rho u, rho v, E]
-return U[3].sum(), U[1].sum(), U[2].sum()            # E_tot, p_x, p_y (run.py:85)
+return U[3].sum(), U[1].sum(), U[2].sum()            # E_tot, p_x, p_y
 ```
 - Cell-wise sums of the conservative components, without $dx^2$ weight. These are proxies:
   sufficient for a relative invariant (mass conservation) and a sign invariant (contrast),
   insufficient as an absolute physical integral. The case tests only the relative and the sign.
 
-Integration loop `run_case(sign, label)` (`run.py:88-137`):
+Integration loop `run_case(sign, label)` (in run.py):
 
 ```python
-sim = adc.System(n=N, L=L, periodic=True)            # run.py:93
-sim.add_block("gas", model=models.euler_poisson(sign=sign, ...), ...)   # run.py:94-98
-sim.set_poisson(rhs="charge_density", solver="geometric_mg")           # run.py:99
-sim.set_density("gas", initial_density())            # run.py:100
-mass0 = sim.mass("gas")                               # masse de reference (run.py:103)
+sim = adc.System(n=N, L=L, periodic=True)
+sim.add_block("gas", model=models.euler_poisson(sign=sign, ...), ...)
+sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+sim.set_density("gas", initial_density())
+mass0 = sim.mass("gas")                               # masse de reference
 for step in range(1, NSTEPS + 1):
-    sim.advance(DT, 1)                               # 1 pas SSPRK2 + Poisson par etage (run.py:115)
-    rel_mass = relative_drift(m, mass0)             # |m - mass0| / |mass0| (run.py:119)
-    max_rel_mass = max(max_rel_mass, rel_mass)      # pire derive sur tous les pas (run.py:120)
-    max_mom = max(max_mom, abs(px), abs(py))        # pire impulsion (run.py:121)
+    sim.advance(DT, 1)                               # 1 pas SSPRK2 + Poisson par etage
+    rel_mass = relative_drift(m, mass0)             # |m - mass0| / |mass0|
+    max_rel_mass = max(max_rel_mass, rel_mass)      # pire derive sur tous les pas
+    max_mom = max(max_mom, abs(px), abs(py))        # pire impulsion
 ```
 - `rhs="charge_density"` is the generic alias of the composed right-hand side (sum of the elliptic
   bricks of each block; here the single `GravityCoupling`). `relative_drift`
-  (`common/checks.py:11-13`) guards the denominator against zero. `mass("gas")` returns the sum of
+  (in checks.py) guards the denominator against zero. `mass("gas")` returns the sum of
   $\rho$: $64\times64\times1=4096$, matching the output.
 
-Verification `main()` (`run.py:140-183`):
+Verification `main()` (in run.py):
 
 ```python
-assert res["max_rel_mass"] < TOL_MASS               # masse conservee (run.py:150)
-assert res["max_mom"] < TOL_MOM                     # impulsion nette nulle (run.py:155)
-dE_grav = grav["energy_final"] - grav["energy0"]    # run.py:160
-dE_plas = plas["energy_final"] - plas["energy0"]    # run.py:161
-assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE, ...)   # signes opposes + magnitude (run.py:174)
-assert dE_grav < 0.0                                # gravite attractive (run.py:177)
-assert dE_plas > 0.0                                # plasma repulsif (run.py:179)
+assert res["max_rel_mass"] < TOL_MASS               # masse conservee
+assert res["max_mom"] < TOL_MOM                     # impulsion nette nulle
+dE_grav = grav["energy_final"] - grav["energy0"]
+dE_plas = plas["energy_final"] - plas["energy0"]
+assert_opposite_sign(dE_grav, dE_plas, min_mag=TOL_DE, ...)   # signes opposes + magnitude
+assert dE_grav < 0.0                                # gravite attractive
+assert dE_plas > 0.0                                # plasma repulsif
 ```
-- `assert_opposite_sign` (`common/checks.py:43-54`) requires `|a| > min_mag AND |b| > min_mag` then
+- `assert_opposite_sign` (in checks.py) requires `|a| > min_mag AND |b| > min_mag` then
   `a*b < 0`: you do not trivially validate two near-zeros whose product happens to be negative.
 
 ---
@@ -229,9 +229,9 @@ assert dE_plas > 0.0                                # plasma repulsif (run.py:17
 
 | Tolerance | Value | Why this value |
 |---|---|---|
-| `TOL_MASS` | $10^{-9}$ | The finite-volume scheme is conservative: mass is an exact invariant, the only drift is floating-point arithmetic. Measured: $2.6\times10^{-14}$ relative, ~5 orders below the tolerance (`run.py:58`) |
-| `TOL_MOM` | $10^{-8}$ | The Poisson force derives from a periodic potential: its spatial sum is zero, it injects no momentum. Measured: $8.9\times10^{-16}$, ~8 orders below the tolerance (`run.py:59`) |
-| `TOL_DE` | $10^{-5}$ | Lower bound: $dE=0$ exactly at $\epsilon=0$ (verified). Upper bound: the expected physical magnitude is $\sim6\times10^{-4}$ ($\epsilon=0.01$, 20 steps, `run.py:60-62`). $10^{-5}$ sits between the noise (0) and the signal ($6\times10^{-4}$): it rejects an insignificant sign without rejecting the real signal (`run.py:63`) |
+| `TOL_MASS` | $10^{-9}$ | The finite-volume scheme is conservative: mass is an exact invariant, the only drift is floating-point arithmetic. Measured: $2.6\times10^{-14}$ relative, ~5 orders below the tolerance (`TOL_MASS` in run.py) |
+| `TOL_MOM` | $10^{-8}$ | The Poisson force derives from a periodic potential: its spatial sum is zero, it injects no momentum. Measured: $8.9\times10^{-16}$, ~8 orders below the tolerance (`TOL_MOM` in run.py) |
+| `TOL_DE` | $10^{-5}$ | Lower bound: $dE=0$ exactly at $\epsilon=0$ (verified). Upper bound: the expected physical magnitude is $\sim6\times10^{-4}$ ($\epsilon=0.01$, 20 steps, `TOL_DE` in run.py). $10^{-5}$ sits between the noise (0) and the signal ($6\times10^{-4}$): it rejects an insignificant sign without rejecting the real signal (`TOL_DE` in run.py) |
 
 ---
 
@@ -244,7 +244,7 @@ Generated by `python make_figures.py` (same parameters as `run.py`), versioned w
 
 ![E_tot(t) - E_tot(0) for gravity (descends) and plasma (rises), side by side](figures/energy_vs_t.png)
 
-- Proves (asserted `run.py:177-180`): $E_{tot}$ decreases for gravity
+- Proves (asserted in `main`, run.py): $E_{tot}$ decreases for gravity
   ($dE_{grav}=-5.858\times10^{-4}$) and increases for the plasma ($dE_{plas}=+6.137\times10^{-4}$).
   The two curves start from 0 (same state at rest) and diverge in opposite directions: strictly
   opposite signs, magnitudes $\gg$ TOL_DE.
@@ -314,7 +314,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Prerequisites: `numpy` (and `matplotlib` for the figures, outside the case's own `needs`), the `adc`
 module compiled and imported with the same interpreter that compiled it (ABI suffix `cpython-312`).
 The first path of the `PYTHONPATH` provides the C++ module; the second makes `adc_cases` importable
-without installation (the case also has a `sys.path` fallback, `run.py:48-53`).
+without installation (the case also has a `sys.path` fallback in run.py).
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
@@ -339,5 +339,5 @@ digits of $dE$ vary with the BLAS and the summation order (see `figures/provenan
 | `make_figures.py` | replays the physics + $\epsilon$ sweep; writes the 3 figures + `provenance.json` |
 | `figures/*.png` | `energy_vs_t.png`, `de_vs_eps.png`, `density_map.png` (versioned, regenerated in place) |
 | `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured numbers ($dE$, slopes, drifts) |
-| `../adc_cases/models.py` | `euler_poisson(sign,...)` = composition of the 4 native bricks (`l.48-55`) |
+| `../adc_cases/models.py` | `euler_poisson(sign,...)` = composition of the 4 native bricks |
 | `../adc_cases/common/checks.py` | `relative_drift`, `assert_opposite_sign` (used by the case) |

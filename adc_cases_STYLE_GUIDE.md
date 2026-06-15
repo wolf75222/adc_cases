@@ -61,13 +61,13 @@ The falsifiable prediction is stated from the contract on (section 0) and the ar
 
 Hard rules:
 
-- Real anchoring: cite `run.py:NN` (line range) and the exact name (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`). A theoretical claim with no line implementing it is cut. No non-trivial line without its justification.
+- Real anchoring: cite the exact stable symbol (`run_case`, `diocotron_eigenvalue`, `largest_stable_dt`, `assert_opposite_sign`, `TOL_DE`) and its file, in the form `SYMBOL in run.py`, not a drift-prone line range. A theoretical claim with no symbol implementing it is cut. No non-trivial construct without its justification.
 - Never paraphrase a trivial line (`import numpy as np`, `sys.path.insert`). You gloss only the lines that carry physics or algorithm.
 - Inline vs link: you show inline the key-physics functions (the flux, the eigenvalues, the operator assembly, the diagnostic measurement) as 5-to-15-line blocks of the real `run.py`, followed by bullets explaining each non-trivial variable (`rho`, `Om`, `Lmat`, `Q`, `dE_grav`). You link (without copying) the plumbing: the `adc_cases` import try/except block, the backend fallback machinery, the argparse.
 - Granularity by role: a key-physics function (e.g. `mode_l_amplitude`, `diocotron_eigenvalue`, `magnetized_model`) deserves the line-by-line comment; a plumbing function (e.g. `make_system` that only does `adc.System(...)`) deserves one sentence.
-- The 3-layer "who computes what" table, mandatory for brick-based cases. Three rows, each pinned to a real line of `run.py`:
+- The 3-layer "who computes what" table, mandatory for brick-based cases. Three rows, each pinned to a real symbol of `run.py`:
 
-| run.py line | Layer | What happens |
+| run.py symbol | Layer | What happens |
 |---|---|---|
 | `add_block(...)` / `add_equation(...)` | Python composes and diagnoses | choice of model, scheme, integrator; reading the state |
 | `models.euler_poisson(...)` / `ExBVelocity` brick / `BackgroundDensity` | compiled C++ brick | the frozen physical choice (flux, eigenvalues, elliptic RHS) |
@@ -77,11 +77,11 @@ For a DSL case, the middle layer is no longer a named brick but the expressions 
 
 ## 4. How to treat the math
 
-- Derive, do not assert: for a falsifiable prediction, you show the steps. Mandatory example for `diocotron`: go from the linearization $\phi'=\hat\phi(r)e^{i(m\theta-\omega t)}$ to the eigenvalue problem $\omega\mathcal{L}_m\hat\phi=(m\Omega\mathcal{L}_m+Q)\hat\phi$, then to the standard form $\omega\hat\phi=\mathcal{L}_m^{-1}(\dots)\hat\phi=M\hat\phi$, and state that `eigvals(M)` returns the spectrum. Each symbol in the formula points to the line that computes it (`Om` = $\Omega(r)$ line 110, `Q` = $\frac{m}{r}\frac{dn_0}{dr}$ line 134, `Lmat` = $\mathcal{L}_m$ lines 120-125).
+- Derive, do not assert: for a falsifiable prediction, you show the steps. Mandatory example for `diocotron`: go from the linearization $\phi'=\hat\phi(r)e^{i(m\theta-\omega t)}$ to the eigenvalue problem $\omega\mathcal{L}_m\hat\phi=(m\Omega\mathcal{L}_m+Q)\hat\phi$, then to the standard form $\omega\hat\phi=\mathcal{L}_m^{-1}(\dots)\hat\phi=M\hat\phi$, and state that `eigvals(M)` returns the spectrum. Each symbol in the formula points to the variable that computes it in `diocotron_eigenvalue` (`Om` = $\Omega(r)$, `Q` = $\frac{m}{r}\frac{dn_0}{dr}$, `Lmat` = $\mathcal{L}_m$).
 - Admit cleanly: what is not re-derivable in a few lines (the exact paper convention, the $\times 2\pi/\bar\rho$ normalization) is cited with its source, not reconstructed by hand.
 - Notation: GitHub LaTeX, `$...$` inline and `$$...$$` in block. French accents OK. No em-dash (U+2014); use a colon, parentheses, or periods.
 - The quantitative falsifiable prediction is preferred. For `euler_poisson`, the real testable prediction from the linearization is $|dE|\propto\epsilon^2$: a log-log plot of $|dE|$ vs $\epsilon$ must have slope 2; doubling $\epsilon$ quadruples $|dE|$. This is verifiable and turns a boolean assert into a convergence curve. State it, and say what a different slope would betray (slope ~1 = spurious linear term, background `rho0` poorly subtracted; slope > 2 at large $\epsilon$ = nonlinear onset).
-- Verify the sign by behavior, never by a textbook convention pasted on top. The Poisson solver (`poisson_operator.hpp`) has several sign layers plus a `GradSign` in post-processing. Writing "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ hence attractive gravity" without checking is wrong (may yield repulsion). The physical sign is read off the assert that passes: for `euler_poisson`, `run.py:177-180` imposes `dE_grav < 0` (attractive) and `dE_plas > 0` (repulsive); that is the reference, not a textbook formula.
+- Verify the sign by behavior, never by a textbook convention pasted on top. The Poisson solver (`poisson_operator.hpp`) has several sign layers plus a `GradSign` in post-processing. Writing "$-\nabla^2\phi=+4\pi G(\rho-\rho_0)$ hence attractive gravity" without checking is wrong (may yield repulsion). The physical sign is read off the assert that passes: for `euler_poisson`, `main` in run.py imposes `dE_grav < 0` (attractive) and `dE_plas > 0` (repulsive); that is the reference, not a textbook formula.
 - Name the paradoxes, do not fabricate the derivation. For `euler_poisson`, $E_{tot}=U[3].sum()$ is the fluid energy alone (no field potential) and it decreases for gravity even though $v\cdot g>0$. State the tension openly and attribute it to the coupling convention, without manufacturing a boxed theorem. A wrong boxed sign is worse than an honest report.
 
 ## 5. How to treat the physics
@@ -124,7 +124,7 @@ For a DSL case, the middle layer is no longer a named brick but the expressions 
 - Deletion test: if removing a sentence loses neither a fact, a number, a symbol, a sign, nor a reason, it goes.
 - Zero recap. No "In conclusion" section that re-states the intro. The current `diocotron` exemplar has sections 8 (Architecture) and 12 (Limits) that re-state sections 1 through 7; that budget is reclaimed for the derivation and the figure analysis, at near-constant length. One fact, at a single altitude.
 - A theoretical claim without the line of code that implements it is cut.
-- A tolerance is a clause justified by an order of magnitude, never a posited constant. `TOL_DE=1e-5` sits between machine noise (dE = 0 exactly at $\epsilon=0$) and the expected physical magnitude ~6e-4 (`run.py:60-62`): write that ratio. `TOL_MASS=1e-9` because the scheme is conservative and the drift comes from floating-point arithmetic. Each tolerance has its "why".
+- A tolerance is a clause justified by an order of magnitude, never a posited constant. `TOL_DE=1e-5` sits between machine noise (dE = 0 exactly at $\epsilon=0$) and the expected physical magnitude ~6e-4 (`TOL_DE` in run.py): write that ratio. `TOL_MASS=1e-9` because the scheme is conservative and the drift comes from floating-point arithmetic. Each tolerance has its "why".
 - Always distinguish Proves (by an assert) from Suggests (made plausible by a figure). Anti-over-interpretation guardrail, to apply to all 15 cases.
 - For DSL child cases: link, do not copy the parent's physics.
 
@@ -157,8 +157,8 @@ Binary, to tick before acceptance:
 2. [ ] The Does not prove clause is as detailed as Proves and its tone follows the category (pending if `reproduction-candidate`, "not a published repro" if `validation`, prototype if `experimental`).
 3. [ ] Each substantive section names the contract clause it justifies; no orphan clause.
 4. [ ] A falsifiable prediction is stated in the contract and an artifact (figure/assert/table) confronts it.
-5. [ ] Each theoretical claim points to a real line (`run.py:NN`) and a real name; no trivial line is paraphrased.
-6. [ ] The 3-layer table (Python composes / brick freezes / per-cell kernel) is present for a brick-based case, each row pinned to a real line.
+5. [ ] Each theoretical claim points to a real stable symbol (`SYMBOL in run.py`); no trivial line is paraphrased.
+6. [ ] The 3-layer table (Python composes / brick freezes / per-cell kernel) is present for a brick-based case, each row pinned to a real symbol.
 7. [ ] The physical signs are verified by the asserted behavior, not by a pasted textbook convention.
 8. [ ] Each tolerance is justified by an order of magnitude (noise / physical magnitude ratio).
 9. [ ] Each figure is embedded and followed by 2 to 4 sentences of analysis, partitioned Proves / Suggests / Not shown.

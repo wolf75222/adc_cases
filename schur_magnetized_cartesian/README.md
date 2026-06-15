@@ -15,7 +15,7 @@ to [`../magnetic_isothermal_dsl/`](../magnetic_isothermal_dsl/).
 | Category (manifest) | `experimental` (`cases_manifest.toml`, `schur_magnetized_cartesian/run.py`, `ci = false`, `needs = ["cxx"]`). A measurement prototype: the path is not finalized (the Schur stage is wired through a private hook, AOT backend), not a published reproduction. |
 | Inputs | $16^2$ grid, $L=1$, **periodic** ($h=0.0625$); IC $\rho=1+0.05\cos(2\pi x)$, oblique velocity $u=v=0.5$; $c_s^2=10^{-4}$ (slow transport, not limiting), $q=-1$, $\alpha=1$, $B_z=\omega_c$ constant; minmod + Rusanov, SSPRK2 transport (AOT); Schur stage $\theta\in\{0.5,1.0\}$ |
 | Outputs | `dt_stable` per method (explicit / Schur $\theta{=}0.5$ / Schur $\theta{=}1.0$), product $dt\,\omega_c$, gain; console + `out/<case>/dt_stable.csv` (`--csv` option); 2 figures in `figures/` + `figures/provenance.json` |
-| Guaranteed invariants | no `assert`: this is a measurement, not a validation. The stability criterion is `is_stable` (`run.py:152-161`): at a given $dt$, density stays finite, $\lvert\rho\rvert_{\max}\le 10^3$ and $\rho_{\min}\ge -10^{-2}$ at every step up to $t_{end}$ |
+| Guaranteed invariants | no `assert`: this is a measurement, not a validation. The stability criterion is `is_stable` (in run.py): at a given $dt$, density stays finite, $\lvert\rho\rvert_{\max}\le 10^3$ and $\rho_{\min}\ge -10^{-2}$ at every step up to $t_{end}$ |
 | Proven (measured, not asserted) | explicit: $dt_{stable}\propto 1/\omega_c$ (measured $5.62\times10^{-2}\to5.62\times10^{-4}$ from $\omega_c{=}10^2$ to $10^3$, factor of exactly 100), bounded product $dt\,\omega_c\le O(1)$; at $\omega_c{=}10^4$ no tested $dt$ is stable ($dt_{stable}=0$). Schur: $dt_{stable}=3.16\times10^{-1}$ independent of $\omega_c$, set by transport; measured gain 562x ($\omega_c{=}10^3$, full run) up to unbounded ($\omega_c{=}10^4$) |
 | Does not prove | not a published reproduction; no fidelity to any paper (the Hoffart target [arXiv:2510.11808](https://arxiv.org/abs/2510.11808) is the separate case [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), itself a pending `reproduction-candidate`). The Schur stage is wired through the private hook `sim._s.set_source_stage(...)`, not through `adc.Split(Explicit, CondensedSchur)` (not wired on AOT). `dt_stable` is a discrete bound (geometric sweep at a quarter-decade), not a fine threshold; the stability criterion is heuristic (finiteness + bounds + positivity), not spectral. A fabricated stiff case (tiny $c_s^2$): the gain is specific to this operating point |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, DSL backend `aot`, $16^2$, macOS arm64; figure (1) read from the documented full run `out/dt_stable.csv` ($\omega_c{=}10^3$, $t_{end}{=}1$), figure (2) from a fresh targeted measurement (3 $\omega_c$, $t_{end}{=}0.05$, ~231 s for the three sweeps); `figures/provenance.json` |
@@ -42,7 +42,7 @@ $$\partial_t\rho+\nabla\cdot(\rho v)=0,\qquad
 
 Projected in 2D, the rotation $m\times\Omega$ gives $(+B_z m_y,\,-B_z m_x)$ on momentum and $0$ on
 energy ($v\times B\perp v$): this is exactly the `MagneticLorentzForce` convention
-(`source.hpp:84-93`), $s_1=+q_{om}B_z m_y$, $s_2=-q_{om}B_z m_x$. This rotation is the stiff term: it
+(in source.hpp), $s_1=+q_{om}B_z m_y$, $s_2=-q_{om}B_z m_x$. This rotation is the stiff term: it
 rotates $m$ at angular frequency $\omega_c$ without dissipating it. The larger $\omega_c$, the faster
 the rotation, the finer the step the explicit advance must take to follow it. This justifies the
 Proven clause (the explicit bound) and its converse (the Schur path removing it).
@@ -71,57 +71,57 @@ both checked in section 6:
 Why does the Schur path remove the bound? It advances the source not by an explicit increment but by
 solving the implicit advance of the rotation. The Lorentz eliminator encodes the implicit rotation
 matrix $B=\begin{pmatrix}1&-w\\w&1\end{pmatrix}$, $w=\theta\,dt\,B_z$, $\det B=1+w^2>0$ for any real
-$w$ (`lorentz_eliminator.hpp:64-74`): $B$ is invertible whatever $dt\,B_z$ is, so the reconstruction
-$v^{n+\theta}=B^{-1}(v^n-\theta\,dt\,\nabla\phi^{n+\theta})$ (`SchurReconstructKernel`,
-`condensed_schur_source_stepper.hpp:84-107`) stays bounded even at arbitrarily large $\omega_c$. This
+$w$ (`LorentzEliminator` in lorentz_eliminator.hpp): $B$ is invertible whatever $dt\,B_z$ is, so the reconstruction
+$v^{n+\theta}=B^{-1}(v^n-\theta\,dt\,\nabla\phi^{n+\theta})$ (`SchurReconstructKernel`
+in condensed_schur_source_stepper.hpp) stays bounded even at arbitrarily large $\omega_c$. This
 is the algebraic root of the absence of a bound: $\det B=1+w^2$ never vanishes.
 
 The stage assembles the condensed operator $A_{op}=I+c\,\rho\,B^{-1}$ with $c=\theta^2 dt^2\alpha$ and
 solves $L_{schur}(\phi)=-\nabla\!\cdot(A_{op}\nabla\phi)=\text{rhs}$ by matrix-free BiCGStab
-preconditioned with multigrid (`condensed_schur_source_stepper.hpp:30-37, 251-266`). Two $\theta$
+preconditioned with multigrid (`CondensedSchurSourceStepper::step` in condensed_schur_source_stepper.hpp). Two $\theta$
 values are measured: $\theta=0.5$ (Crank-Nicolson, marginally stable for a pure rotation) and
 $\theta=1.0$ (backward Euler, unconditionally stable). The step from the $\theta$-stage to $n+1$ is a
-linear extrapolation with factor $1/\theta$ (`SchurExtrapolateVelocityKernel`, `...:122-137`); energy
+linear extrapolation with factor $1/\theta$ (`SchurExtrapolateVelocityKernel` in condensed_schur_source_stepper.hpp); energy
 is touched only if the Energy role exists (absent here, the 3-variable isothermal model).
 
 ---
 
 ## 4. The three layers: who computes what (DSL case: the middle layer is expressions)
 
-The model is written once as `adc.dsl.Model` (`magnetized_model`, `run.py:88-121`), instantiated in
+The model is written once as `adc.dsl.Model` (`magnetized_model` in run.py), instantiated in
 two variants that share flux/eigenvalues/Poisson and differ only by their source.
 
 | `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_equation("plasma", model=compiled, spatial=adc.FiniteVolume(minmod, rusanov, conservative), time=adc.Explicit())` (`run.py:136-140`); `sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)` (`run.py:145`) | Python composes and measures | choice of transport scheme, wiring of the condensed source stage; the `largest_stable_dt` sweep (`run.py:164-174`) reads density to judge stability |
-| `m.flux(...)`, `m.eigenvalues(...)`, `m.source([0, q*rho*(-gx)+bz*my, q*rho*(-gy)-bz*mx])` (local) or `m.source([0*rho,0*mx,0*my])` (schur), `m.elliptic_rhs(q*rho)` (`run.py:103-119`) | expressions that `adc.dsl` compiles and freezes | the exact convention of the isothermal flux, the eigenvalues $v_n\pm c_s$, the Lorentz term $(+B_z m_y,-B_z m_x)$, the right-hand side $q\rho$ |
+| `sim.add_equation("plasma", model=compiled, spatial=adc.FiniteVolume(minmod, rusanov, conservative), time=adc.Explicit())` (`build` in run.py); `sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)` (`build` in run.py) | Python composes and measures | choice of transport scheme, wiring of the condensed source stage; the `largest_stable_dt` sweep (in run.py) reads density to judge stability |
+| `m.flux(...)`, `m.eigenvalues(...)`, `m.source([0, q*rho*(-gx)+bz*my, q*rho*(-gy)-bz*mx])` (local) or `m.source([0*rho,0*mx,0*my])` (schur), `m.elliptic_rhs(q*rho)` (`magnetized_model` in run.py) | expressions that `adc.dsl` compiles and freezes | the exact convention of the isothermal flux, the eigenvalues $v_n\pm c_s$, the Lorentz term $(+B_z m_y,-B_z m_x)$, the right-hand side $q\rho$ |
 | `CondensedSchurSourceStepper::step` (assembles $A_{op}=I+c\rho B^{-1}$, BiCGStab+MG, reconstructs $B^{-1}$) | per-cell kernel (device) | the real implicit solve of the source, with no Python callback; named device-clean functors |
 
-The `schur` variant zeroes its local source (`run.py:115`): the condensed stage carries the full
+The `schur` variant zeroes its local source (`magnetized_model` in run.py): the condensed stage carries the full
 source, and leaving it locally would advance it twice. The DSL names no scenario: it re-declares the
 formulas of the `IsothermalFlux` / `MagneticLorentzForce` / `ChargeDensity` bricks, a table of
 conventions anchored in [`../magnetic_isothermal_dsl/`](../magnetic_isothermal_dsl/) (section 2).
 
 ---
 
-## 5. The measurement: `largest_stable_dt` and the stability criterion (`run.py:124-174`)
+## 5. The measurement: `largest_stable_dt` and the stability criterion (in run.py)
 
-Initial conditions `initial_state` (`run.py:124-130`): cosine density + constant oblique velocity.
+Initial conditions `initial_state` (in run.py): cosine density + constant oblique velocity.
 The velocity $u=v=0.5$ makes both momentum components nonzero, so the Lorentz rotation
 $(+B_z m_y,-B_z m_x)$ is active from the first step (otherwise $m_x=m_y=0$: nothing to rotate, stiffness
 invisible).
 
 ```python
-sim.set_magnetic_field(omega_c * np.ones((n, n)))     # B_z = omega_c everywhere (run.py:141)
+sim.set_magnetic_field(omega_c * np.ones((n, n)))     # B_z = omega_c everywhere
 if schur:
-    sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)  # run.py:145
+    sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)
 ```
 - `set_magnetic_field` populates the extended aux channel (canonical index 3, read by the Lorentz
   term and by the Schur stage) with a constant field $\omega_c$: so $\omega_c=B_z$ is the only
   stiffness parameter swept.
 
 ```python
-def is_stable(...):                                    # run.py:152-161
+def is_stable(...):
     sim = build(...); nst = max(2, ceil(t_end / dt))
     for _ in range(nst):
         sim.step(dt)
@@ -136,7 +136,7 @@ def is_stable(...):                                    # run.py:152-161
   accepting an outright negative density; $10^3$ catches exponential blow-up.
 
 ```python
-def largest_stable_dt(...):                            # run.py:164-174
+def largest_stable_dt(...):
     best = 0.0
     for e in range(-16, 5):
         dt = 10.0 ** (e / 4.0)
@@ -203,7 +203,7 @@ Category `experimental`: the path is a prototype, and three choices must be name
   `adc.Split(adc.Explicit, adc.CondensedSchur)` is wired only by the native `production` path: the AOT
   `.so` ABI does not carry the SSPRK3 substep that `adc.Split` expects. The case therefore wires the
   condensed stage directly via `sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta,
-  alpha)` (`run.py:145`), which runs the same C++ (`CondensedSchurSourceStepper`) that `adc.Split`
+  alpha)` (`build` in run.py), which runs the same C++ (`CondensedSchurSourceStepper`) that `adc.Split`
   would produce on the production side. This is a low-level access, subject to renaming: promoting it
   requires wiring `adc.Split` on AOT.
 - **AOT backend (host-marshaled).** The `production` DSL backend (native zero-copy) does not link on

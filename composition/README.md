@@ -15,7 +15,7 @@ capability; it validates no published physical result.
 | Category (manifest) | `tutoriel` (`cases_manifest.toml`, `composition/run.py`, `ci = true`, `needs = []`) |
 | Inputs | A: grid $48^2$, $L=1$, periodic; electrons $\rho=1+0.02\cos(2\pi x/L)$ (Euler $\gamma=1.4$, $q=-1$), ions $\rho=1$ (isothermal $c_s^2=0.5$, $q=+1$); $dt=0.001$, 8 steps. B/D: grid $32^2$ periodic, diocotron ($B_0=1$, $\alpha=1$, background $n_{i0}=\overline{\rho}$); B: $dt=0.002$, 12 steps; D: $dt=0.001$, 20 Python steps |
 | Outputs | printed diagnostics (no file produced by `run.py`); the figures are generated separately by `make_figures.py` in `figures/` + `figures/provenance.json` |
-| Guaranteed invariants | the `assert` statements in `run.py`: A electron/ion mass $<$ `MASS_TOL=1e-10` and $\|\phi\|_\infty>10^{-8}$ and electron evolution $>10^{-9}$ (`run.py:124-137`); B difference between two compositions $==0$ exactly (`run.py:166`); C the 3 invalid combinations raise and `n_species()==0` (`run.py:185-209`); D mass $<10^{-9}$ and finite state (`run.py:243-244`) |
+| Guaranteed invariants | the `assert` statements in `run.py`: A electron/ion mass $<$ `MASS_TOL=1e-10` and $\|\phi\|_\infty>10^{-8}$ and electron evolution $>10^{-9}$ (`partie_A` in run.py); B difference between two compositions $==0$ exactly (`partie_B` in run.py); C the 3 invalid combinations raise and `n_species()==0` (`partie_C` in run.py); D mass $<10^{-9}$ and finite state (`partie_D` in run.py) |
 | Proves | (A) two fluids with different schemes coexist in the same `adc.System`, each conserves its mass ($2.7\times10^{-12}$ electrons, $1.8\times10^{-12}$ ions), the coupled Poisson is active ($\|\phi\|_\infty=5.06\times10^{-4}$), the electrons evolve ($3.5\times10^{-5}$); (B) the same model composed twice gives a bit-identical state (difference $=0$, `np.array_equal` true); (C) HLLC on scalar transport, fluid source on a scalar, and an inconsistent model are rejected at composition / at add time, with no block added; (D) an SSPRK2 integrator written in Python conserves mass ($2.3\times10^{-13}$) and stays finite |
 | Does not prove | demonstrates an API capability, validates no published physical result. No number is checked against a paper; the initial conditions are simple cosines, the horizons are short (8/12/20 steps), no physical dynamics is interpreted. Bit determinism (B, D) is an implementation property (same frozen C++ bricks, same floating-point operations in the same order), not a cross-platform guarantee: it can break across BLAS, summation order, or architecture. The measured mass conservation is not a scheme validation: it is the minimum expected of a conservative finite-volume method |
 | Provenance | adc_cpp `01873299`, adc_cases (deeptut) `a9541ba4`, native serial backend, $48^2$ (A) / $32^2$ (B,D), ~1 s 1 CPU core; `figures/provenance.json` |
@@ -33,17 +33,17 @@ The watchword is: Python composes, C++ computes. The system config carries only 
 physics is carried by the blocks:
 
 ```python
-sim = adc.System(n=48, L=1.0, periodic=True)            # config = MAILLAGE seul (run.py:94)
+sim = adc.System(n=48, L=1.0, periodic=True)            # config = MAILLAGE seul
 sim.add_block("electrons", model=models.electron_euler(),
               spatial=adc.Spatial(vanleer=True, flux="hllc"),
-              time=adc.IMEX(substeps=10))                # run.py:100-102
+              time=adc.IMEX(substeps=10))
 sim.add_block("ions", model=models.ion_isothermal(),
               spatial=adc.Spatial(minmod=True, flux="rusanov"),
-              time=adc.Explicit())                       # run.py:104-106
+              time=adc.Explicit())
 ```
-- `adc.System(n, L, periodic)` (`run.py:94`) carries no physical parameter ($\gamma$, $c_s^2$,
+- `adc.System(n, L, periodic)` (`partie_A` in run.py) carries no physical parameter ($\gamma$, $c_s^2$,
   $B_0$, charge): only the mesh. The physics moves into the blocks.
-- `models.electron_euler()` and `models.ion_isothermal()` (`models.py:28-45`) are compositions of
+- `models.electron_euler()` and `models.ion_isothermal()` (`electron_euler`, `ion_isothermal` in models.py) are compositions of
   generic bricks (section 3), not magic strings. The word "electron" lives in `adc_cases`, never on
   the core side.
 - each `add_block` independently chooses the reconstruction (`adc.Spatial`), the flux
@@ -64,20 +64,20 @@ the exact brick for each slot:
 
 | Model (`models.py`) | state | transport | source | elliptic |
 |---|---|---|---|---|
-| `electron_euler()` (l.28) | `FluidState(compressible, gamma=1.4)` | `CompressibleFlux` | `PotentialForce(charge=-1)` | `ChargeDensity(charge=-1)` |
-| `ion_isothermal()` (l.38) | `FluidState(isothermal, cs2=0.5)` | `IsothermalFlux` | `PotentialForce(charge=+1)` | `ChargeDensity(charge=+1)` |
-| `diocotron()` (l.18) | `Scalar` | `ExB(B0=1)` | `NoSource` | `BackgroundDensity(alpha=1, n0=n_i0)` |
+| `electron_euler()` (in models.py) | `FluidState(compressible, gamma=1.4)` | `CompressibleFlux` | `PotentialForce(charge=-1)` | `ChargeDensity(charge=-1)` |
+| `ion_isothermal()` (in models.py) | `FluidState(isothermal, cs2=0.5)` | `IsothermalFlux` | `PotentialForce(charge=+1)` | `ChargeDensity(charge=+1)` |
+| `diocotron()` (in models.py) | `Scalar` | `ExB(B0=1)` | `NoSource` | `BackgroundDensity(alpha=1, n0=n_i0)` |
 
 Each brick is a pointwise, device-callable physics, defined once on the core side:
 
-- `CompressibleFlux` = `Euler` (`hyperbolic.hpp:118`): Euler flux, 4 variables $(\rho,\rho u,\rho v,E)$.
-- `IsothermalFlux` (`hyperbolic.hpp:127`): 3 variables, closure $p=c_s^2\rho$, wave $\sqrt{c_s^2}$.
-- `ExBVelocity` (`hyperbolic.hpp:27`): 1 variable, drift $v=(-\partial_y\phi,\partial_x\phi)/B_0$.
-- `PotentialForce` (`source.hpp:33`): $s[1]=q\rho E_x$, $s[2]=q\rho E_y$, work $s[3]$ only
+- `CompressibleFlux` = `Euler` (in hyperbolic.hpp): Euler flux, 4 variables $(\rho,\rho u,\rho v,E)$.
+- `IsothermalFlux` (in hyperbolic.hpp): 3 variables, closure $p=c_s^2\rho$, wave $\sqrt{c_s^2}$.
+- `ExBVelocity` (in hyperbolic.hpp): 1 variable, drift $v=(-\partial_y\phi,\partial_x\phi)/B_0$.
+- `PotentialForce` (in source.hpp): $s[1]=q\rho E_x$, $s[2]=q\rho E_y$, work $s[3]$ only
   if `State::size()==4` (Euler). On a 3-variable transport (isothermal) there is no energy
   component; on a scalar (1 variable) the force is meaningless (rejected, section 5).
-- `ChargeDensity` (`elliptic.hpp:19`): right-hand side $f=q\,n$, sign of $q$ included.
-- `BackgroundDensity` (`elliptic.hpp:31`): $f=\alpha(n-n_0)$, neutralizing background for the periodic Poisson.
+- `ChargeDensity` (in elliptic.hpp): right-hand side $f=q\,n$, sign of $q$ included.
+- `BackgroundDensity` (in elliptic.hpp): $f=\alpha(n-n_0)$, neutralizing background for the periodic Poisson.
 
 The right-hand side of the system Poisson is $\sum_s f_s = \sum_s q_s n_s$ (generic sum of the
 elliptic bricks of each block). With perturbed electrons $q=-1$ and uniform ions $q=+1$
@@ -87,11 +87,11 @@ elliptic bricks of each block). With perturbed electrons $q=-1$ and uniform ions
 
 | `run.py` line | Layer | What happens |
 |---|---|---|
-| `sim.add_block("electrons", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.IMEX(substeps=10))` (`run.py:100-102`) | Python composes | choice of the model (bricks), the spatial scheme (reconstruction + flux), the time treatment (IMEX + 10 substeps); reads the state via `density`/`potential`/`get_state` |
-| `models.electron_euler()` -> bricks `CompressibleFlux` / `PotentialForce` / `ChargeDensity` (`hyperbolic.hpp:118`, `source.hpp:33`, `elliptic.hpp:19`) | C++ brick freezes the physics | the exact convention of the Euler flux, of the $q\rho E$ force, of the $q n$ right-hand side |
-| `System::add_block(... spatial.limiter, spatial.flux, spatial.recon, time.kind, time.substeps, time.stride ...)` (facade `__init__.py:831-833`) then `assemble_rhs<Limiter,Flux>` + local IMEX Newton + system Poisson | per-cell kernel (device) | the real computation, with no Python callback in the hot path |
+| `sim.add_block("electrons", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.IMEX(substeps=10))` (`partie_A` in run.py) | Python composes | choice of the model (bricks), the spatial scheme (reconstruction + flux), the time treatment (IMEX + 10 substeps); reads the state via `density`/`potential`/`get_state` |
+| `models.electron_euler()` -> bricks `CompressibleFlux` / `PotentialForce` / `ChargeDensity` (`CompressibleFlux` in hyperbolic.hpp, `PotentialForce` in source.hpp, `ChargeDensity` in elliptic.hpp) | C++ brick freezes the physics | the exact convention of the Euler flux, of the $q\rho E$ force, of the $q n$ right-hand side |
+| `System::add_block(... spatial.limiter, spatial.flux, spatial.recon, time.kind, time.substeps, time.stride ...)` (facade `System.add_block` in __init__.py) then `assemble_rhs<Limiter,Flux>` + local IMEX Newton + system Poisson | per-cell kernel (device) | the real computation, with no Python callback in the hot path |
 
-The key point is the third row: the `add_block` facade (`__init__.py:819-833`) passes
+The key point is the third row: the `add_block` facade (`System.add_block` in __init__.py) passes
 `spatial.limiter`, `spatial.flux`, `spatial.recon`, `time.kind`, `time.substeps`, `time.stride` to
 the C++ `System::add_block` at add time. The scheme (VanLeer+HLLC+IMEX+10) is then frozen into the
 block as a compiled advance closure; it is no longer reconfigurable without re-adding the block, and
@@ -104,7 +104,7 @@ bricks + same frozen scheme -> same C++ computation.
 
 For a tutorial, the testable "prediction" is not a physical number but a falsifiable implementation
 property: recomposing the same model with the same initial condition, or replaying the same Python
-step, gives a bit-identical state. `run.py:166` asserts it with `assert ecart == 0.0` (B); the
+step, gives a bit-identical state. `partie_B` (in run.py) asserts it with `assert ecart == 0.0` (B); the
 `determinism.png` figure (section 6) checks it on both paths (B C++ composition, D Python step). A
 single nonzero cell in the difference would betray nondeterminism: a hidden global state between two
 compositions, a cell traversal dependent on allocation, or a non-reproducible reduction order in the
@@ -117,36 +117,36 @@ the conservation tolerances (section 4).
 
 | Tolerance | Value | Why this value |
 |---|---|---|
-| `MASS_TOL` | $10^{-10}$ | The fluxes (CompressibleFlux, IsothermalFlux, divergence-free ExB) are conservative: mass is an exact invariant, the only drift is floating-point arithmetic over 8/12 steps. Measured A: $2.7\times10^{-12}$ (electrons) / $1.8\times10^{-12}$ (ions), ~2 orders below the tolerance (`run.py:82`, `135-136`) |
-| difference B | $==0$ exactly | not a tolerance: a strict equality. Two compositions of the same model with the same frozen bricks run the same floating-point operations in the same order, so the result is bit-identical. Any value $>0$ would be a determinism bug, not acceptable noise (`run.py:166`) |
-| mass D | $10^{-9}$ | The Python SSPRK2 integrator combines states as $\frac12 U_0+\frac12(U_1+dt\,R)$: an affine combination of conservative states, hence conservative up to floating-point error over 20 steps. Measured: $2.3\times10^{-13}$, ~4 orders below the tolerance (`run.py:243`) |
-| $\|\phi\|_\infty>10^{-8}$ (A) | lower bound | Guarantees that the coupled Poisson is active (the block really contributes to the right-hand side). Measured: $5.06\times10^{-4}$, ~4 orders above: the coupling is clear, not a numerical residual (`run.py:124`) |
-| electron evolution $>10^{-9}$ (A) | lower bound | Guarantees that the electron block moves (the force and the transport act). Measured: $3.5\times10^{-5}$, ~4 orders above the threshold: the dynamics is nontrivial (`run.py:137`) |
+| `MASS_TOL` | $10^{-10}$ | The fluxes (CompressibleFlux, IsothermalFlux, divergence-free ExB) are conservative: mass is an exact invariant, the only drift is floating-point arithmetic over 8/12 steps. Measured A: $2.7\times10^{-12}$ (electrons) / $1.8\times10^{-12}$ (ions), ~2 orders below the tolerance (`MASS_TOL` and `partie_A` in run.py) |
+| difference B | $==0$ exactly | not a tolerance: a strict equality. Two compositions of the same model with the same frozen bricks run the same floating-point operations in the same order, so the result is bit-identical. Any value $>0$ would be a determinism bug, not acceptable noise (`partie_B` in run.py) |
+| mass D | $10^{-9}$ | The Python SSPRK2 integrator combines states as $\frac12 U_0+\frac12(U_1+dt\,R)$: an affine combination of conservative states, hence conservative up to floating-point error over 20 steps. Measured: $2.3\times10^{-13}$, ~4 orders below the tolerance (`partie_D` in run.py) |
+| $\|\phi\|_\infty>10^{-8}$ (A) | lower bound | Guarantees that the coupled Poisson is active (the block really contributes to the right-hand side). Measured: $5.06\times10^{-4}$, ~4 orders above: the coupling is clear, not a numerical residual (`partie_A` in run.py) |
+| electron evolution $>10^{-9}$ (A) | lower bound | Guarantees that the electron block moves (the force and the transport act). Measured: $3.5\times10^{-5}$, ~4 orders above the threshold: the dynamics is nontrivial (`partie_A` in run.py) |
 
 ---
 
 ## 5. The guards: invalid combinations rejected (justifies Proves: C)
 
-`partie_C` (`run.py:169-209`) checks that three invalid compositions raise a clear error instead of
-producing a wrong computation. `doit_lever(fn, why)` (`run.py:175-181`) runs `fn`, expects an
+`partie_C` (in run.py) checks that three invalid compositions raise a clear error instead of
+producing a wrong computation. `doit_lever(fn, why)` (in run.py) runs `fn`, expects an
 exception (pybind translates `std::runtime_error` into `RuntimeError`), and fails if nothing raises.
 
-1. HLLC on scalar transport (`run.py:185-188`). HLLC requires a compressible transport (4
+1. HLLC on scalar transport (`partie_C` in run.py). HLLC requires a compressible transport (4
    variables + pressure); the diocotron transports a scalar via ExB. Rejected at block add time.
    Actual message: `System : flux 'hllc' exige un transport compressible (4 variables + pr...`.
 
-2. Fluid source on scalar transport (`run.py:194-200`). An `adc.Model(Scalar, ExB,
+2. Fluid source on scalar transport (`partie_C` in run.py). An `adc.Model(Scalar, ExB,
    PotentialForce, BackgroundDensity)` composes (state Scalar and transport ExB are consistent),
    but `PotentialForce` acts on a fluid momentum ($s[1], s[2]$) absent from a scalar (1 variable).
    Rejected at block add time. Actual message: `source 'potential' invalide ici (exige un transport
    fluide >= 3 variab...`.
 
-3. Inconsistent model at composition time (`run.py:204-207`). An `adc.Model(Scalar,
+3. Inconsistent model at composition time (`partie_C` in run.py). An `adc.Model(Scalar,
    CompressibleFlux, ...)` mixes a scalar state (1 var) and an Euler flux (4 var):
    `adc.Model(...)` raises directly, before any add. Actual message: `Scalar exige
    transport=ExB(...)`.
 
-The final assert `sim.n_species() == 0` (`run.py:209`) guarantees that no invalid block was added:
+The final assert `sim.n_species() == 0` (`partie_C` in run.py) guarantees that no invalid block was added:
 the rejections are clean (no partially mutated state). The difference between 1/2 (rejected at add)
 and 3 (rejected at composition) is when the inconsistency is detected: a transport incompatible with
 the state is caught by `adc.Model`, a source/flux incompatible with the transport chosen by
@@ -156,8 +156,8 @@ the state is caught by `adc.Model`, a source/flux incompatible with the transpor
 
 ## 6. Part D: a time integrator written in Python (justifies Proves: D)
 
-Instead of calling `sim.advance(...)` (compiled time loop), `partie_D` (`run.py:212-244`) writes its
-own loop with `adc.integrate.ssprk2_step` (`integrate.py:27-44`), an SSPRK2 (strong-stable Heun)
+Instead of calling `sim.advance(...)` (compiled time loop), `partie_D` (in run.py) writes its
+own loop with `adc.integrate.ssprk2_step` (`ssprk2_step` in integrate.py), an SSPRK2 (strong-stable Heun)
 assembled in Python on top of four primitives exposed by `System`:
 
 ```python
@@ -175,7 +175,7 @@ for n in names:                                       # etage 2 : 1/2 U0 + 1/2 (
   and $\frac12 U_0+\frac12(\dots)$) is in Python, per step.
 - `solve_fields()` re-solves Poisson between the two stages: per-stage hyperbolic/elliptic
   coupling, more accurate than the per-step frozen coupling of `advance`.
-- the loop (`run.py:234-235`) calls `ssprk2_step(sim, 0.001)` 20 times. Measured:
+- the loop (`partie_D` in run.py) calls `ssprk2_step(sim, 0.001)` 20 times. Measured:
   mass drift $2.3\times10^{-13}$, finite state: the Python integrator conserves and stays stable.
 
 This is the strongest capability of the tutorial: the time scheme itself can be written in Python
@@ -196,7 +196,7 @@ diagnostics); the figures are a separate API diagnostic.
 
 ![Maps: electron density initial and final, final ion density, coupled potential |phi|](figures/density_maps.png)
 
-- **Proves** (asserted `run.py:124-137`): the coupled Poisson is active ($\|\phi\|_\infty=5.06\times
+- **Proves** (asserted `partie_A` in run.py): the coupled Poisson is active ($\|\phi\|_\infty=5.06\times
   10^{-4}$, panel 4) and the electrons evolve (the final density, $[0.980, 1.020]$, differs from the
   initial condition; max difference $3.5\times10^{-5}$). The two blocks with different schemes
   coexist: the electron panel carries the Euler/HLLC/IMEX perturbation, the ion panel carries the
@@ -213,7 +213,7 @@ diagnostics); the figures are a separate API diagnostic.
 
 ![Two heatmaps |a-b| identically black (B composition, D Python step) + histogram of the residual at zero](figures/determinism.png)
 
-- **Proves** (asserted `run.py:166` for B; measured for D): both $|a-b|$ heatmaps are identically
+- **Proves** (asserted `partie_B` in run.py for B; measured for D): both $|a-b|$ heatmaps are identically
   black (scale $[0,10^{-15}]$). Panel B: two independent compositions of the same diocotron, max
   difference $0.0$, `np.array_equal` true. Panel D: two runs of the SSPRK2 integrator written in
   Python, max difference $0.0$, `np.array_equal` true. The histogram concentrates all cells
@@ -260,7 +260,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Prerequisites: `numpy` (and `matplotlib` for the figures, outside the case's own `needs`), the `adc`
 module compiled and imported with the same interpreter that compiled it (ABI suffix
 `cpython-312`). The first path in `PYTHONPATH` provides the C++ module; the second makes `adc_cases`
-importable without installation (the case also has a `sys.path` fallback, `run.py:72-77`).
+importable without installation (the case also has a `sys.path` fallback, in run.py).
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
@@ -300,6 +300,6 @@ build (cf. `figures/provenance.json`).
 | `figures/density_maps.png` | composed fields of the heterogeneous system (electrons, ions, $\|\phi\|$) |
 | `figures/determinism.png` | bit equality (B C++ composition, D Python step) + histogram of the residual at 0 |
 | `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, per-block schemes, measured numbers |
-| `../adc_cases/models.py` | `electron_euler`, `ion_isothermal`, `diocotron` = compositions of bricks (l.18-45) |
+| `../adc_cases/models.py` | `electron_euler`, `ion_isothermal`, `diocotron` = compositions of bricks (in models.py) |
 | `../adc_cases/common/grid.py` | `meshgrid_xy` (cell-centered grid, facade convention) |
 | `<adc>/integrate.py` | `ssprk2_step` = SSPRK2 written in Python on the primitives `solve_fields`/`eval_rhs`/`get_state`/`set_state` |
