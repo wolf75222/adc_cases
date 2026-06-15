@@ -67,7 +67,7 @@ one).
 | Option | Effect |
 |---|---|
 | `robust=True` | smooth floors on M00, C20, C02 (protected divisions and roots). The default `False` reproduces the MATLAB, which protects nothing. |
-| `exact_speeds=False` | speed bound `u +- 3*sqrt(C)` instead of the exact eigenvalues. Good enough to start in Rusanov; realizable states exceed it (checked by run.py), so never for HLL. |
+| `exact_speeds=False` | speed bound `u +- 3*sqrt(C)` instead of the exact eigenvalues. Good enough to start in Rusanov; realizable states exceed it (`check_speed_bound` in run.py), so never for HLL. |
 | `solver=` (drivers) | `fft` (direct periodic), `fft_spectral` (continuous symbol, exact on sinusoids), `geometric_mg` (general, required under MPI). |
 
 ## Realizability: the sharp edge
@@ -106,18 +106,22 @@ octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m  # relaxation15 
 What the drivers guarantee, with the numbers checked in CI:
 
 - flux === `Flux_closure15_2D.m` to 1e-12 on 10 states (Gaussians, mixtures,
-  near-degenerate), and exact closure on the Gaussians (independent Isserlis oracle);
+  near-degenerate), and exact closure on the Gaussians (independent Isserlis oracle)
+  (`check_matlab_golden`, `check_gaussian_oracle` in run.py);
 - wave speeds === `eigenvalues15_2D.m` to ~1e-11 (the near-degenerate state is judged
-  against its conditioning, measured in the test);
+  against its conditioning, measured in the test) (`check_speed_bound` in run.py);
 - sources === the explicit equations of the reference document to 1e-14; Larmor rotation
-  === analytic;
+  === analytic (`check_sources_vs_pdf`, `check_larmor_rotation` in run_crossing.py);
 - trajectory: replaying the time steps of the HLL golden with `time='euler'`, the L2 gap
   to MATLAB after 20 steps is ~1e-16 (the MATLAB scheme, additive split + Euler, is
-  algebraically the unsplit Euler); in ssprk2 the gap is 4%, which is the second order;
+  algebraically the unsplit Euler); in ssprk2 the gap is 4%, which is the second order
+  (`check_hll_fidelity` in run_crossing.py);
 - Poisson: phi === analytic on a sinusoid (1e-14 in `fft_spectral`), the source's E field
-  === -grad phi centered to 1e-16, checkpoint/restart bit-identical;
+  === -grad phi centered to 1e-16, checkpoint/restart bit-identical
+  (`check_poisson_oracle`, `check_poisson_solvers` in run_diocotron.py);
 - `relaxation15` === Octave to 4e-14 on 12 states covering the 5 branches; at Ma=20 the
-  projected/raw contrast is measured in realizability (13% vs 52% of cells violated).
+  projected/raw contrast is measured in realizability (13% vs 52% of cells violated)
+  (`check_golden`, `check_crossing_ma20` in run_relaxation.py).
 
 ## Multi-rank MPI smoke (geometric_mg)
 
@@ -145,7 +149,8 @@ Measured (n=64, 12 steps, 1 on-node thread, Mac M1, MPI+Kokkos Serial build):
 - np=1/2/4: 12 steps finished, mass conserved to 2.6e-16, phi finite; `solver="fft"`
   rejected by the core message "solveur fft non supporte en MPI (n_ranks>1)",
   `solver="fft_spectral"` rejected as an unknown solver (not implemented in this revision of
-  the core), both as a clean RuntimeError with no deadlock or segfault;
+  the core), both as a clean RuntimeError with no deadlock or segfault
+  (`check_fft_rejected` in run_mpi.py);
 - np=2 and np=4 parity vs np=1: BIT-IDENTICAL (dU_max = dphi_max = 0), deterministic halos;
 - indicative cost/scaling: the 12-step loop ~0.11 s (np=1), ~0.21 s (np=2), ~0.19 s (np=4);
   no speedup, which is expected (the grid fits in one box on rank 0, the other ranks only do
