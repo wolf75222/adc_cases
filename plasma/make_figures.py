@@ -64,7 +64,7 @@ def build_system() -> adc.System:
 def total_momentum(sim: adc.System, block: str) -> tuple[float, float]:
     """Impulsion totale (somme cellule) d'un bloc fluide : (sum rho u, sum rho v)."""
     st = np.array(
-        sim._s.get_state(block)
+        sim.get_state(block)
     )  # (ncomp, n, n), comp 1 = rho u, comp 2 = rho v
     return float(st[1].sum()), float(st[2].sum())
 
