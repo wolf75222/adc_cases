@@ -78,7 +78,7 @@ reproduce a published physical curve. What that means component by component:
 | Proven | Euler trajectory replay | replaying the HLL golden steps with `time='euler'`, L2 gap to MATLAB ~4.5e-16 after 20 steps (`run.py`); the MATLAB additive split + Euler is algebraically the unsplit Euler |
 | Proven | Poisson | phi === analytic on a sinusoid to 1e-14 in `fft_spectral`, source E === -grad phi centered to 1e-16, checkpoint/restart bit-identical (`run_diocotron.py`) |
 | Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
-| Partial | realizability under transport | the per-cell Python `relax_field` is an oracle, not a scalable path (ADC-275); the native compiled projector is not yet wired (depends on ADC-177) |
+| Partial | realizability under transport | the per-cell Python `relax_field` is an oracle, not a scalable path (ADC-275); the native compiled projector is blocked on two ADC-177/DSL gaps (non-idempotent relaxation vs the projection contract, missing eigenvalue `Expr` node), reproduced by [probe_native_projector.py](probe_native_projector.py), detailed in [notes/native_projector_feasibility.md](notes/native_projector_feasibility.md) |
 | Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
 | Partial | golden coverage | no spatial golden with relaxation active (transport x relaxation); the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated (ADC-203) |
 | Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
@@ -123,15 +123,33 @@ Two paths, two purposes:
   `numpy.linalg.eigvals` per cell. It is the reference for validation (=== Octave to 4e-14,
   `run_relaxation.py`) and the source of truth for the native port. It is not scalable: not
   usable inside a GPU/MPI time step (ADC-275).
-- Native projector (expected, not yet wired): a compiled device-safe `U -> U_projected`
-  applied after each whole step (the MATLAB `flagrelax=1` semantics are per-step, not
-  per-RK-stage). It depends on the generic post-step projection hook ADC-177 (adc_cpp PR #318);
-  the HyQMOM15 formulas stay on the case side, only the hook is core (ADC-275). Until it
-  lands, production GPU runs apply no projection in the step and must keep Ma moderate or
-  accept the dt collapse above.
+- Native projector (production target, not yet feasible on ADC-177 as merged): a compiled
+  device-safe `U -> U_projected` applied after each whole step (the MATLAB `flagrelax=1`
+  semantics are per-step, not per-RK-stage; an `after_stage` variant could trade fidelity for
+  robustness). The generic post-step hook ADC-177 (`m.projection`) is now on adc_cpp master, but
+  emitting `relaxation15` through it is blocked by two concrete gaps, both reproduced by
+  [probe_native_projector.py](probe_native_projector.py) against the relax goldens and detailed in
+  [notes/native_projector_feasibility.md](notes/native_projector_feasibility.md):
+  1. `m.projection` requires an idempotent `P(P(U)) == P(U)`, but `relaxation15` is a relaxation
+     toward a target (worst re-apply gap ~6e1 on the goldens), so it does not satisfy the
+     projection contract; it needs a relaxation-typed post-step hook.
+  2. the "complex flux eigenvalues" test and the `collision15_anisotropic` gates need
+     `numpy.linalg.eigvals` / `det` of 3x3 blocks (the order-3 Jacobian sub-blocks at the
+     standardized state, the `p2p2` matrix), which have no `Expr` node in the DSL; the C++
+     `adc::real_eig_minmax` / `EigBounds.max_im` exist but are only wired into
+     `set_wave_speeds_from_jacobian`, not exposed as a projection expression.
+  The spectral-free realizability clamps (`s30/s03`, `H20/H02`, `s11`) do map onto `max`/`min`/
+  `abs_`/`sign` and are idempotent, but they reproduce `relaxation15` only on the identity branch
+  (they differ 80-160x elsewhere, where collision and complex-eig fire): a clamp-only projection
+  is a different operator, not a `relaxation15` replacement. Until the two gaps close (ADC-177)
+  and the API/ABI is confirmed (ADC-273), the oracle `relax_field` stays the production validation
+  path; production GPU runs apply no projection in the step and must keep Ma moderate or accept the
+  dt collapse above. Tolerances for the future native vs Python validation (issue criteria): 1e-12
+  to 1e-10 per branch on the goldens, depending on the spectral branches.
 
 `relaxation15` is a relaxation toward a target, not an idempotent projector: re-relaxing
-relaxes again (verified under Octave); the drivers assert no idempotence, faithful to MATLAB.
+relaxes again (verified under Octave and by `probe_native_projector.py`); the drivers assert no
+idempotence, faithful to MATLAB.
 
 ## Correlated crossing initial condition (`r != 0`)
 
@@ -313,7 +331,8 @@ What is not validated at scale:
 - The closure is exact on Gaussians, but the scheme does not preserve realizability: long
   runs => project (realizability section).
 - The realizability projection is a Python per-cell oracle; a compiled device-safe projector
-  is not yet wired (ADC-275, depends on ADC-177).
+  is blocked on two ADC-177/DSL gaps (ADC-275, see the realizability section and
+  [notes/native_projector_feasibility.md](notes/native_projector_feasibility.md)).
 - `crossing_state(r != 0)` raises `NotImplementedError`; the MATLAB parity exists but the gate
   is not yet removed (ADC-274).
 - The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt
