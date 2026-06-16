@@ -131,6 +131,100 @@ def build_sim(n, rho_bg, name="mom", riemann="rusanov", exact_speeds=False,
     return sim
 
 
+# ---------------------------------------------------------------------------------------------
+# Borne dt source MATLAB (compute_dt.m / main_electrostatic_wave.m), reproduite cote cas. OPT-IN
+# (--dt-source-matlab) : le defaut reste m.source_frequency (cfl/omega_p), volontairement plus
+# laxe (cf. README, ecart delibere 4). Ce chemin sert le run de controle a dt MATLAB.
+# ---------------------------------------------------------------------------------------------
+
+K_MIN = np.sqrt(2.0) * np.pi / 1.0          # k_min = sqrt(2)*pi sur le domaine de cote 1
+
+
+def _linearized_jacobian_magnetostatic(kx, ky, lam, oc):
+    """Transcription de linearized_Jacobian_magnetostatic.m : Jacobien 15x15 du systeme
+    linearise (matrice creuse fixe, complexe a cause des termes oc). @p lam : longueur de
+    Debye adimensionnee. @return ndarray (15, 15) complexe."""
+    kl2 = (kx * kx + ky * ky) * lam * lam
+    j = np.zeros((15, 15), dtype=complex)
+    j[0, 1] = kx; j[0, 5] = ky
+    j[1, 0] = kx / kl2; j[1, 2] = kx; j[1, 5] = 1j * oc; j[1, 6] = ky
+    j[2, 3] = kx; j[2, 6] = 2j * oc; j[2, 7] = ky
+    j[3, 0] = 3 * kx / kl2; j[3, 4] = kx; j[3, 7] = 3j * oc; j[3, 8] = ky
+    j[4, 1] = -6 * kx; j[4, 3] = 7 * kx; j[4, 5] = -3 * ky; j[4, 7] = 6 * ky; j[4, 8] = 4j * oc
+    j[5, 0] = ky / kl2; j[5, 1] = -1j * oc; j[5, 6] = kx; j[5, 9] = ky
+    j[6, 2] = -1j * oc; j[6, 7] = kx; j[6, 9] = 1j * oc; j[6, 10] = ky
+    j[7, 0] = ky / kl2; j[7, 3] = -1j * oc; j[7, 8] = kx; j[7, 10] = 2j * oc; j[7, 11] = ky
+    j[8, 1] = -3 * ky; j[8, 3] = ky; j[8, 4] = -1j * oc; j[8, 5] = -3 * kx
+    j[8, 7] = 6 * kx; j[8, 10] = 3 * ky; j[8, 11] = 3j * oc
+    j[9, 6] = -2j * oc; j[9, 10] = kx; j[9, 12] = ky
+    j[10, 0] = kx / kl2; j[10, 7] = -2j * oc; j[10, 11] = kx; j[10, 12] = 1j * oc; j[10, 13] = ky
+    j[11, 1] = -3 * kx; j[11, 3] = kx; j[11, 5] = -3 * ky; j[11, 7] = 3 * ky
+    j[11, 8] = -2j * oc; j[11, 10] = 3 * kx; j[11, 12] = ky; j[11, 13] = 2j * oc
+    j[12, 0] = 3 * ky / kl2; j[12, 10] = -3j * oc; j[12, 13] = kx; j[12, 14] = ky
+    j[13, 1] = -3 * ky; j[13, 5] = -3 * kx; j[13, 7] = 3 * kx; j[13, 10] = 6 * ky
+    j[13, 11] = -3j * oc; j[13, 12] = kx; j[13, 14] = 1j * oc
+    j[14, 1] = -3 * kx; j[14, 5] = -6 * ky; j[14, 10] = 6 * kx; j[14, 12] = 7 * ky
+    j[14, 13] = -4j * oc
+    return j
+
+
+def matlab_dt_source(n, cfl=0.4):
+    """Borne dt source de compute_dt.m sur l'IC diocotron, fidele au driver :
+    dt_source = CFL*dx*lambda_flux*k_min^2/max_speed^2. max_speed = plus grande partie reelle
+    des valeurs propres du Jacobien linearise magnetostatique (n-independant). lambda_flux =
+    vitesse de flux maximale sur l'IC, recuperee EXACTE par une etape sonde du chemin
+    exact_speeds (cfl*dx/dt == eigenvalues15_2D, deja epingle dans run_waves). @return dict des
+    intermediaires + dt_source/dt_flux."""
+    dx = 1.0 / n
+    lam = DEBYE / 1.0                                 # adim_debye = debye/(xmax-xmin), cote 1
+    jac = _linearized_jacobian_magnetostatic(K_MIN, K_MIN, lam, OMEGA_C)
+    max_speed = float(np.sort(np.linalg.eigvals(jac).real)[-1])
+    U0 = diocotron_state(n)
+    probe = build_sim(n, rho_bg=float(U0[0].mean()), riemann="hll", exact_speeds=True)
+    probe.set_state("mom", U0)
+    probe.solve_fields()
+    dt_cfl = probe.step_cfl(cfl)                      # une etape jetable : recupere lambda_flux
+    lambda_flux = cfl * dx / dt_cfl
+    dt_flux = cfl * dx / lambda_flux
+    dt_source = cfl * dx * lambda_flux * (K_MIN ** 2) / (max_speed ** 2)
+    return {"dx": dx, "k_min": K_MIN, "lambda_flux": lambda_flux, "max_speed": max_speed,
+            "dt_flux": dt_flux, "dt_source": dt_source}
+
+
+def check_diocotron_dt_source_matlab():
+    """OPT-IN (--dt-source-matlab) : rejoue le smoke en cappant chaque pas a
+    min(dt_cfl, dt_source MATLAB) via step() explicite (la voie compute_dt.m). Verifie que la
+    borne source MORD (dt_source << dt_cfl, regime source-limite), que le run reste fini / M00 > 0
+    / masse conservee. NE change PAS le defaut : ce controle est hors du main() sans argument."""
+    n, nsteps, cfl = 64, 10, 0.4
+    info = matlab_dt_source(n, cfl=cfl)
+    dt_src = info["dt_source"]
+    U0 = diocotron_state(n)
+    sim = build_sim(n, rho_bg=float(U0[0].mean()))
+    sim.set_state("mom", U0)
+    sim.solve_fields()
+    mass0 = float(U0[0].sum())
+    # premiere etape CFL pour mesurer dt_cfl : la borne source doit etre plus stricte (sinon le
+    # cap n'a pas de sens). On rebatit ensuite pour rejouer proprement depuis l'IC.
+    dt_cfl0 = sim.step_cfl(cfl)
+    assert dt_src < dt_cfl0, ("borne source non mordante : dt_source=%.3e >= dt_cfl=%.3e -- le "
+                              "cap MATLAB ne s'appliquerait pas a ce scenario" % (dt_src, dt_cfl0))
+    sim = build_sim(n, rho_bg=float(U0[0].mean()))
+    sim.set_state("mom", U0)
+    sim.solve_fields()
+    for _ in range(nsteps):
+        sim.step(min(dt_cfl0, dt_src))                # min(dt, dt_source) : dt_source mord ici
+    U = np.array(sim.get_state("mom"))
+    assert np.all(np.isfinite(U)), "dt source MATLAB : etat non fini"
+    assert np.all(U[0] > 0), "dt source MATLAB : M00 non positif"
+    drift = abs(float(U[0].sum()) - mass0) / mass0
+    assert drift < 1e-12, "dt source MATLAB : masse non conservee (%.2e)" % drift
+    print("(8) borne dt source MATLAB (opt-in) : lambda_flux=%.3f, max_speed=%.3f, "
+          "dt_source=%.3e < dt_cfl=%.3e (facteur %.0f) ; %d pas cappes, M00 > 0, masse %.1e, "
+          "fini -- OK" % (info["lambda_flux"], info["max_speed"], dt_src, dt_cfl0,
+                          dt_cfl0 / dt_src, nsteps, drift))
+
+
 def check_poisson_oracle():
     """(1) + (2) : sinusoide analytique. Le signe et l'echelle sont LUS sur l'assert qui passe
     (convention : ADC resout Delta(phi) = rhs, rhs = (M00 - rho_bg)/lam^2, fond explicite)."""
@@ -287,12 +381,21 @@ def check_poisson_solvers():
           % (errs["fft_spectral"], dmg, errs["fft"]))
 
 
-def main():
+def main(argv=None):
+    import argparse
+    p = argparse.ArgumentParser(description="hyqmom15 Vlasov-Poisson diocotron")
+    # OPT-IN : reproduit la borne dt source de compute_dt.m (min(dt, dt_source)). Le defaut (sans
+    # flag) ne change PAS : le smoke tourne avec m.source_frequency, plus laxe (cf. README).
+    p.add_argument("--dt-source-matlab", action="store_true",
+                   help="run aussi le controle a dt source MATLAB (ecart delibere 4)")
+    args = p.parse_args(argv)
     print("=== hyqmom15/run_diocotron : Vlasov-Poisson 15 moments, anneau diocotron ===")
     check_poisson_oracle()
     check_poisson_solvers()
     check_diocotron()
     check_diocotron_hll_exact()
+    if args.dt_source_matlab:
+        check_diocotron_dt_source_matlab()
     print("hyqmom15/run_diocotron : OK")
 
 
