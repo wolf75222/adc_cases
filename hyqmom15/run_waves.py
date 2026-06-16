@@ -32,8 +32,10 @@ meme provenance que les goldens de flux)
 
 Ne prouve pas : l'execution compilee de ce chemin dans un System (couverte par les tests
 adc_cpp de : eval_rhs HLL == reference numpy a 8e-15 sur jouet non lineaire) ; la
-bascule des drivers en riemann='hll'. 
+bascule des drivers en riemann='hll'.
 """
+
+from __future__ import annotations
 
 import os
 import sys
@@ -45,26 +47,39 @@ sys.path.insert(0, HERE)
 
 from model import HYQMOM_BLOCKS, build_moment_model  # noqa: E402
 
-NEAR_DEGENERATE = 8  # etat quasi-degenere du jeu golden (melange resserre, C20 ~ 1e-6)
+NEAR_DEGENERATE = (
+    8  # etat quasi-degenere du jeu golden (melange resserre, C20 ~ 1e-6)
+)
 
 
-def load_golden_vp():
+def load_golden_vp() -> tuple[np.ndarray, np.ndarray]:
+    """Charge les etats golden et les vitesses propres de reference (Octave)."""
     g = os.path.join(HERE, "golden")
     states = np.loadtxt(os.path.join(g, "golden_states.csv"), delimiter=",")
     vp = np.loadtxt(os.path.join(g, "golden_vp.csv"), delimiter=",")
     return states, vp
 
 
-def measured_sensitivity(m, M, blocks_x):
-    """Sensibilite du probleme aux valeurs propres de l'etat @p M : perturbation relative 1e-12
-    des entrees du jacobien -> plus grand deplacement relatif des extremes (20 tirages). C'est
-    la borne d'incertitude INTRINSEQUE entre deux jacobiennes algebriquement identiques
-    arrondies differemment (autodiff DSL vs jacobian15.m symbolique)."""
+def measured_sensitivity(m, M: np.ndarray, blocks_x) -> float:
+    """Sensibilite du probleme aux valeurs propres de l'etat M.
+
+    Perturbation relative 1e-12 des entrees du jacobien -> plus grand
+    deplacement relatif des extremes (20 tirages). C'est la borne d'incertitude
+    INTRINSEQUE entre deux jacobiennes algebriquement identiques arrondies
+    differemment (autodiff DSL vs jacobian15.m symbolique).
+    """
     env = m._m._env(M[:, None], {})
     rows = m._m._ws_jacobian["rows"]["x"]
     n = len(rows)
-    J = np.array([[float(np.asarray(rows[i][j].eval(env)).ravel()[0]) for j in range(n)]
-                  for i in range(n)])
+    J = np.array(
+        [
+            [
+                float(np.asarray(rows[i][j].eval(env)).ravel()[0])
+                for j in range(n)
+            ]
+            for i in range(n)
+        ]
+    )
     rng = np.random.default_rng(0)
     worst = 0.0
     for b in blocks_x:
@@ -75,12 +90,16 @@ def measured_sensitivity(m, M, blocks_x):
             Ap = A * (1.0 + 1e-12 * rng.standard_normal(A.shape))
             lp = np.sort(np.linalg.eigvals(Ap).real)
             den = max(abs(lam[0]), abs(lam[-1]), 1e-30)
-            worst = max(worst, abs(lp[0] - lam[0]) / den, abs(lp[-1] - lam[-1]) / den)
+            worst = max(
+                worst, abs(lp[0] - lam[0]) / den, abs(lp[-1] - lam[-1]) / den
+            )
     return worst
 
 
-def main():
-    print("=== hyqmom15/run_waves : vitesses HLL exactes vs eigenvalues15_2D.m (flagsym=1) ===")
+def main() -> None:
+    print(
+        "=== hyqmom15/run_waves : vitesses HLL exactes vs eigenvalues15_2D.m (flagsym=1) ==="
+    )
     states, vp = load_golden_vp()
     m = build_moment_model(name="hyqmom15_exact", exact_speeds=True)
 
@@ -93,22 +112,35 @@ def main():
     # (1) etats bien conditionnes : rtol 1e-8, x ET y (gate dur en y)
     well = [i for i in range(states.shape[0]) if i != NEAR_DEGENERATE]
     for i in well:
-        assert err[i, :2].max() < 1e-8, "etat %d : vpx (err %.2e)" % (i, err[i, :2].max())
-        assert err[i, 2:].max() < 1e-8, "etat %d : vpy (err %.2e) -- GATE DUR y" % (
-            i, err[i, 2:].max())
-    print("(1) 9 etats bien conditionnes : [vpxmin vpxmax vpymin vpymax] == MATLAB, pire "
-          "err rel %.1e (x) / %.1e (y) -- OK"
-          % (max(err[i, :2].max() for i in well), max(err[i, 2:].max() for i in well)))
+        assert err[i, :2].max() < 1e-8, "etat %d : vpx (err %.2e)" % (
+            i,
+            err[i, :2].max(),
+        )
+        assert (
+            err[i, 2:].max() < 1e-8
+        ), "etat %d : vpy (err %.2e) -- GATE DUR y" % (i, err[i, 2:].max())
+    print(
+        "(1) 9 etats bien conditionnes : [vpxmin vpxmax vpymin vpymax] == MATLAB, pire "
+        "err rel %.1e (x) / %.1e (y) -- OK"
+        % (
+            max(err[i, :2].max() for i in well),
+            max(err[i, 2:].max() for i in well),
+        )
+    )
 
     # (2) etat quasi-degenere : tolerance deduite de la sensibilite mesuree du probleme
     sens = measured_sensitivity(m, states[NEAR_DEGENERATE], HYQMOM_BLOCKS["x"])
     tol = 100.0 * sens
     e8 = err[NEAR_DEGENERATE].max()
-    assert e8 < tol, ("etat quasi-degenere : ecart %.2e > 100 x sensibilite mesuree %.2e -- "
-                      "ce ne serait PLUS du conditionnement" % (e8, sens))
-    print("(2) etat quasi-degenere : ecart %.1e <= 100 x sensibilite mesuree %.1e (paires de "
-          "valeurs propres quasi-defectives : conditionnement du probleme, pas du chemin) -- OK"
-          % (e8, sens))
+    assert e8 < tol, (
+        "etat quasi-degenere : ecart %.2e > 100 x sensibilite mesuree %.2e -- "
+        "ce ne serait PLUS du conditionnement" % (e8, sens)
+    )
+    print(
+        "(2) etat quasi-degenere : ecart %.1e <= 100 x sensibilite mesuree %.1e (paires de "
+        "valeurs propres quasi-defectives : conditionnement du probleme, pas du chemin) -- OK"
+        % (e8, sens)
+    )
 
     # (3) la borne CFL exacte couvre les vraies vitesses sur TOUS les etats (faille bring-up
     # fermee : run.py invariant 6 montrait 2 etats au-dela de k*sqrt(C)). Marge relative :
@@ -118,14 +150,20 @@ def main():
     # exigee a 100 x sensibilite pres, marge sans consequence pour la CFL (facteur ~0.4-0.5).
     for i in range(states.shape[0]):
         slack = (100.0 * sens) if i == NEAR_DEGENERATE else 1e-6
-        mws_x = m._m.max_wave_speed(U[:, i:i + 1], {}, 0)
-        mws_y = m._m.max_wave_speed(U[:, i:i + 1], {}, 1)
+        mws_x = m._m.max_wave_speed(U[:, i : i + 1], {}, 0)
+        mws_y = m._m.max_wave_speed(U[:, i : i + 1], {}, 1)
         need_x = max(abs(vp[i, 0]), abs(vp[i, 1]))
         need_y = max(abs(vp[i, 2]), abs(vp[i, 3]))
-        assert need_x <= mws_x * (1 + slack) + 1e-12, "etat %d : borne x insuffisante" % i
-        assert need_y <= mws_y * (1 + slack) + 1e-12, "etat %d : borne y insuffisante" % i
-    print("(3) max_wave_speed exact >= vraies vitesses sur les 10 etats (faille de la borne "
-          "bring-up fermee ; quasi-degenere a l'incertitude de conditionnement pres) -- OK")
+        assert need_x <= mws_x * (1 + slack) + 1e-12, (
+            "etat %d : borne x insuffisante" % i
+        )
+        assert need_y <= mws_y * (1 + slack) + 1e-12, (
+            "etat %d : borne y insuffisante" % i
+        )
+    print(
+        "(3) max_wave_speed exact >= vraies vitesses sur les 10 etats (faille de la borne "
+        "bring-up fermee ; quasi-degenere a l'incertitude de conditionnement pres) -- OK"
+    )
 
     print("hyqmom15/run_waves : OK")
 

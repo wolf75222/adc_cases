@@ -10,6 +10,9 @@ l'etat brut (densite + phi) via sim.write(format="npz") aux 9 fractions de snaps
 --precompile-only : compile le .so DSL (cache) et sort -- a lancer UNE fois sur le login AVANT les
 jobs (les noeuds reutilisent le cache, pas de g++ concurrent par job).
 """
+
+from __future__ import annotations
+
 import argparse
 import math
 import os
@@ -25,38 +28,57 @@ for _p in (_CASE, _REPO):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from model import PaperParameters, paper_initial_density, drift_velocity_from_potential  # noqa: E402
-from run import compile_model                                                            # noqa: E402
-import adc                                                                               # noqa: E402
+from model import (
+    PaperParameters,
+    paper_initial_density,
+    drift_velocity_from_potential,
+)  # noqa: E402
+from run import compile_model  # noqa: E402
+import adc  # noqa: E402
 
 SNAP_FRAC = (0.01, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0)
 
 
-def build_real(compiled, rho0, params, limiter):
+def build_real(compiled, rho0: np.ndarray, params, limiter: str) -> adc.System:
     """Copie de make_paper_figures.build_real (sans dependre du module qui importe matplotlib)."""
     sim = adc.System(n=rho0.shape[0], L=params.length, periodic=False)
-    sim.set_poisson(rhs="composite", solver="geometric_mg", bc="dirichlet",
-                    wall="circle", wall_radius=params.radius)
+    sim.set_poisson(
+        rhs="composite",
+        solver="geometric_mg",
+        bc="dirichlet",
+        wall="circle",
+        wall_radius=params.radius,
+    )
     sim.set_magnetic_field(params.omega * np.ones_like(rho0))
-    sim.add_equation("electrons", model=compiled,
-                     spatial=adc.FiniteVolume(limiter=limiter, riemann="rusanov",
-                                              variables="conservative"),
-                     time=adc.Strang(hyperbolic=adc.Explicit(method="ssprk3"),
-                                     source=adc.CondensedSchur(theta=0.5, alpha=params.alpha)))
+    sim.add_equation(
+        "electrons",
+        model=compiled,
+        spatial=adc.FiniteVolume(
+            limiter=limiter, riemann="rusanov", variables="conservative"
+        ),
+        time=adc.Strang(
+            hyperbolic=adc.Explicit(method="ssprk3"),
+            source=adc.CondensedSchur(theta=0.5, alpha=params.alpha),
+        ),
+    )
     zeros = np.zeros_like(rho0)
-    sim.set_primitive_state("electrons", rho=rho0, u=zeros, v=zeros); sim.solve_fields()
+    sim.set_primitive_state("electrons", rho=rho0, u=zeros, v=zeros)
+    sim.solve_fields()
     u0, v0 = drift_velocity_from_potential(np.asarray(sim.potential()), params)
-    sim.set_primitive_state("electrons", rho=rho0, u=u0, v=v0);     sim.solve_fields()
+    sim.set_primitive_state("electrons", rho=rho0, u=u0, v=v0)
+    sim.solve_fields()
     return sim
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", type=int, required=True)
     ap.add_argument("--n", type=int, default=512)
     ap.add_argument("--limiter", choices=["minmod", "weno5"], default="minmod")
     ap.add_argument("--cfl", type=float, default=0.4)
-    ap.add_argument("--out", default=None, help="dossier npz (defaut: ./npz_l<mode>_n<n>)")
+    ap.add_argument(
+        "--out", default=None, help="dossier npz (defaut: ./npz_l<mode>_n<n>)"
+    )
     ap.add_argument("--precompile-only", action="store_true")
     args = ap.parse_args()
 
@@ -82,19 +104,28 @@ def main():
         while si < len(snaps) and t >= snaps[si] - 1e-9:
             dens = np.asarray(sim.density("electrons"), float)
             if not np.isfinite(dens).all():
-                print(f"FAIL: densite non finie a t={t:.3f} ({100*t/t_end:.0f}%)"); return 1
+                print(
+                    f"FAIL: densite non finie a t={t:.3f} ({100*t/t_end:.0f}%)"
+                )
+                return 1
             sim.write(os.path.join(out, "state"), format="npz", step=si)
-            print(f"  snap {si} t={t:7.2f} ({100*t/t_end:5.1f}%) min_rho={dens.min():+.3e} "
-                  f"wall={time.time()-t0:7.0f}s", flush=True)
+            print(
+                f"  snap {si} t={t:7.2f} ({100*t/t_end:5.1f}%) min_rho={dens.min():+.3e} "
+                f"wall={time.time()-t0:7.0f}s",
+                flush=True,
+            )
             si += 1
         if t >= t_end:
             break
         sim.step_cfl(args.cfl)
         step += 1
         if step > 2_000_000:
-            print("FAIL: budget de pas epuise"); return 1
-    print(f"OK l={args.mode} n={args.n} {args.limiter} : {si} npz dans {out}, "
-          f"{step} pas, {time.time()-t0:.0f}s")
+            print("FAIL: budget de pas epuise")
+            return 1
+    print(
+        f"OK l={args.mode} n={args.n} {args.limiter} : {si} npz dans {out}, "
+        f"{step} pas, {time.time()-t0:.0f}s"
+    )
     return 0
 
 

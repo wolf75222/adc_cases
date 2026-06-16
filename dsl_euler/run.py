@@ -13,6 +13,9 @@ briques compilees ; ce cas montre le bout "declaratif" cote utilisateur.
 On verifie : masse conservee (continuite, domaine periodique), dynamique non triviale (la bulle de
 pression genere des ondes acoustiques), etat physique (rho > 0, p > 0, fini).
 """
+
+from __future__ import annotations
+
 import numpy as np
 
 from adc import dsl
@@ -23,7 +26,10 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 from adc_cases.common.checks import assert_finite, relative_drift  # noqa: E402
 from adc_cases.common.grid import meshgrid_xy  # noqa: E402
 from adc_cases.common.initial_conditions import euler_pressure  # noqa: E402
@@ -31,7 +37,7 @@ from adc_cases.common.initial_conditions import euler_pressure  # noqa: E402
 GAMMA = 1.4
 
 
-def make_euler():
+def make_euler() -> dsl.HyperbolicModel:
     """Euler 2D entierement declaratif : variables -> primitives -> flux -> valeurs propres."""
     e = dsl.HyperbolicModel("euler")
     rho, rhou, rhov, E = e.conservative_vars("rho", "rho_u", "rho_v", "E")
@@ -40,8 +46,8 @@ def make_euler():
     v = e.primitive("v", rhov / rho)
     p = e.primitive("p", (GAMMA - 1.0) * (E - 0.5 * rho * (u * u + v * v)))
 
-    H = (E + p) / rho                 # enthalpie totale
-    c = dsl.sqrt(GAMMA * p / rho)     # vitesse du son
+    H = (E + p) / rho  # enthalpie totale
+    c = dsl.sqrt(GAMMA * p / rho)  # vitesse du son
 
     e.set_flux(
         x=[rhou, rhou * u + p, rhou * v, rho * H * u],
@@ -52,13 +58,17 @@ def make_euler():
     return e
 
 
-def pressure(U):
+def pressure(U: np.ndarray) -> np.ndarray:
+    """Pression de l'etat conservatif U (avec GAMMA du cas)."""
     return euler_pressure(U, gamma=GAMMA)
 
 
-def main():
+def main() -> None:
     euler = make_euler()
-    print("modele declare en formules : %d variables %s" % (euler.n_vars, euler.cons_names))
+    print(
+        "modele declare en formules : %d variables %s"
+        % (euler.n_vars, euler.cons_names)
+    )
 
     n, L = 64, 1.0
     h = L / n
@@ -74,7 +84,9 @@ def main():
     mass0 = float(U[0].sum())
     p_init = pressure(U).copy()
 
-    pf = euler.to_python_flux()  # arbre symbolique -> flux numpy -> backend hote
+    pf = (
+        euler.to_python_flux()
+    )  # arbre symbolique -> flux numpy -> backend hote
     steps = 120
     for _ in range(steps):
         U = U + pf.cfl_dt(U, h, 0.4) * pf.residual(U, h)
@@ -82,9 +94,14 @@ def main():
     drel = relative_drift(float(U[0].sum()), mass0)
     moved = float(np.max(np.abs(pressure(U) - p_init)))
 
-    print("apres %d pas : drho_max=%.3f  |v|_max=%.3f"
-          % (steps, float(U[0].max() - U[0].min()),
-             float(np.max(np.sqrt((U[1] / U[0]) ** 2 + (U[2] / U[0]) ** 2)))))
+    print(
+        "apres %d pas : drho_max=%.3f  |v|_max=%.3f"
+        % (
+            steps,
+            float(U[0].max() - U[0].min()),
+            float(np.max(np.sqrt((U[1] / U[0]) ** 2 + (U[2] / U[0]) ** 2))),
+        )
+    )
     print("masse : drel=%.2e   dynamique : max|dp|=%.3f" % (drel, moved))
 
     assert_finite(U, "etat")

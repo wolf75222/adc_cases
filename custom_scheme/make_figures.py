@@ -10,6 +10,8 @@ Ecrit figures/{density_evolution,phi_evolution,diagnostics}.png + figures/proven
 (SHA adc_cpp/adc_cases, backend, resolution, nombres mesures). matplotlib Agg, aucune fenetre.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -26,7 +28,10 @@ try:
     import adc_cases  # noqa: F401
 except ImportError:
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 from adc_cases import models  # noqa: E402
 from adc_cases.common.checks import relative_drift  # noqa: E402
 from adc_cases.common.initial_conditions import band_density  # noqa: E402
@@ -45,14 +50,14 @@ CFL, NSTEPS = 0.4, 200
 SNAP_STEPS = [0, 40, 100, 200]  # instants captures (en pas)
 
 
-def rhs(sim, n):
+def rhs(sim: adc.System, n: np.ndarray) -> tuple[np.ndarray, float, np.ndarray]:
     phi = poisson_oracle(sim, n)
     vx, vy = drift(phi, DX, B0)
     speed = float(np.hypot(vx, vy).max())
     return divergence_upwind(n, vx, vy, DX), speed, phi
 
 
-def main():
+def main() -> None:
     n = band_density(NX, L, amp=1.0, width=0.05, mode=4, disp=0.02)
     n_i0 = float(n.mean())
 
@@ -92,62 +97,104 @@ def main():
     vmin = min(float(s.min()) for s in n_snaps)
     vmax = max(float(s.max()) for s in n_snaps)
     for ax, s, tt in zip(axes, n_snaps, snap_t):
-        im = ax.imshow(s, origin="lower", extent=[0, L, 0, L], cmap="inferno",
-                       vmin=vmin, vmax=vmax, aspect="equal")
+        im = ax.imshow(
+            s,
+            origin="lower",
+            extent=[0, L, 0, L],
+            cmap="inferno",
+            vmin=vmin,
+            vmax=vmax,
+            aspect="equal",
+        )
         ax.set_title("n  (t = %.3f)" % tt)
         ax.set_xlabel("x")
     axes[0].set_ylabel("y")
     fig.colorbar(im, ax=axes, fraction=0.012, pad=0.02, label="densite n")
-    fig.suptitle("custom_scheme : densite advectee par le transport ExB ecrit en numpy "
-                 "(bande mode 4)", fontsize=12)
-    fig.savefig(os.path.join(FIGDIR, "density_evolution.png"), dpi=110,
-                bbox_inches="tight")
+    fig.suptitle(
+        "custom_scheme : densite advectee par le transport ExB ecrit en numpy "
+        "(bande mode 4)",
+        fontsize=12,
+    )
+    fig.savefig(
+        os.path.join(FIGDIR, "density_evolution.png"),
+        dpi=110,
+        bbox_inches="tight",
+    )
     plt.close(fig)
 
     # ---- Figure 2 : |phi| resolu par adc ----
     fig, axes = plt.subplots(1, 4, figsize=(15, 4.0))
     pvmax = max(float(np.abs(p).max()) for p in phi_snaps)
     for ax, p, tt in zip(axes, phi_snaps, snap_t):
-        im = ax.imshow(np.abs(p), origin="lower", extent=[0, L, 0, L], cmap="viridis",
-                       vmin=0.0, vmax=pvmax, aspect="equal")
+        im = ax.imshow(
+            np.abs(p),
+            origin="lower",
+            extent=[0, L, 0, L],
+            cmap="viridis",
+            vmin=0.0,
+            vmax=pvmax,
+            aspect="equal",
+        )
         ax.set_title("|phi|  (t = %.3f)" % tt)
         ax.set_xlabel("x")
     axes[0].set_ylabel("y")
-    fig.colorbar(im, ax=axes, fraction=0.012, pad=0.02, label="|phi| (resolu par adc)")
-    fig.suptitle("custom_scheme : |phi| self-consistant resolu par adc (le seul appel a la lib)",
-                 fontsize=12)
-    fig.savefig(os.path.join(FIGDIR, "phi_evolution.png"), dpi=110, bbox_inches="tight")
+    fig.colorbar(
+        im, ax=axes, fraction=0.012, pad=0.02, label="|phi| (resolu par adc)"
+    )
+    fig.suptitle(
+        "custom_scheme : |phi| self-consistant resolu par adc (le seul appel a la lib)",
+        fontsize=12,
+    )
+    fig.savefig(
+        os.path.join(FIGDIR, "phi_evolution.png"), dpi=110, bbox_inches="tight"
+    )
     plt.close(fig)
 
     # ---- Figure 3 : diagnostics temporels ----
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.0))
     ax[0].semilogy(times, np.maximum(mass_drift, 1e-18), color="C0")
     ax[0].axhline(1e-12, color="r", ls="--", label="tolerance 1e-12")
-    ax[0].set_xlabel("t"); ax[0].set_ylabel("derive de masse relative")
-    ax[0].set_title("masse : flux upwind conservatif"); ax[0].legend()
+    ax[0].set_xlabel("t")
+    ax[0].set_ylabel("derive de masse relative")
+    ax[0].set_title("masse : flux upwind conservatif")
+    ax[0].legend()
     ax[1].plot(times, dnmax, color="C1")
     ax[1].axhline(1e-3, color="r", ls="--", label="seuil 1e-3")
-    ax[1].set_xlabel("t"); ax[1].set_ylabel("max|n(t) - n(0)|")
-    ax[1].set_title("evolution : dynamique non triviale"); ax[1].legend()
+    ax[1].set_xlabel("t")
+    ax[1].set_ylabel("max|n(t) - n(0)|")
+    ax[1].set_title("evolution : dynamique non triviale")
+    ax[1].legend()
     ax[2].plot(times, phimax, color="C2", label="|phi|_max (adc)")
     ax[2].plot(times, speedmax, color="C3", label="vitesse ExB max")
-    ax[2].set_xlabel("t"); ax[2].set_title("couplage Poisson actif"); ax[2].legend()
-    fig.suptitle("custom_scheme : diagnostics du schema Python (Poisson par adc)", fontsize=12)
-    fig.savefig(os.path.join(FIGDIR, "diagnostics.png"), dpi=110, bbox_inches="tight")
+    ax[2].set_xlabel("t")
+    ax[2].set_title("couplage Poisson actif")
+    ax[2].legend()
+    fig.suptitle(
+        "custom_scheme : diagnostics du schema Python (Poisson par adc)",
+        fontsize=12,
+    )
+    fig.savefig(
+        os.path.join(FIGDIR, "diagnostics.png"), dpi=110, bbox_inches="tight"
+    )
     plt.close(fig)
 
     # ---- provenance ----
-    def sha(path):
+    def sha(path: str) -> str:
         try:
             return subprocess.check_output(
-                ["git", "-C", path, "rev-parse", "HEAD"], text=True).strip()
+                ["git", "-C", path, "rev-parse", "HEAD"], text=True
+            ).strip()
         except Exception:
             return "unknown"
 
     prov = {
         "script": "custom_scheme/make_figures.py",
         "command": "python custom_scheme/make_figures.py",
-        "produces": ["density_evolution.png", "phi_evolution.png", "diagnostics.png"],
+        "produces": [
+            "density_evolution.png",
+            "phi_evolution.png",
+            "diagnostics.png",
+        ],
         "adc_cpp_sha": sha(adc.__file__.split("/python/adc/")[0]),
         "adc_cases_sha": sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.System : un bloc models.diocotron, Poisson geometric_mg)",
@@ -171,9 +218,14 @@ def main():
 
     print("figures ecrites dans", FIGDIR)
     print("  |phi|_max initial = %.6e  final = %.6e" % (phimax[0], phimax[-1]))
-    print("  vitesse ExB max   initial = %.6e  final = %.6e" % (speedmax[0], speedmax[-1]))
-    print("  derive masse finale = %.3e   max|dn| finale = %.3e   t_final = %.4f"
-          % (mass_drift[-1], dnmax[-1], times[-1]))
+    print(
+        "  vitesse ExB max   initial = %.6e  final = %.6e"
+        % (speedmax[0], speedmax[-1])
+    )
+    print(
+        "  derive masse finale = %.3e   max|dn| finale = %.3e   t_final = %.4f"
+        % (mass_drift[-1], dnmax[-1], times[-1])
+    )
 
 
 if __name__ == "__main__":

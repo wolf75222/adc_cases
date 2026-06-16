@@ -11,12 +11,16 @@ aussi figures/provenance.json (nombres mesures du run).
 Lancement (meme interpreteur que celui qui a compile _adc) :
   PYTHONPATH=<build>/python:/private/tmp/adc_cases-deeptut python3.12 make_figures.py
 """
+
+from __future__ import annotations
+
 import json
 import os
 import subprocess
 import sys
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,16 +36,22 @@ FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
 
-def git_sha(path):
+def git_sha(path: str) -> str:
+    """SHA du HEAD du depot `path`, ou "unknown" si indisponible."""
     try:
-        return subprocess.check_output(
-            ["git", "-C", path, "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "-C", path, "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
     except Exception:
         return "unknown"
 
 
-def main():
+def main() -> None:
     # --- meme configuration que run.main() ---
     n, L = 96, 1.0
     ne0 = case.band_density(n, L, amp=1.0, width=0.05, mode=2, disp=0.02)
@@ -61,23 +71,57 @@ def main():
     # meme dynamique ; le troisieme prouve qu'ils sont bit-identiques (max = 0). ---
     fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.4))
     vmin, vmax = 1.0, max(float(dn.max()), float(dd.max()))
-    im0 = axes[0].imshow(dn, origin="lower", cmap="viridis", vmin=vmin, vmax=vmax, extent=[0, L, 0, L])
+    im0 = axes[0].imshow(
+        dn,
+        origin="lower",
+        cmap="viridis",
+        vmin=vmin,
+        vmax=vmax,
+        extent=[0, L, 0, L],
+    )
     axes[0].set_title("natif : briques ExB + BackgroundDensity")
     fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label=r"$n$")
-    im1 = axes[1].imshow(dd, origin="lower", cmap="viridis", vmin=vmin, vmax=vmax, extent=[0, L, 0, L])
+    im1 = axes[1].imshow(
+        dd,
+        origin="lower",
+        cmap="viridis",
+        vmin=vmin,
+        vmax=vmax,
+        extent=[0, L, 0, L],
+    )
     axes[1].set_title("DSL : formules adc.dsl.Model")
     fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label=r"$n$")
     # ecart : echelle fixe 0..1e-15 (a max = 0 le panneau est noir ; un seul pixel au niveau
     # machine ressortirait). On annote le max pour lever toute ambiguite "carte vide vs cassee".
-    im2 = axes[2].imshow(diff, origin="lower", cmap="inferno", vmin=0.0, vmax=1e-15, extent=[0, L, 0, L])
-    axes[2].set_title(r"$|n_{\mathrm{DSL}} - n_{\mathrm{natif}}|$" + "\n"
-                      r"max $= %.1e$ (bit-identique : %s)" % (max_abs, identical))
-    cb = fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label="ecart (echelle 0 a 1e-15)")
-    cb.formatter.set_powerlimits((0, 0)); cb.ax.yaxis.get_offset_text().set_visible(False)
+    im2 = axes[2].imshow(
+        diff,
+        origin="lower",
+        cmap="inferno",
+        vmin=0.0,
+        vmax=1e-15,
+        extent=[0, L, 0, L],
+    )
+    axes[2].set_title(
+        r"$|n_{\mathrm{DSL}} - n_{\mathrm{natif}}|$" + "\n"
+        r"max $= %.1e$ (bit-identique : %s)" % (max_abs, identical)
+    )
+    cb = fig.colorbar(
+        im2,
+        ax=axes[2],
+        fraction=0.046,
+        pad=0.04,
+        label="ecart (echelle 0 a 1e-15)",
+    )
+    cb.formatter.set_powerlimits((0, 0))
+    cb.ax.yaxis.get_offset_text().set_visible(False)
     for ax in axes:
-        ax.set_xlabel("x"); ax.set_ylabel("y")
-    fig.suptitle(r"diocotron_dsl : deux chemins, etat bit-identique apres %d pas (grille $%d^2$, "
-                 r"CFL 0.4, backend %s)" % (n_steps, n, backend), y=1.03)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+    fig.suptitle(
+        r"diocotron_dsl : deux chemins, etat bit-identique apres %d pas (grille $%d^2$, "
+        r"CFL 0.4, backend %s)" % (n_steps, n, backend),
+        y=1.03,
+    )
     fig.tight_layout()
     p1 = os.path.join(FIGDIR, "equivalence_heatmap.png")
     fig.savefig(p1, dpi=130, bbox_inches="tight")
@@ -93,7 +137,9 @@ def main():
         "script": "diocotron_dsl/make_figures.py",
         "command": "python diocotron_dsl/make_figures.py",
         "produces": ["equivalence_heatmap.png"],
-        "adc_cpp_sha": git_sha("/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"),
+        "adc_cpp_sha": git_sha(
+            "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"
+        ),
         "adc_cases_sha": git_sha(HERE),
         "backend": backend,
         "backend_preference": ["production", "aot"],
@@ -117,7 +163,10 @@ def main():
     with open(os.path.join(FIGDIR, "provenance.json"), "w") as fh:
         json.dump(prov, fh, indent=2)
 
-    print("backend %r | max|DSL - natif| = %.3e | bit-identique = %s" % (backend, max_abs, identical))
+    print(
+        "backend %r | max|DSL - natif| = %.3e | bit-identique = %s"
+        % (backend, max_abs, identical)
+    )
     print("ecrit : %s" % p1)
     print("ecrit : %s" % os.path.join(FIGDIR, "provenance.json"))
 

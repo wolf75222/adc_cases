@@ -45,6 +45,8 @@ Invariants verifies par assert :
   - croissance de l'instabilite : amplitude finale > amplitude initiale.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 import adc
@@ -55,13 +57,18 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases import (
+    models,
+)  # noqa: E402  (compositions de briques nommees, cote application)
 from adc_cases.common.checks import relative_drift  # noqa: E402
 from adc_cases.common.initial_conditions import band_density  # noqa: E402
 
 
-def perturbation_amplitude(density):
+def perturbation_amplitude(density: np.ndarray) -> float:
     """Amplitude L2 de la perturbation = deviation par rapport a la moyenne en x.
 
     La bande non perturbee est uniforme le long de x (axis=1) et structuree le
@@ -73,7 +80,7 @@ def perturbation_amplitude(density):
     return float(np.sqrt(np.mean(delta * delta)))
 
 
-def main():
+def main() -> None:
     # --- Condition initiale en bande, grille 96 x 96 (CI partagee, mode 2) ---
     n = 96
     L = 1.0
@@ -85,8 +92,12 @@ def main():
 
     # --- Composition du systeme : un seul bloc "diocotron" (1 variable) ---
     sim = adc.System(n=n, L=L, periodic=True)
-    sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
-                  spatial=adc.Spatial(minmod=True), time=adc.Explicit())
+    sim.add_block(
+        "ne",
+        model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
+        spatial=adc.Spatial(minmod=True),
+        time=adc.Explicit(),
+    )
     # Poisson periodique sans paroi : RHS = densite de charge Sum_s elliptic_rhs_s,
     # solveur multigrille geometrique.
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
@@ -107,7 +118,7 @@ def main():
 
     # --- Boucle d'integration : ~120 pas, CFL = 0.4 ---
     n_steps = 120
-    k = 10            # frequence d'impression des diagnostics
+    k = 10  # frequence d'impression des diagnostics
     rel_mass_tol = 1e-6
 
     amp_last = amp0
@@ -118,9 +129,9 @@ def main():
         # Invariant physique : la masse totale est conservee (transport advectif).
         mass = sim.mass("ne")
         rel_mass = relative_drift(mass, mass0)
-        assert rel_mass < rel_mass_tol, (
-            f"masse non conservee au pas {step} : ecart relatif {rel_mass:.3e}"
-        )
+        assert (
+            rel_mass < rel_mass_tol
+        ), f"masse non conservee au pas {step} : ecart relatif {rel_mass:.3e}"
 
         amp_last = perturbation_amplitude(sim.density("ne"))
 
@@ -132,9 +143,9 @@ def main():
     print(f"facteur de croissance = {amp_last / amp0:.4f}")
 
     # --- Invariant : l'instabilite a fait croitre la perturbation ---
-    assert amp_last > amp0, (
-        "l'amplitude n'a pas cru : instabilite diocotron non observee"
-    )
+    assert (
+        amp_last > amp0
+    ), "l'amplitude n'a pas cru : instabilite diocotron non observee"
 
     print("OK diocotron")
 

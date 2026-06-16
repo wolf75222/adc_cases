@@ -20,12 +20,15 @@ Lancer (depuis euler_poisson/) :
   PYTHONPATH=<adc_build>/python:<deeptut> python make_figures.py
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
 import sys
 
 import matplotlib
+
 matplotlib.use("Agg")  # backend non interactif : ecrit des PNG sans serveur X
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,7 +38,9 @@ import adc
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 from adc_cases import models  # noqa: E402
 
 # Memes constantes que run.py (un seul jeu de parametres, pas de divergence).
@@ -47,12 +52,14 @@ FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
 
-def make_sim(sign):
+def make_sim(sign: float) -> adc.System:
     """Construit le meme systeme Euler-Poisson que run.py:93-99 (un bloc, Poisson de systeme)."""
     sim = adc.System(n=N, L=L, periodic=True)
     sim.add_block(
         "gas",
-        model=models.euler_poisson(sign=sign, gamma=GAMMA, four_pi_G=1.0, rho0=RHO0),
+        model=models.euler_poisson(
+            sign=sign, gamma=GAMMA, four_pi_G=1.0, rho0=RHO0
+        ),
         spatial=adc.Spatial(vanleer=True, flux="hllc"),
         time=adc.Explicit(),
     )
@@ -60,14 +67,16 @@ def make_sim(sign):
     return sim
 
 
-def initial_density(eps):
+def initial_density(eps: float) -> np.ndarray:
     """CI de run.py:75-79, parametree par eps : rho = rho0 (1 + eps cos(2 pi x / L))."""
     x = (np.arange(N) + 0.5) * L / N
     xx, _ = np.meshgrid(x, x, indexing="ij")
     return RHO0 * (1.0 + eps * np.cos(2.0 * np.pi * xx / L))
 
 
-def run_energy_trace(sign, eps=EPS_REF):
+def run_energy_trace(
+    sign: float, eps: float = EPS_REF
+) -> tuple[np.ndarray, np.ndarray]:
     """Avance NSTEPS pas et renvoie (t, E_tot) a chaque pas. E_tot = U[3].sum() (energie fluide)."""
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
@@ -80,7 +89,7 @@ def run_energy_trace(sign, eps=EPS_REF):
     return np.array(ts), np.array(es)
 
 
-def run_dE(sign, eps):
+def run_dE(sign: float, eps: float) -> float:
     """dE = E_tot(fin) - E_tot(debut) pour une amplitude eps donnee."""
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
@@ -91,7 +100,7 @@ def run_dE(sign, eps):
     return e1 - e0
 
 
-def final_density(sign, eps=EPS_REF):
+def final_density(sign: float, eps: float = EPS_REF) -> np.ndarray:
     """Densite rho(x,y) apres NSTEPS pas (composante 0 de l'etat)."""
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
@@ -112,14 +121,28 @@ fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), sharey=False)
 for ax, (t, e, dE, title, col) in zip(
     axes,
     [
-        (tg, eg, dE_grav, f"GRAVITE (sign=+1, attractif)\ndE = {dE_grav:+.3e}", "tab:blue"),
-        (tp, ep, dE_plas, f"PLASMA (sign=-1, repulsif)\ndE = {dE_plas:+.3e}", "tab:red"),
+        (
+            tg,
+            eg,
+            dE_grav,
+            f"GRAVITE (sign=+1, attractif)\ndE = {dE_grav:+.3e}",
+            "tab:blue",
+        ),
+        (
+            tp,
+            ep,
+            dE_plas,
+            f"PLASMA (sign=-1, repulsif)\ndE = {dE_plas:+.3e}",
+            "tab:red",
+        ),
     ],
 ):
     ax.plot(t, e - e[0], "o-", color=col, ms=4)
     ax.axhline(0.0, color="0.6", lw=0.8, ls="--")
     ax.set_xlabel("temps t")
-    ax.set_ylabel(r"$E_{tot}(t) - E_{tot}(0)$  (energie fluide $U[3].\mathrm{sum}()$)")
+    ax.set_ylabel(
+        r"$E_{tot}(t) - E_{tot}(0)$  (energie fluide $U[3].\mathrm{sum}()$)"
+    )
     ax.set_title(title, fontsize=10)
     ax.grid(alpha=0.3)
 fig.suptitle(
@@ -144,28 +167,49 @@ dEg0 = run_dE(+1.0, 0.0)
 dEp0 = run_dE(-1.0, 0.0)
 
 fig, ax = plt.subplots(figsize=(6.4, 5.0))
-ax.loglog(EPS_SWEEP, np.abs(dEg), "o-", color="tab:blue",
-          label=f"|dE| gravite  (pente {slope_g:.3f})")
-ax.loglog(EPS_SWEEP, np.abs(dEp), "s-", color="tab:red",
-          label=f"|dE| plasma   (pente {slope_p:.3f})")
+ax.loglog(
+    EPS_SWEEP,
+    np.abs(dEg),
+    "o-",
+    color="tab:blue",
+    label=f"|dE| gravite  (pente {slope_g:.3f})",
+)
+ax.loglog(
+    EPS_SWEEP,
+    np.abs(dEp),
+    "s-",
+    color="tab:red",
+    label=f"|dE| plasma   (pente {slope_p:.3f})",
+)
 # droite de reference pente 2 ancree au point eps=0.01
 ref = np.abs(dEg[1]) * (EPS_SWEEP / EPS_SWEEP[1]) ** 2
-ax.loglog(EPS_SWEEP, ref, "--", color="0.4", label=r"pente 2 ($\propto \epsilon^2$)")
+ax.loglog(
+    EPS_SWEEP, ref, "--", color="0.4", label=r"pente 2 ($\propto \epsilon^2$)"
+)
 ax.axvline(EPS_REF, color="0.7", lw=0.8, ls=":")
-ax.text(EPS_REF * 1.05, np.abs(dEg).min(), r"$\epsilon=0.01$ (run.py)", fontsize=8, color="0.4")
+ax.text(
+    EPS_REF * 1.05,
+    np.abs(dEg).min(),
+    r"$\epsilon=0.01$ (run.py)",
+    fontsize=8,
+    color="0.4",
+)
 ax.set_xlabel(r"amplitude de perturbation $\epsilon$")
 ax.set_ylabel(r"$|dE| = |E_{tot}(\mathrm{fin}) - E_{tot}(0)|$")
-ax.set_title(r"Prediction falsifiable : $|dE| \propto \epsilon^2$ (pente 2 en log-log)")
+ax.set_title(
+    r"Prediction falsifiable : $|dE| \propto \epsilon^2$ (pente 2 en log-log)"
+)
 ax.grid(alpha=0.3, which="both")
 ax.legend(fontsize=9)
 fig.tight_layout()
 fig.savefig(os.path.join(FIGDIR, "de_vs_eps.png"), dpi=130)
 plt.close(fig)
 
+
 # --------------------------------------------------------------------------- #
 # Figure 3 : carte 2D de densite finale (gravite vs plasma)
 # --------------------------------------------------------------------------- #
-def run_conservation(sign, eps=EPS_REF):
+def run_conservation(sign: float, eps: float = EPS_REF) -> tuple[float, float]:
     """max derive relative de masse et max |p| sur les NSTEPS pas (memes diagnostics que run.py)."""
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
@@ -175,7 +219,9 @@ def run_conservation(sign, eps=EPS_REF):
         sim.advance(DT, 1)
         m = float(sim.mass("gas"))
         U = sim.get_state("gas")
-        max_rel_mass = max(max_rel_mass, abs(m - mass0) / max(abs(mass0), 1e-30))
+        max_rel_mass = max(
+            max_rel_mass, abs(m - mass0) / max(abs(mass0), 1e-30)
+        )
         max_mom = max(max_mom, abs(float(U[1].sum())), abs(float(U[2].sum())))
     return max_rel_mass, max_mom
 
@@ -189,7 +235,11 @@ mass_drift_p, mom_p = run_conservation(-1.0)
 fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.3))
 extent = [0, L, 0, L]
 # echelle d'ecart au fond, commune, symetrique
-amp = max(np.abs(rho_g - RHO0).max(), np.abs(rho_p - RHO0).max(), np.abs(rho0_map - RHO0).max())
+amp = max(
+    np.abs(rho_g - RHO0).max(),
+    np.abs(rho_p - RHO0).max(),
+    np.abs(rho0_map - RHO0).max(),
+)
 for ax, (field, title) in zip(
     axes,
     [
@@ -198,8 +248,15 @@ for ax, (field, title) in zip(
         (rho_p, "PLASMA finale (t=0.08)"),
     ],
 ):
-    im = ax.imshow((field - RHO0).T, origin="lower", extent=extent, cmap="RdBu_r",
-                   vmin=-amp, vmax=amp, aspect="equal")
+    im = ax.imshow(
+        (field - RHO0).T,
+        origin="lower",
+        extent=extent,
+        cmap="RdBu_r",
+        vmin=-amp,
+        vmax=amp,
+        aspect="equal",
+    )
     ax.set_title(title, fontsize=10)
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -221,7 +278,7 @@ plt.close(fig)
 # --------------------------------------------------------------------------- #
 # Provenance
 # --------------------------------------------------------------------------- #
-def git_sha(path):
+def git_sha(path: str) -> str:
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"], text=True
@@ -230,7 +287,9 @@ def git_sha(path):
         return "unknown"
 
 
-ADC_BUILD = os.path.dirname(os.path.dirname(adc.__file__))  # .../build-master/python
+ADC_BUILD = os.path.dirname(
+    os.path.dirname(adc.__file__)
+)  # .../build-master/python
 # adc_cpp = remonter depuis build-master/python/adc
 adc_cpp_root = os.path.dirname(os.path.dirname(os.path.dirname(adc.__file__)))
 

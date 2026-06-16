@@ -8,11 +8,15 @@ Le cas etant `experimental` (cf. cases_manifest.toml), ces figures ne sont pas u
 reproduction versionne : ce sont des diagnostics du prototype (un etat fini et coherent + la
 relaxation de la bulle). Aucune cible publiee, aucune tolerance sur une valeur physique.
 """
+
+from __future__ import annotations
+
 import json
 import os
 import sys
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,7 +33,7 @@ FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
 
-def make_euler():
+def make_euler() -> dsl.HyperbolicModel:
     """Modele Euler 2D declare en formules (copie conforme de run.py:make_euler)."""
     e = dsl.HyperbolicModel("euler")
     rho, rhou, rhov, E = e.conservative_vars("rho", "rho_u", "rho_v", "E")
@@ -47,7 +51,7 @@ def make_euler():
     return e
 
 
-def main():
+def main() -> None:
     euler = make_euler()
     n, L = 64, 1.0
     h = L / n
@@ -66,8 +70,8 @@ def main():
     steps = 120
     t = []
     tt = 0.0
-    p_center = []   # pression au centre (sommet de la bulle)
-    amp = []        # max|p - p_init| (le diagnostic 'moved' de run.py)
+    p_center = []  # pression au centre (sommet de la bulle)
+    amp = []  # max|p - p_init| (le diagnostic 'moved' de run.py)
     for _ in range(steps):
         dt = pf.cfl_dt(U, h, 0.4)
         U = U + dt * pf.residual(U, h)
@@ -89,14 +93,19 @@ def main():
     ext = [0, L, 0, L]
     im0 = ax[0].imshow(rho_final.T, origin="lower", extent=ext, cmap="viridis")
     ax[0].set_title(r"densite finale $\rho$ (t=%.3f, 120 pas)" % tt)
-    ax[0].set_xlabel("x"); ax[0].set_ylabel("y")
+    ax[0].set_xlabel("x")
+    ax[0].set_ylabel("y")
     fig.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
     im1 = ax[1].imshow(pr_final.T, origin="lower", extent=ext, cmap="magma")
     ax[1].set_title(r"pression finale $p$ (anneau acoustique)")
-    ax[1].set_xlabel("x"); ax[1].set_ylabel("y")
+    ax[1].set_xlabel("x")
+    ax[1].set_ylabel("y")
     fig.colorbar(im1, ax=ax[1], fraction=0.046, pad=0.04)
-    fig.suptitle("dsl_euler (prototype DSL interprete) : etat fini, anneau radial, "
-                 r"$\rho>0$, $p>0$", fontsize=10)
+    fig.suptitle(
+        "dsl_euler (prototype DSL interprete) : etat fini, anneau radial, "
+        r"$\rho>0$, $p>0$",
+        fontsize=10,
+    )
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     f1 = os.path.join(FIGDIR, "final_state.png")
     fig.savefig(f1, dpi=120)
@@ -105,22 +114,37 @@ def main():
     # ---- Figure 2 : relaxation de la bulle (decroissance de la perturbation) ----
     fig, ax = plt.subplots(1, 2, figsize=(9.4, 3.9))
     ax[0].plot(t, p_center, color="C3", lw=1.8)
-    ax[0].axhline(p_mean, color="0.5", ls="--", lw=1.0,
-                  label=r"$\bar p=%.3f$ (moyenne finale)" % p_mean)
-    ax[0].axhline(pc0, color="C3", ls=":", lw=1.0, alpha=0.6,
-                  label=r"$p_c(0)=%.3f$" % pc0)
+    ax[0].axhline(
+        p_mean,
+        color="0.5",
+        ls="--",
+        lw=1.0,
+        label=r"$\bar p=%.3f$ (moyenne finale)" % p_mean,
+    )
+    ax[0].axhline(
+        pc0, color="C3", ls=":", lw=1.0, alpha=0.6, label=r"$p_c(0)=%.3f$" % pc0
+    )
     ax[0].set_title("relaxation du sommet de la bulle")
-    ax[0].set_xlabel("t"); ax[0].set_ylabel(r"$p$ au centre")
+    ax[0].set_xlabel("t")
+    ax[0].set_ylabel(r"$p$ au centre")
     ax[0].legend(fontsize=8)
     ax[1].plot(t, amp, color="C0", lw=1.8)
     kmax = int(np.argmax(amp))
     ax[1].plot(t[kmax], amp[kmax], "o", color="C0", ms=5)
-    ax[1].annotate(r"pic %.3f a t=%.3f" % (amp[kmax], t[kmax]),
-                   (t[kmax], amp[kmax]), textcoords="offset points", xytext=(8, -2),
-                   fontsize=8)
+    ax[1].annotate(
+        r"pic %.3f a t=%.3f" % (amp[kmax], t[kmax]),
+        (t[kmax], amp[kmax]),
+        textcoords="offset points",
+        xytext=(8, -2),
+        fontsize=8,
+    )
     ax[1].set_title(r"amplitude $\max|p-p_0|$ (diagnostic 'moved')")
-    ax[1].set_xlabel("t"); ax[1].set_ylabel(r"$\max|p-p_0|$")
-    fig.suptitle("dsl_euler : la bulle se detend (front sortant), puis se dilue", fontsize=10)
+    ax[1].set_xlabel("t")
+    ax[1].set_ylabel(r"$\max|p-p_0|$")
+    fig.suptitle(
+        "dsl_euler : la bulle se detend (front sortant), puis se dilue",
+        fontsize=10,
+    )
     fig.tight_layout(rect=[0, 0, 1, 0.94])
     f2 = os.path.join(FIGDIR, "bubble_decay.png")
     fig.savefig(f2, dpi=120)
@@ -131,7 +155,7 @@ def main():
         "command": "python make_figures.py",
         "category": "experimental",
         "note": "prototype DSL interprete numpy (PythonFlux), hors CI ; figures de diagnostic, "
-                "pas un asset de reproduction versionne",
+        "pas un asset de reproduction versionne",
         "produces": ["final_state.png", "bubble_decay.png"],
         "adc_cpp_sha": "018732997c02a17ade387fa99a74267f37e252c1",
         "adc_cases_sha": "1affec1d209e26d5ee422cac255d2cc3f149247a",
@@ -154,7 +178,9 @@ def main():
             "p_mean_final": p_mean,
             "p_center_t0": pc0,
             "p_center_final": float(p_center[-1]),
-            "vmax_final": float(np.sqrt((U[1] / U[0]) ** 2 + (U[2] / U[0]) ** 2).max()),
+            "vmax_final": float(
+                np.sqrt((U[1] / U[0]) ** 2 + (U[2] / U[0]) ** 2).max()
+            ),
             "moved_final": float(amp[-1]),
             "amp_peak": float(amp[kmax]),
             "t_amp_peak": float(t[kmax]),
@@ -167,9 +193,18 @@ def main():
     print("ecrit :", f1)
     print("ecrit :", f2)
     print("ecrit :", os.path.join(FIGDIR, "provenance.json"))
-    print("drel=%.2e  drho_max=%.4f  p_center %.4f -> %.4f (moyenne %.4f)  amp_peak=%.4f @ t=%.3f"
-          % (drel, prov["measured"]["drho_max"], pc0, p_center[-1], p_mean,
-             amp[kmax], t[kmax]))
+    print(
+        "drel=%.2e  drho_max=%.4f  p_center %.4f -> %.4f (moyenne %.4f)  amp_peak=%.4f @ t=%.3f"
+        % (
+            drel,
+            prov["measured"]["drho_max"],
+            pc0,
+            p_center[-1],
+            p_mean,
+            amp[kmax],
+            t[kmax],
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ fake `adc` module that records every method call on the fake `System`, then driv
 Run standalone (`python3 test_geometry_flag.py`) or under pytest.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import types
@@ -23,7 +25,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _install_fake_adc():
+def _install_fake_adc() -> types.ModuleType:
     """Register a fake `adc` module that records System calls. Returns the module."""
     adc = types.ModuleType("adc")
 
@@ -76,21 +78,25 @@ def _install_fake_adc():
 
 
 def _import_run():
-    case_root = os.path.dirname(HERE)   # tests/ -> la racine du cas (model.py, run*.py)
+    case_root = os.path.dirname(
+        HERE
+    )  # tests/ -> la racine du cas (model.py, run*.py)
     if case_root not in sys.path:
         sys.path.insert(0, case_root)
     # Make `from adc_cases.common.io import case_output_dir` importable without
     # the installed package (the case appends the repo root itself on ImportError).
     import importlib
+
     return importlib.import_module("run")
 
 
 def _params():
     from model import PaperParameters
+
     return PaperParameters()
 
 
-def test_square_does_not_call_set_disc_domain():
+def test_square_does_not_call_set_disc_domain() -> None:
     _install_fake_adc()
     run = _import_run()
     params = _params()
@@ -98,50 +104,77 @@ def test_square_does_not_call_set_disc_domain():
     sim = run.build_uniform(object(), rho, params, geometry="square")
     names = [c[0] for c in sim.calls]
     assert "set_disc_domain" not in names, (
-        "square geometry must stay bit-identical (no set_disc_domain): %r" % names
+        "square geometry must stay bit-identical (no set_disc_domain): %r"
+        % names
     )
 
 
-def test_staircase_calls_set_disc_domain_with_center_and_radius():
+def test_staircase_calls_set_disc_domain_with_center_and_radius() -> None:
     _install_fake_adc()
     run = _import_run()
     params = _params()
     rho = np.full((16, 16), params.rho_min)
     sim = run.build_uniform(object(), rho, params, geometry="staircase")
     disc_calls = [c for c in sim.calls if c[0] == "set_disc_domain"]
-    assert len(disc_calls) == 1, "staircase must call set_disc_domain exactly once: %r" % (
+    assert (
+        len(disc_calls) == 1
+    ), "staircase must call set_disc_domain exactly once: %r" % (
         [c[0] for c in sim.calls],
     )
     _, args, kw = disc_calls[0]
     cx, cy, R = args
-    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (0.5 * params.length, cx)
-    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (0.5 * params.length, cy)
-    assert R == params.radius, "R must equal params.radius (%g), got %g" % (params.radius, R)
+    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (
+        0.5 * params.length,
+        cx,
+    )
+    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (
+        0.5 * params.length,
+        cy,
+    )
+    assert R == params.radius, "R must equal params.radius (%g), got %g" % (
+        params.radius,
+        R,
+    )
     # The disc center must coincide with the circular Poisson wall center and the
     # disc radius with the wall radius, so the FV mask and the elliptic wall agree.
     assert R == params.radius
-    assert kw.get("mode") == "staircase", "mode must be 'staircase', got %r" % kw.get("mode")
+    assert (
+        kw.get("mode") == "staircase"
+    ), "mode must be 'staircase', got %r" % kw.get("mode")
 
 
-def test_cutcell_calls_set_disc_domain_with_mode_cutcell():
+def test_cutcell_calls_set_disc_domain_with_mode_cutcell() -> None:
     _install_fake_adc()
     run = _import_run()
     params = _params()
     rho = np.full((16, 16), params.rho_min)
     sim = run.build_uniform(object(), rho, params, geometry="cutcell")
     disc_calls = [c for c in sim.calls if c[0] == "set_disc_domain"]
-    assert len(disc_calls) == 1, "cutcell must call set_disc_domain exactly once: %r" % (
+    assert (
+        len(disc_calls) == 1
+    ), "cutcell must call set_disc_domain exactly once: %r" % (
         [c[0] for c in sim.calls],
     )
     _, args, kw = disc_calls[0]
     cx, cy, R = args
-    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (0.5 * params.length, cx)
-    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (0.5 * params.length, cy)
-    assert R == params.radius, "R must equal params.radius (%g), got %g" % (params.radius, R)
-    assert kw.get("mode") == "cutcell", "mode must be 'cutcell', got %r" % kw.get("mode")
+    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (
+        0.5 * params.length,
+        cx,
+    )
+    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (
+        0.5 * params.length,
+        cy,
+    )
+    assert R == params.radius, "R must equal params.radius (%g), got %g" % (
+        params.radius,
+        R,
+    )
+    assert (
+        kw.get("mode") == "cutcell"
+    ), "mode must be 'cutcell', got %r" % kw.get("mode")
 
 
-def test_unknown_geometry_raises():
+def test_unknown_geometry_raises() -> None:
     _install_fake_adc()
     run = _import_run()
     params = _params()
@@ -155,12 +188,16 @@ def test_unknown_geometry_raises():
     assert raised, "an unknown geometry must raise ValueError"
 
 
-def test_staircase_rejected_for_amr_engine():
+def test_staircase_rejected_for_amr_engine() -> None:
     _install_fake_adc()
     run = _import_run()
     argv = sys.argv
     sys.argv = [
-        "run.py", "--engine", "amr-imex", "--geometry", "staircase",
+        "run.py",
+        "--engine",
+        "amr-imex",
+        "--geometry",
+        "staircase",
         "--acknowledge-amr-approximation",
     ]
     try:
@@ -170,13 +207,17 @@ def test_staircase_rejected_for_amr_engine():
         except SystemExit as exc:
             raised = True
             # main() raises SystemExit with the explanatory message before any build.
-            assert "staircase" in str(exc), "expected staircase rejection, got %r" % (exc,)
-        assert raised, "staircase + amr-imex must be rejected at the argument layer"
+            assert "staircase" in str(
+                exc
+            ), "expected staircase rejection, got %r" % (exc,)
+        assert (
+            raised
+        ), "staircase + amr-imex must be rejected at the argument layer"
     finally:
         sys.argv = argv
 
 
-def _run_all():
+def _run_all() -> None:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
         t()

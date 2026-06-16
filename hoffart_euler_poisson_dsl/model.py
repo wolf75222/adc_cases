@@ -21,6 +21,8 @@ Both variants use the same conservative variables, physical flux, eigenvalues an
 Poisson right-hand side.
 """
 
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -43,18 +45,18 @@ class PaperParameters:
     temperature: float = 0.0
 
     @property
-    def length(self):
+    def length(self) -> float:
         return 2.0 * self.radius
 
     @property
-    def alpha(self):
+    def alpha(self) -> float:
         return self.beta * self.beta / self.rho_max
 
     @property
-    def omega(self):
+    def omega(self) -> float:
         return self.beta * self.beta
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         out = asdict(self)
         out.update(length=self.length, alpha=self.alpha, omega=self.omega)
         return out
@@ -64,10 +66,22 @@ class PaperParameters:
 # utilise le modele ExB scalaire reduit, pas le systeme complet defini ici ; seul l=4 colle.
 PAPER_GROWTH_RATES = {3: 0.772, 4: 0.911, 5: 0.683}
 PAPER_FIT_WINDOWS = {3: (0.40, 0.70), 4: (0.60, 0.75), 5: (1.15, 1.35)}
-PAPER_SNAPSHOT_FRACTIONS = (0.01, 0.125, 0.25, 0.375, 0.50, 0.625, 0.75, 0.875, 1.0)
+PAPER_SNAPSHOT_FRACTIONS = (
+    0.01,
+    0.125,
+    0.25,
+    0.375,
+    0.50,
+    0.625,
+    0.75,
+    0.875,
+    1.0,
+)
 
 
-def magnetic_euler_poisson_model(params=None, source="schur"):
+def magnetic_euler_poisson_model(
+    params: PaperParameters | None = None, source: str = "schur"
+) -> dsl.Model:
     r"""Return the paper model as symbolic formulas.
 
     .. math::
@@ -95,7 +109,9 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
     #    composantes de la quantite de mouvement m = rho*u. Pas d'energie (modele barotrope,
     #    fermeture isotherme p = theta*rho). Le role indique au moteur le sens physique du champ.
     rho, mx, my = m.conservative_vars(
-        "rho", "rho_u", "rho_v",
+        "rho",
+        "rho_u",
+        "rho_v",
         roles=["Density", "MomentumX", "MomentumY"],
     )
 
@@ -138,11 +154,13 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
     #        reference). La laisser non nulle l'avancerait deux fois.
     if source == "local":
         omega = m.param("omega", params.omega)
-        m.source([
-            0.0 * rho,
-            -rho * grad_x + omega * my,
-            -rho * grad_y - omega * mx,
-        ])
+        m.source(
+            [
+                0.0 * rho,
+                -rho * grad_x + omega * my,
+                -rho * grad_y - omega * mx,
+            ]
+        )
     else:
         m.source([0.0 * rho, 0.0 * mx, 0.0 * my])
 
@@ -157,7 +175,9 @@ def magnetic_euler_poisson_model(params=None, source="schur"):
     return m
 
 
-def paper_initial_density(n, mode, params=None):
+def paper_initial_density(
+    n: int, mode: int, params: PaperParameters | None = None
+) -> np.ndarray:
     """Cell-centred annular density from equation (35) of the paper."""
     params = params or PaperParameters()
     if mode not in PAPER_GROWTH_RATES:
@@ -172,13 +192,16 @@ def paper_initial_density(n, mode, params=None):
     rho = np.full((n, n), params.rho_min, dtype=np.float64)
     ring = (radius >= params.ring_inner) & (radius <= params.ring_outer)
     rho[ring] = params.rho_max * (
-        1.0 - params.perturbation
+        1.0
+        - params.perturbation
         + params.perturbation * np.sin(mode * angle[ring])
     )
     return rho
 
 
-def drift_velocity_from_potential(phi, params=None):
+def drift_velocity_from_potential(
+    phi: np.ndarray, params: PaperParameters | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     r"""Initial drift velocity `-(grad(phi) x Omega)/|Omega|^2`."""
     params = params or PaperParameters()
     h = params.length / phi.shape[0]
@@ -192,4 +215,3 @@ def drift_velocity_from_potential(phi, params=None):
     u[outside] = 0.0
     v[outside] = 0.0
     return u, v
-

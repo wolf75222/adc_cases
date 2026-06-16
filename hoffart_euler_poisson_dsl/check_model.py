@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Cheap analytic oracle for the Hoffart magnetic Euler-Poisson DSL formulas."""
 
+from __future__ import annotations
+
 import numpy as np
 
 from model import PaperParameters, magnetic_euler_poisson_model
 
 
-def main():
+def main() -> None:
     p = PaperParameters(beta=3.0, temperature=0.25)
     model = magnetic_euler_poisson_model(p, source="local")._m
 
@@ -28,20 +30,23 @@ def main():
     np.testing.assert_allclose(fy, np.stack([my, my * u, my * v + pressure]))
     np.testing.assert_allclose(
         src,
-        np.stack([
-            np.zeros_like(rho),
-            -rho * gx + p.omega * my,
-            -rho * gy - p.omega * mx,
-        ]),
+        np.stack(
+            [
+                np.zeros_like(rho),
+                -rho * gx + p.omega * my,
+                -rho * gy - p.omega * mx,
+            ]
+        ),
     )
 
     env = model._env(U, aux)
     np.testing.assert_allclose(model._elliptic.eval(env), -p.alpha * rho)
     assert model.max_wave_speed(U, aux, 0) > 0.0
     assert model.max_wave_speed(U, aux, 1) > 0.0
-    print("OK Hoffart DSL: flux, Lorentz/electric source, eigenvalues and Poisson rhs")
+    print(
+        "OK Hoffart DSL: flux, Lorentz/electric source, eigenvalues and Poisson rhs"
+    )
 
 
 if __name__ == "__main__":
     main()
-

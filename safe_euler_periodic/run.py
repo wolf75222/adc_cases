@@ -19,6 +19,8 @@ adc_cpp/bench/frontend_cpp.cpp.
 Lancement : PYTHONPATH=<build>/python:. python3 safe_euler_periodic/run.py [--n 64 --steps 40]
 """
 
+from __future__ import annotations
+
 import argparse
 
 import numpy as np
@@ -30,57 +32,101 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 
 from adc_cases.common import safe_euler as sc  # noqa: E402
-from adc_cases.common.checks import assert_finite, assert_positive, relative_drift  # noqa: E402
+from adc_cases.common.checks import (
+    assert_finite,
+    assert_positive,
+    relative_drift,
+)  # noqa: E402
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from adc_cases.common.native import adc_include  # noqa: E402
 
 
-def run_bricks(n, steps):
-    """Front BRIQUES : System + add_block(models.euler), dt fixe. Renvoie (etat final, masse)."""
+def run_bricks(n: int, steps: int) -> tuple[np.ndarray, float]:
+    """Front BRIQUES : System + add_block(models.euler), dt fixe.
+
+    Renvoie (etat final, masse).
+    """
     dt = sc.dt(n)
     sim = adc.System(n=n, L=sc.L, periodic=True)
-    sim.add_block("gas", model=sc.bricks_model(), spatial=sc.spatial_bricks(), time=adc.Explicit())
+    sim.add_block(
+        "gas",
+        model=sc.bricks_model(),
+        spatial=sc.spatial_bricks(),
+        time=adc.Explicit(),
+    )
     sim.set_state("gas", sc.ic(n).reshape(-1).tolist())
     for _ in range(steps):
         sim.step(dt)
-    return np.asarray(sim.get_state("gas"), dtype=float).reshape(4, n, n), sim.mass("gas")
+    return np.asarray(sim.get_state("gas"), dtype=float).reshape(
+        4, n, n
+    ), sim.mass("gas")
 
 
-def run_dsl(n, steps):
-    """Front DSL : compile (production -> aot) + add_equation, MEMES reglages. Renvoie (etat, masse, backend)."""
+def run_dsl(n: int, steps: int) -> tuple[np.ndarray, float, str]:
+    """Front DSL : compile (production -> aot) + add_equation, MEMES reglages.
+
+    Renvoie (etat, masse, backend).
+    """
     dt = sc.dt(n)
     so_dir = case_output_dir("safe_euler_periodic")
     model = sc.dsl_model()
     include = adc_include()
     import os
+
     last = None
     for cand in ("production", "aot"):
         try:
-            compiled = model.compile(os.path.join(so_dir, "safe_euler_%s.so" % cand), include,
-                                     backend=cand)
+            compiled = model.compile(
+                os.path.join(so_dir, "safe_euler_%s.so" % cand),
+                include,
+                backend=cand,
+            )
             sim = adc.System(n=n, L=sc.L, periodic=True)
-            sim.add_equation("gas", model=compiled, spatial=sc.spatial_dsl(), time=adc.Explicit())
+            sim.add_equation(
+                "gas",
+                model=compiled,
+                spatial=sc.spatial_dsl(),
+                time=adc.Explicit(),
+            )
             sim.set_state("gas", sc.ic(n).reshape(-1).tolist())
             for _ in range(steps):
                 sim.step(dt)
-            return np.asarray(sim.get_state("gas"), dtype=float).reshape(4, n, n), sim.mass("gas"), cand
+            return (
+                np.asarray(sim.get_state("gas"), dtype=float).reshape(4, n, n),
+                sim.mass("gas"),
+                cand,
+            )
         except Exception as exc:  # noqa: BLE001
             last = exc
-            print("backend DSL %r indisponible (%s), essai suivant" % (cand, type(exc).__name__))
-    raise RuntimeError("aucun backend DSL n'a compile ni execute le modele Euler sur (%s)" % last)
+            print(
+                "backend DSL %r indisponible (%s), essai suivant"
+                % (cand, type(exc).__name__)
+            )
+    raise RuntimeError(
+        "aucun backend DSL n'a compile ni execute le modele Euler sur (%s)"
+        % last
+    )
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Cas sur Euler periodique : validation + equivalence fronts")
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description="Cas sur Euler periodique : validation + equivalence fronts"
+    )
     ap.add_argument("--n", type=int, default=64)
     ap.add_argument("--steps", type=int, default=40)
     args = ap.parse_args()
     n, steps = args.n, args.steps
 
-    print("=== safe_euler_periodic : Euler compressible pur, periodique (n=%d, %d pas) ===" % (n, steps))
+    print(
+        "=== safe_euler_periodic : Euler compressible pur, periodique (n=%d, %d pas) ==="
+        % (n, steps)
+    )
     U0 = sc.ic(n)
     mass0 = float(U0[0].sum())
     p0 = sc.pressure(U0)
@@ -92,9 +138,13 @@ def main():
     # --- EQUIVALENCE briques <-> DSL : etat final bit-identique ---
     max_abs = float(np.max(np.abs(Ub - Ud)))
     identical = bool(np.array_equal(Ub, Ud))
-    print("max|briques - DSL| = %.3e   bit-identique = %s" % (max_abs, identical))
+    print(
+        "max|briques - DSL| = %.3e   bit-identique = %s" % (max_abs, identical)
+    )
     assert max_abs < 1e-10, (
-        "briques et DSL divergent (max|d|=%.3e) : une formule DSL s'ecarte de la brique Euler" % max_abs)
+        "briques et DSL divergent (max|d|=%.3e) : une formule DSL s'ecarte de la brique Euler"
+        % max_abs
+    )
 
     # --- INVARIANTS (sur les briques ; le DSL est bit-identique) ---
     pb = sc.pressure(Ub)
@@ -105,9 +155,13 @@ def main():
     moved = float(np.max(np.abs(pb - p0)))
     print("masse : drel=%.3e   dynamique : max|dp|=%.3e" % (mass_drift, moved))
     assert mass_drift < 1e-9, "masse non conservee (drel=%.3e)" % mass_drift
-    assert moved > 1e-4, "dynamique triviale (la bulle de pression n'a pas evolue)"
+    assert (
+        moved > 1e-4
+    ), "dynamique triviale (la bulle de pression n'a pas evolue)"
 
-    print("OK safe_euler_periodic (equivalence briques<->DSL, invariants, dynamique)")
+    print(
+        "OK safe_euler_periodic (equivalence briques<->DSL, invariants, dynamique)"
+    )
 
 
 if __name__ == "__main__":

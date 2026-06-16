@@ -62,6 +62,8 @@ n par defaut = 128. Le module `adc` doit etre construit (chemin polaire =
 adc.System(mesh=adc.PolarMesh(...)) + transport ExB + Poisson polaire).
 """
 
+from __future__ import annotations
+
 import math
 import sys
 
@@ -73,14 +75,24 @@ import adc
 # Geometrie de l'anneau (echelle papier 6:8:16). RMIN = bord interne du domaine
 # polaire (l'anneau de densite vit dans [R0, R1], le domaine va de RMIN a RW).
 R0, R1, RW, RMIN = 6.0, 8.0, 16.0, 2.0
-RHO_MIN, RHO_MAX, DELTA = 1e-6, 1.0, 0.1   # rhobar = RHO_MAX dans la normalisation 2pi/rhobar
+RHO_MIN, RHO_MAX, DELTA = (
+    1e-6,
+    1.0,
+    0.1,
+)  # rhobar = RHO_MAX dans la normalisation 2pi/rhobar
 
-PAPER = {3: 0.772, 4: 0.911, 5: 0.683}        # gamma normalise du papier
-RE_ANA = {3: 0.33144, 4: 0.43859, 5: 0.54747}  # |Re(omega)| analytique (eigenmode complexe)
+PAPER = {3: 0.772, 4: 0.911, 5: 0.683}  # gamma normalise du papier
+RE_ANA = {
+    3: 0.33144,
+    4: 0.43859,
+    5: 0.54747,
+}  # |Re(omega)| analytique (eigenmode complexe)
 RATIO_ANA = {3: 0.3708, 4: 0.3309, 5: 0.1998}  # Im/Re analytique
 
 
-def run(l, n, cfl=0.4, nsteps=2200):
+def run(
+    l: int, n: int, cfl: float = 0.4, nsteps: int = 2200
+) -> tuple[np.ndarray, np.ndarray]:
     """Avance le mode l sur le chemin polaire et renvoie (temps, c_l(t)) a r=r0."""
     sim = adc.System(mesh=adc.PolarMesh(r_min=RMIN, r_max=RW, nr=n, ntheta=n))
     sim.add_block(
@@ -110,7 +122,9 @@ def run(l, n, cfl=0.4, nsteps=2200):
     i_r0 = max(0, min(n - 1, int(round((R0 - RMIN) / dr - 0.5))))
     ts, cs = [], []
     for step in range(nsteps + 1):
-        phi = np.asarray(sim.potential(), float).ravel().reshape(n, n)  # [theta, r]
+        phi = (
+            np.asarray(sim.potential(), float).ravel().reshape(n, n)
+        )  # [theta, r]
         if not np.isfinite(phi).all():
             break
         ck = (np.fft.rfft(phi[:, i_r0]) / n)[l]
@@ -122,7 +136,7 @@ def run(l, n, cfl=0.4, nsteps=2200):
     return np.array(ts), np.array(cs)
 
 
-def measure(l, n):
+def measure(l: int, n: int) -> dict | None:
     """Mesure gamma_raw, Omega_raw, ratio, et les deux normalisations (g_2pi, g_rot)."""
     ts, cs = run(l, n)
     mag = np.abs(cs)
@@ -137,7 +151,7 @@ def measure(l, n):
     pk = int(mag.argmax())
     lo = int(np.searchsorted(mag, 1.3 * a0))
     if pk > lo + 3:
-        hi = int(np.searchsorted(mag[:pk + 1], 0.6 * mag[pk]))
+        hi = int(np.searchsorted(mag[: pk + 1], 0.6 * mag[pk]))
     else:
         hi = len(ts) - 1
     hi = min(max(hi, lo + 4), len(ts) - 1)
@@ -153,29 +167,67 @@ def measure(l, n):
     # Normalisation globale 2pi/rhobar (la trouvaille) :
     g_2pi = g_raw * 2.0 * math.pi / RHO_MAX
     # Normalisation "par rotation locale" (echoue : Omega_raw ~ 0 a r0) :
-    g_rot = (g_raw / abs(om_raw)) * RE_ANA[l] * 2.0 * math.pi if om_raw else float("nan")
+    g_rot = (
+        (g_raw / abs(om_raw)) * RE_ANA[l] * 2.0 * math.pi
+        if om_raw
+        else float("nan")
+    )
 
     return dict(
-        g_raw=g_raw, om_raw=om_raw, ratio=ratio, g_2pi=g_2pi, g_rot=g_rot,
-        win=(float(ts[lo]), float(ts[hi])), tf=float(ts[-1]),
+        g_raw=g_raw,
+        om_raw=om_raw,
+        ratio=ratio,
+        g_2pi=g_2pi,
+        g_rot=g_rot,
+        win=(float(ts[lo]), float(ts[hi])),
+        tf=float(ts[-1]),
     )
 
 
-def main():
+def main() -> None:
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 128
-    print("DIAG rotation polaire n=%d (top-hat [%g,%g], R=%g, WENO5/SSPRK3)"
-          % (n, R0, R1, RW))
-    print("  normalisation = gamma_raw * 2pi/rhobar (rhobar=%g) ; cible = g_pap" % RHO_MAX)
-    print("%3s %9s %9s | %8s %8s | %9s %9s %9s"
-          % ("l", "g_raw", "Om_raw", "ratio", "rat_ana", "g_2pi", "g_rot", "g_pap"))
+    print(
+        "DIAG rotation polaire n=%d (top-hat [%g,%g], R=%g, WENO5/SSPRK3)"
+        % (n, R0, R1, RW)
+    )
+    print(
+        "  normalisation = gamma_raw * 2pi/rhobar (rhobar=%g) ; cible = g_pap"
+        % RHO_MAX
+    )
+    print(
+        "%3s %9s %9s | %8s %8s | %9s %9s %9s"
+        % (
+            "l",
+            "g_raw",
+            "Om_raw",
+            "ratio",
+            "rat_ana",
+            "g_2pi",
+            "g_rot",
+            "g_pap",
+        )
+    )
     for l in (3, 4, 5):
         m = measure(l, n)
         if m is None:
             print("%3d  echec (instable / non-fini)" % l)
             continue
-        print("%3d %9.5f %9.5f | %8.4f %8.4f | %9.4f %9.4f %9.4f  [win %.2f,%.2f tf=%.2f]"
-              % (l, m["g_raw"], m["om_raw"], m["ratio"], RATIO_ANA[l],
-                 m["g_2pi"], m["g_rot"], PAPER[l], m["win"][0], m["win"][1], m["tf"]))
+        print(
+            "%3d %9.5f %9.5f | %8.4f %8.4f | %9.4f %9.4f %9.4f  [win %.2f,%.2f tf=%.2f]"
+            % (
+                l,
+                m["g_raw"],
+                m["om_raw"],
+                m["ratio"],
+                RATIO_ANA[l],
+                m["g_2pi"],
+                m["g_rot"],
+                PAPER[l],
+                m["win"][0],
+                m["win"][1],
+                m["tf"],
+            )
+        )
 
 
 if __name__ == "__main__":

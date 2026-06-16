@@ -18,20 +18,24 @@ Lancement : python3 perf/plot_frontend.py [--frontend out/safe_euler_periodic/fr
             [--scaling out/safe_euler_periodic/scaling.jsonl]
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import sys
 
 
-def _bootstrap():
+def _bootstrap() -> None:
     try:
         import adc_cases  # noqa: F401
     except ImportError:
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(
+            0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
 
 
-def read_jsonl(path):
+def read_jsonl(path: str) -> list:
     recs = []
     with open(path) as fh:
         for line in fh:
@@ -41,44 +45,65 @@ def read_jsonl(path):
     return recs
 
 
-def assert_single_build(recs, what):
+def assert_single_build(recs: list, what: str) -> None:
     """GARDE-FOU : tous les enregistrements doivent partager (adc_cpp_sha, adc_cpp_branch)."""
     keys = {(r.get("adc_cpp_sha"), r.get("adc_cpp_branch")) for r in recs}
     if len(keys) > 1:
         raise SystemExit(
             "REFUS : %s melange plusieurs builds adc_cpp (master vs PR ?) : %s. "
-            "Un graphe ne doit jamais melanger deux SHA/branches." % (what, sorted(keys)))
+            "Un graphe ne doit jamais melanger deux SHA/branches."
+            % (what, sorted(keys))
+        )
 
 
-def _prov_footer(recs):
+def _prov_footer(recs: list) -> str:
     r = recs[0]
-    return ("adc_cpp %s@%s | adc_cases %s@%s | %s"
-            % (str(r.get("adc_cpp_branch")), str(r.get("adc_cpp_sha"))[:10],
-               str(r.get("adc_cases_branch")), str(r.get("adc_cases_sha"))[:10],
-               str(r.get("machine"))))
+    return "adc_cpp %s@%s | adc_cases %s@%s | %s" % (
+        str(r.get("adc_cpp_branch")),
+        str(r.get("adc_cpp_sha"))[:10],
+        str(r.get("adc_cases_branch")),
+        str(r.get("adc_cases_sha"))[:10],
+        str(r.get("machine")),
+    )
 
 
-STAGE_ORDER = ["import", "model_build", "dsl_compile", "addblock", "state_init", "first_step",
-               "warmup", "run_loop", "diag"]
+STAGE_ORDER = [
+    "import",
+    "model_build",
+    "dsl_compile",
+    "addblock",
+    "state_init",
+    "first_step",
+    "warmup",
+    "run_loop",
+    "diag",
+]
 
 
-def _front_label(r):
+def _front_label(r: dict) -> str:
     f = r["front"]
     if f == "python_dsl":
         return "DSL/%s" % r.get("dsl_cache", "?")
     return {"cpp": "C++", "python_bricks": "briques"}.get(f, f)
 
 
-def plot_frontend(path, figdir):
+def plot_frontend(path: str, figdir: str) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
     recs = read_jsonl(path)
-    recs = [r for r in recs if r.get("schema") == "adc_perf_v1" and "hot_ms_per_step" in r]
+    recs = [
+        r
+        for r in recs
+        if r.get("schema") == "adc_perf_v1" and "hot_ms_per_step" in r
+    ]
     if not recs:
-        raise SystemExit("aucun enregistrement frontend exploitable dans %s" % path)
+        raise SystemExit(
+            "aucun enregistrement frontend exploitable dans %s" % path
+        )
     assert_single_build(recs, "frontend_compare")
     os.makedirs(figdir, exist_ok=True)
     labels = [_front_label(r) for r in recs]
@@ -96,7 +121,10 @@ def plot_frontend(path, figdir):
         ax.bar(labels, vals, bottom=bottoms, label=stage, color=cmap(k % 10))
         bottoms += vals
     ax.set_ylabel("temps utilisateur cold-cache (s)")
-    ax.set_title("Decomposition du temps cold-cache par front (Euler sur, poisson=%s)" % poisson)
+    ax.set_title(
+        "Decomposition du temps cold-cache par front (Euler sur, poisson=%s)"
+        % poisson
+    )
     ax.legend(ncol=3, fontsize=8, loc="upper left")
     fig.text(0.01, 0.005, footer, fontsize=7, color="gray")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
@@ -106,14 +134,32 @@ def plot_frontend(path, figdir):
     # (b) hot ms/pas avec barres d'erreur p10-p90.
     fig, ax = plt.subplots(figsize=(8.0, 4.6))
     med = np.array([r["hot_ms_per_step"]["median"] for r in recs])
-    lo = np.array([r["hot_ms_per_step"]["median"] - r["hot_ms_per_step"]["p10"] for r in recs])
-    hi = np.array([r["hot_ms_per_step"]["p90"] - r["hot_ms_per_step"]["median"] for r in recs])
+    lo = np.array(
+        [
+            r["hot_ms_per_step"]["median"] - r["hot_ms_per_step"]["p10"]
+            for r in recs
+        ]
+    )
+    hi = np.array(
+        [
+            r["hot_ms_per_step"]["p90"] - r["hot_ms_per_step"]["median"]
+            for r in recs
+        ]
+    )
     ax.bar(labels, med, yerr=[lo, hi], capsize=5, color="steelblue")
     for i, r in enumerate(recs):
-        ax.text(i, med[i], "cv=%.1f%%" % (100 * r["hot_ms_per_step"]["cv"]), ha="center",
-                va="bottom", fontsize=8)
+        ax.text(
+            i,
+            med[i],
+            "cv=%.1f%%" % (100 * r["hot_ms_per_step"]["cv"]),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
     ax.set_ylabel("hot ms / pas (median, p10-p90)")
-    ax.set_title("Cout du pas chaud par front (Euler sur, poisson=%s)" % poisson)
+    ax.set_title(
+        "Cout du pas chaud par front (Euler sur, poisson=%s)" % poisson
+    )
     fig.text(0.01, 0.005, footer, fontsize=7, color="gray")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     fig.savefig(os.path.join(figdir, "frontend_hot_ms.png"), dpi=130)
@@ -124,7 +170,9 @@ def plot_frontend(path, figdir):
     x = np.arange(len(recs))
     w = 0.38
     step_loop = np.array([r["hot_ms_per_step"]["median"] for r in recs])
-    advance = np.array([r.get("advance_ms_per_step", float("nan")) for r in recs])
+    advance = np.array(
+        [r.get("advance_ms_per_step", float("nan")) for r in recs]
+    )
     ax.bar(x - w / 2, step_loop, w, label="step(dt) en boucle Python")
     ax.bar(x + w / 2, advance, w, label="advance(dt, nsteps) un appel")
     ax.set_xticks(x)
@@ -148,7 +196,9 @@ def plot_frontend(path, figdir):
         for i, v in enumerate(ratios):
             ax.text(i, v, "%.2fx" % v, ha="center", va="bottom", fontsize=8)
         ax.set_ylabel("ratio hot ms/pas (C++ = 1.0)")
-        ax.set_title("Surcout du front vs C++ direct (Euler sur, poisson=%s)" % poisson)
+        ax.set_title(
+            "Surcout du front vs C++ direct (Euler sur, poisson=%s)" % poisson
+        )
         fig.text(0.01, 0.005, footer, fontsize=7, color="gray")
         fig.tight_layout(rect=(0, 0.03, 1, 1))
         fig.savefig(os.path.join(figdir, "frontend_ratio.png"), dpi=130)
@@ -156,14 +206,19 @@ def plot_frontend(path, figdir):
     print("figures frontend ecrites dans %s" % figdir)
 
 
-def plot_scaling(path, figdir):
+def plot_scaling(path: str, figdir: str) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
-    recs = [r for r in read_jsonl(path) if r.get("front") == "cpp_scaling"
-            and r.get("status") != "not_implemented"]
+    recs = [
+        r
+        for r in read_jsonl(path)
+        if r.get("front") == "cpp_scaling"
+        and r.get("status") != "not_implemented"
+    ]
     if not recs:
         print("aucun enregistrement scaling exploitable dans %s (saute)" % path)
         return
@@ -179,10 +234,23 @@ def plot_scaling(path, figdir):
     # On SEPARE par backend (kokkos-omp / kokkos-cuda / mpi-* ...) : ne JAMAIS melanger CPU et GPU
     # dans une meme courbe de scaling. Une courbe = un (backend, workload, scaling) avec >=2 points
     # a unites DISTINCTES (sinon balayage degenere, p.ex. mono-GPU a unites=1 : montre en table).
-    combos = sorted({(r.get("backend", "?"), r["workload"], r.get("scaling", "strong")) for r in recs})
+    combos = sorted(
+        {
+            (r.get("backend", "?"), r["workload"], r.get("scaling", "strong"))
+            for r in recs
+        }
+    )
     for backend, workload, scaling in combos:
-        sub = sorted([r for r in recs if r.get("backend") == backend and r["workload"] == workload
-                      and r.get("scaling", "strong") == scaling], key=units)
+        sub = sorted(
+            [
+                r
+                for r in recs
+                if r.get("backend") == backend
+                and r["workload"] == workload
+                and r.get("scaling", "strong") == scaling
+            ],
+            key=units,
+        )
         if len(sub) < 2 or len({units(r) for r in sub}) < 2:
             continue
         if True:
@@ -218,18 +286,26 @@ def plot_scaling(path, figdir):
             fig.suptitle("Scaling %s -- %s (%s)" % (scaling, workload, backend))
             fig.text(0.01, 0.005, footer, fontsize=7, color="gray")
             fig.tight_layout(rect=(0, 0.03, 1, 0.96))
-            out = os.path.join(figdir, "scaling_%s_%s_%s.png" % (scaling, workload, backend))
+            out = os.path.join(
+                figdir, "scaling_%s_%s_%s.png" % (scaling, workload, backend)
+            )
             fig.savefig(out, dpi=130)
             plt.close(fig)
             print("figure scaling ecrite : %s" % out)
 
 
-def main():
+def main() -> None:
     _bootstrap()
     from adc_cases.common.io import case_output_dir
+
     default_dir = case_output_dir("safe_euler_periodic")
-    ap = argparse.ArgumentParser(description="Figures de la campagne de perf (frontend + scaling)")
-    ap.add_argument("--frontend", default=os.path.join(default_dir, "frontend_compare.jsonl"))
+    ap = argparse.ArgumentParser(
+        description="Figures de la campagne de perf (frontend + scaling)"
+    )
+    ap.add_argument(
+        "--frontend",
+        default=os.path.join(default_dir, "frontend_compare.jsonl"),
+    )
     ap.add_argument("--scaling", default=None)
     ap.add_argument("--figdir", default=os.path.join(default_dir, "figures"))
     args = ap.parse_args()

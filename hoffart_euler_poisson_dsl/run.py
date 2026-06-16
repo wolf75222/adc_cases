@@ -17,6 +17,8 @@ Two execution paths are intentionally separated:
     are never labelled as a quantitative reproduction of the paper.
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import fcntl
@@ -33,7 +35,9 @@ import adc
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from model import (  # noqa: E402
@@ -68,21 +72,31 @@ class Result:
     frame_times: list
 
 
-def mpi_rank():
-    for key in ("OMPI_COMM_WORLD_RANK", "PMI_RANK", "PMIX_RANK", "SLURM_PROCID"):
+def mpi_rank() -> int:
+    for key in (
+        "OMPI_COMM_WORLD_RANK",
+        "PMI_RANK",
+        "PMIX_RANK",
+        "SLURM_PROCID",
+    ):
         if key in os.environ:
             return int(os.environ[key])
     return 0
 
 
-def mpi_size():
-    for key in ("OMPI_COMM_WORLD_SIZE", "PMI_SIZE", "PMIX_SIZE", "SLURM_NTASKS"):
+def mpi_size() -> int:
+    for key in (
+        "OMPI_COMM_WORLD_SIZE",
+        "PMI_SIZE",
+        "PMIX_SIZE",
+        "SLURM_NTASKS",
+    ):
         if key in os.environ:
             return int(os.environ[key])
     return 1
 
 
-def compile_model(params, engine, out):
+def compile_model(params, engine: str, out: str):
     """Compile once across MPI ranks; subsequent ranks reuse the DSL cache."""
     source = "schur" if engine == "system-schur" else "local"
     target = "system" if engine == "system-schur" else "amr_system"
@@ -99,7 +113,12 @@ def compile_model(params, engine, out):
     return compiled
 
 
-def sample_circle(field, radius, length, ntheta=2048):
+def sample_circle(
+    field: np.ndarray,
+    radius: float,
+    length: float,
+    ntheta: int = 2048,
+) -> np.ndarray:
     n = field.shape[0]
     h = length / n
     theta = np.linspace(0.0, 2.0 * math.pi, ntheta, endpoint=False)
@@ -119,13 +138,18 @@ def sample_circle(field, radius, length, ntheta=2048):
     return values
 
 
-def mode_amplitude(phi, mode, params):
+def mode_amplitude(phi: np.ndarray, mode: int, params) -> float:
     values = sample_circle(phi, params.ring_inner, params.length)
     coeffs = np.fft.rfft(values) / values.size
     return 2.0 * abs(coeffs[mode])
 
 
-def fit_growth(times, amplitudes, mode, rhobar=1.0):
+def fit_growth(
+    times: np.ndarray,
+    amplitudes: np.ndarray,
+    mode: int,
+    rhobar: float = 1.0,
+) -> float:
     """Pente BRUTE de log|c_l| dans la fenetre papier MAPPEE en temps de SIMULATION.
 
     T3 : la fenetre papier (model.PAPER_FIT_WINDOWS, en temps T_d) est convertie en temps
@@ -141,7 +165,13 @@ def fit_growth(times, amplitudes, mode, rhobar=1.0):
     return float(np.polyfit(times[mask], np.log(amplitudes[mask]), 1)[0])
 
 
-def build_uniform(compiled, rho, params, geometry="square", gauss_policy="restart"):
+def build_uniform(
+    compiled,
+    rho: np.ndarray,
+    params,
+    geometry: str = "square",
+    gauss_policy: str = "restart",
+) -> adc.System:
     n = rho.shape[0]
     sim = adc.System(n=n, L=params.length, periodic=False)
     sim.set_poisson(
@@ -161,9 +191,17 @@ def build_uniform(compiled, rho, params, geometry="square", gauss_policy="restar
     # etait un artefact de metrologie (fenetre + horloge), pas la geometrie ni le schema :
     # mesure paper-faithful, le full reproduit a <10% et converge (RESULTS sections 9-11, T3).
     if geometry in ("staircase", "cutcell"):
-        sim.set_disc_domain(0.5 * params.length, 0.5 * params.length, params.radius, mode=geometry)
+        sim.set_disc_domain(
+            0.5 * params.length,
+            0.5 * params.length,
+            params.radius,
+            mode=geometry,
+        )
     elif geometry != "square":
-        raise ValueError("geometry must be 'square', 'staircase' or 'cutcell', got %r" % geometry)
+        raise ValueError(
+            "geometry must be 'square', 'staircase' or 'cutcell', got %r"
+            % geometry
+        )
     # CondensedSchur requires B_z before set_source_stage is installed.
     sim.set_magnetic_field(params.omega * np.ones_like(rho))
     sim.add_equation(
@@ -199,7 +237,7 @@ def build_uniform(compiled, rho, params, geometry="square", gauss_policy="restar
     return sim
 
 
-def amr_initial_drift(params, rho):
+def amr_initial_drift(params, rho: np.ndarray):
     """Vitesse de derive initiale du papier ``v0 = -(grad phi0 x Omega)/|Omega|^2`` pour semer l'etat
     conservatif de l'AMR (Phase B). Resout le Poisson initial ``-Delta phi = alpha rho`` (meme paroi
     circulaire, resolution = niveau grossier AMR) sur un System uniforme JETABLE, via un compile
@@ -211,17 +249,26 @@ def amr_initial_drift(params, rho):
     dans les metadonnees. Renvoie (u0, v0) ; leve si le solve echoue (l'appelant retombe sur set_density).
     """
     n = rho.shape[0]
-    probe_model = magnetic_euler_poisson_model(params, source="schur")  # source nulle : seul le Poisson importe
-    compiled_sys = probe_model.compile(backend="production", target="system",
-                                       name="hoffart_amr_drift_probe")
+    probe_model = magnetic_euler_poisson_model(
+        params, source="schur"
+    )  # source nulle : seul le Poisson importe
+    compiled_sys = probe_model.compile(
+        backend="production", target="system", name="hoffart_amr_drift_probe"
+    )
     probe = adc.System(n=n, L=params.length, periodic=False)
     probe.set_poisson(
-        rhs="composite", solver="geometric_mg", bc="dirichlet",
-        wall="circle", wall_radius=params.radius,
+        rhs="composite",
+        solver="geometric_mg",
+        bc="dirichlet",
+        wall="circle",
+        wall_radius=params.radius,
     )
     probe.add_equation(
-        "electrons", model=compiled_sys,
-        spatial=adc.FiniteVolume(limiter="weno5", riemann="rusanov", variables="conservative"),
+        "electrons",
+        model=compiled_sys,
+        spatial=adc.FiniteVolume(
+            limiter="weno5", riemann="rusanov", variables="conservative"
+        ),
         time=adc.Explicit(method="ssprk2"),
     )
     zeros = np.zeros_like(rho)
@@ -230,7 +277,7 @@ def amr_initial_drift(params, rho):
     return drift_velocity_from_potential(np.asarray(probe.potential()), params)
 
 
-def build_amr(compiled, rho, params, args):
+def build_amr(compiled, rho: np.ndarray, params, args) -> adc.AmrSystem:
     sim = adc.AmrSystem(
         n=rho.shape[0],
         L=params.length,
@@ -267,29 +314,41 @@ def build_amr(compiled, rho, params, args):
         # NOMBRE de composantes contre le modele compile (l'ordre suit conservative_from de model.py).
         state = np.stack([rho, rho * u0, rho * v0])
         if state.shape[0] != compiled.n_vars:
-            raise ValueError("etat de derive a %d composantes mais le bloc compile en a %d"
-                             % (state.shape[0], compiled.n_vars))
+            raise ValueError(
+                "etat de derive a %d composantes mais le bloc compile en a %d"
+                % (state.shape[0], compiled.n_vars)
+            )
         sim.set_conservative_state("electrons", state)
-    except Exception as exc:  # noqa: BLE001 -- fallback robuste, jamais de regression du build
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 -- fallback robuste, jamais de regression du build
         if mpi_rank() == 0:
-            print("[amr-imex] seed de derive indisponible (%s) -> fallback set_density (m=0)" % exc)
+            print(
+                "[amr-imex] seed de derive indisponible (%s) -> fallback set_density (m=0)"
+                % exc
+            )
         sim.set_density("electrons", rho)
     return sim
 
 
-def density(sim):
+def density(sim) -> np.ndarray:
     return np.asarray(sim.density("electrons"))
 
 
-def potential(sim):
+def potential(sim) -> np.ndarray:
     return np.asarray(sim.potential())
 
 
-def run_mode(mode, compiled, params, args):
+def run_mode(mode: int, compiled, params, args) -> Result:
     rho0 = paper_initial_density(args.n, mode, params)
     if args.engine == "system-schur":
-        sim = build_uniform(compiled, rho0, params, geometry=args.geometry,
-                            gauss_policy=args.gauss_policy)
+        sim = build_uniform(
+            compiled,
+            rho0,
+            params,
+            geometry=args.geometry,
+            gauss_policy=args.gauss_policy,
+        )
     else:
         sim = build_amr(compiled, rho0, params, args)
 
@@ -309,12 +368,18 @@ def run_mode(mode, compiled, params, args):
             amplitudes.append(amp)
             current_density = None
 
-            while next_snapshot < len(snapshot_targets) and t >= snapshot_targets[next_snapshot] - 0.5 * args.dt:
+            while (
+                next_snapshot < len(snapshot_targets)
+                and t >= snapshot_targets[next_snapshot] - 0.5 * args.dt
+            ):
                 if current_density is None:
                     current_density = density(sim)
                 snapshots.append((t, current_density.copy()))
                 next_snapshot += 1
-            while next_frame < len(frame_targets) and t >= frame_targets[next_frame] - 0.5 * args.dt:
+            while (
+                next_frame < len(frame_targets)
+                and t >= frame_targets[next_frame] - 0.5 * args.dt
+            ):
                 if current_density is None:
                     current_density = density(sim)
                 frames.append(current_density.copy())
@@ -322,7 +387,9 @@ def run_mode(mode, compiled, params, args):
                 next_frame += 1
 
             if not np.isfinite(phi).all() or not np.isfinite(amp):
-                raise FloatingPointError("non-finite potential/amplitude at t=%g" % t)
+                raise FloatingPointError(
+                    "non-finite potential/amplitude at t=%g" % t
+                )
 
         if t >= args.t_end - 0.5 * args.dt:
             break
@@ -344,7 +411,7 @@ def run_mode(mode, compiled, params, args):
     )
 
 
-def schlieren(rho, params):
+def schlieren(rho: np.ndarray, params) -> np.ndarray:
     h = params.length / rho.shape[0]
     gy, gx = np.gradient(rho, h, h, edge_order=2)
     grad = np.hypot(gx, gy)
@@ -354,7 +421,13 @@ def schlieren(rho, params):
     return np.ma.array(image, mask=np.hypot(X, Y) > params.radius)
 
 
-def write_mode_outputs(result, out, params, engine, make_gif):
+def write_mode_outputs(
+    result: Result,
+    out: str,
+    params,
+    engine: str,
+    make_gif: bool,
+) -> None:
     mode_dir = os.path.join(out, "mode_%d" % result.mode)
     os.makedirs(mode_dir, exist_ok=True)
 
@@ -386,7 +459,9 @@ def write_mode_outputs(result, out, params, engine, make_gif):
         anchor_index = np.flatnonzero(fit)[len(np.flatnonzero(fit)) // 2]
         anchor_time = result.times[anchor_index]
         anchor_value = normalized[anchor_index]
-        theory = anchor_value * np.exp(paper_rate_sim * (result.times - anchor_time))
+        theory = anchor_value * np.exp(
+            paper_rate_sim * (result.times - anchor_time)
+        )
         ax.semilogy(
             result.times,
             theory,
@@ -395,14 +470,28 @@ def write_mode_outputs(result, out, params, engine, make_gif):
             lw=1.2,
             label=r"$\exp(\gamma_%d^{paper} t_{sim})$" % result.mode,
         )
-    ax.axvspan(lo, hi, color="tab:blue", alpha=0.12, label="paper fit window (mapped to sim time)")
-    ax.set(xlabel="sim time", ylabel=r"$|c_l(t)|/|c_l(0)|$",
-           title="l=%d  gamma_raw=%s  gamma_paper=%s (x2pi/rhobar)  target %.3f" % (
-               result.mode,
-               "n/a" if not np.isfinite(result.growth_rate) else "%.4f" % result.growth_rate,
-               "n/a" if gamma_paper_units is None else "%.3f" % gamma_paper_units,
-               PAPER_GROWTH_RATES[result.mode],
-           ))
+    ax.axvspan(
+        lo,
+        hi,
+        color="tab:blue",
+        alpha=0.12,
+        label="paper fit window (mapped to sim time)",
+    )
+    ax.set(
+        xlabel="sim time",
+        ylabel=r"$|c_l(t)|/|c_l(0)|$",
+        title="l=%d  gamma_raw=%s  gamma_paper=%s (x2pi/rhobar)  target %.3f"
+        % (
+            result.mode,
+            (
+                "n/a"
+                if not np.isfinite(result.growth_rate)
+                else "%.4f" % result.growth_rate
+            ),
+            "n/a" if gamma_paper_units is None else "%.3f" % gamma_paper_units,
+            PAPER_GROWTH_RATES[result.mode],
+        ),
+    )
     ax.grid(alpha=0.25, which="both")
     ax.legend()
     fig.tight_layout()
@@ -410,19 +499,26 @@ def write_mode_outputs(result, out, params, engine, make_gif):
     plt.close(fig)
 
     if result.snapshots:
-        fig, axes = plt.subplots(3, 3, figsize=(10, 10), constrained_layout=True)
+        fig, axes = plt.subplots(
+            3, 3, figsize=(10, 10), constrained_layout=True
+        )
         for ax, (t, rho) in zip(axes.flat, result.snapshots):
             ax.imshow(
                 schlieren(rho, params),
                 origin="lower",
-                extent=(-params.radius, params.radius, -params.radius, params.radius),
+                extent=(
+                    -params.radius,
+                    params.radius,
+                    -params.radius,
+                    params.radius,
+                ),
                 cmap="inferno",
             )
             ax.set_title("t = %.3f" % t)
             ax.set_aspect("equal")
             ax.set_xticks([])
             ax.set_yticks([])
-        for ax in axes.flat[len(result.snapshots):]:
+        for ax in axes.flat[len(result.snapshots) :]:
             ax.axis("off")
         fig.suptitle("%s: density schlieren, mode l=%d" % (engine, result.mode))
         fig.savefig(os.path.join(mode_dir, "snapshots.png"), dpi=180)
@@ -430,22 +526,34 @@ def write_mode_outputs(result, out, params, engine, make_gif):
 
     if make_gif and result.frames:
         from matplotlib import animation
+
         fig, ax = plt.subplots(figsize=(5.2, 5.2))
         image = ax.imshow(
             schlieren(result.frames[0], params),
             origin="lower",
-            extent=(-params.radius, params.radius, -params.radius, params.radius),
+            extent=(
+                -params.radius,
+                params.radius,
+                -params.radius,
+                params.radius,
+            ),
             cmap="inferno",
         )
-        title = ax.set_title("l=%d, t=%.3f" % (result.mode, result.frame_times[0]))
+        title = ax.set_title(
+            "l=%d, t=%.3f" % (result.mode, result.frame_times[0])
+        )
         ax.set_aspect("equal")
 
         def update(k):
             image.set_data(schlieren(result.frames[k], params))
-            title.set_text("l=%d, t=%.3f" % (result.mode, result.frame_times[k]))
+            title.set_text(
+                "l=%d, t=%.3f" % (result.mode, result.frame_times[k])
+            )
             return image, title
 
-        movie = animation.FuncAnimation(fig, update, frames=len(result.frames), interval=80)
+        movie = animation.FuncAnimation(
+            fig, update, frames=len(result.frames), interval=80
+        )
         movie.save(
             os.path.join(mode_dir, "diocotron_l%d.gif" % result.mode),
             writer=animation.PillowWriter(fps=12),
@@ -453,7 +561,7 @@ def write_mode_outputs(result, out, params, engine, make_gif):
         plt.close(fig)
 
 
-def write_summary(results, out, params, args):
+def write_summary(results: list, out: str, params, args) -> None:
     # T3 : on reporte gamma_raw_sim (pente brute, fenetre MAPPEE) ET gamma_paper_units
     # = gamma_raw_sim * 2pi/rhobar ; l'erreur compare gamma_paper_units a la cible.
     rhobar = params.rho_max
@@ -461,14 +569,32 @@ def write_summary(results, out, params, args):
     for result in results:
         target = PAPER_GROWTH_RATES[result.mode]
         g_paper = gamma_to_paper_units(result.growth_rate, rhobar)
-        error = (100.0 * (g_paper - target) / target) if g_paper is not None else float("nan")
-        rows.append((result.mode, result.growth_rate,
-                     ("" if g_paper is None else g_paper), target, error))
+        error = (
+            (100.0 * (g_paper - target) / target)
+            if g_paper is not None
+            else float("nan")
+        )
+        rows.append(
+            (
+                result.mode,
+                result.growth_rate,
+                ("" if g_paper is None else g_paper),
+                target,
+                error,
+            )
+        )
 
     with open(os.path.join(out, "growth_rates.csv"), "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["mode", "gamma_raw_sim", "gamma_paper_units", "gamma_paper",
-                         "relative_error_percent"])
+        writer.writerow(
+            [
+                "mode",
+                "gamma_raw_sim",
+                "gamma_paper_units",
+                "gamma_paper",
+                "relative_error_percent",
+            ]
+        )
         writer.writerows(rows)
 
     # Enregistrement de mesure PRE-ENREGISTRE (graine de la table de validation Phase 2).
@@ -482,8 +608,12 @@ def write_summary(results, out, params, args):
         schur_theta = 0.5
         backend = "kokkos-serial" if mpi_size() == 1 else "mpi-%d" % mpi_size()
     else:
-        schur_theta = None  # amr-imex : source IMEX cell-local, pas de CondensedSchur
-        backend = "kokkos-mpi-%d" % mpi_size() if mpi_size() > 1 else "kokkos-serial"
+        schur_theta = (
+            None  # amr-imex : source IMEX cell-local, pas de CondensedSchur
+        )
+        backend = (
+            "kokkos-mpi-%d" % mpi_size() if mpi_size() > 1 else "kokkos-serial"
+        )
     cpp_sha = adc_cpp_sha(adc)
     cases_sha = adc_cases_sha()
     records = [
@@ -533,8 +663,11 @@ def write_summary(results, out, params, args):
         "parameters": params.to_dict(),
         "numerics": {
             "finite_volume": "WENO5-Z + Rusanov",
-            "time": "Strang(SSPRK3 + CondensedSchur(theta=0.5))" if args.engine == "system-schur"
-                    else "AMR transport + cell-local backward-Euler source",
+            "time": (
+                "Strang(SSPRK3 + CondensedSchur(theta=0.5))"
+                if args.engine == "system-schur"
+                else "AMR transport + cell-local backward-Euler source"
+            ),
             "dt": args.dt,
             "n": args.n,
             "mpi_size": mpi_size(),
@@ -579,14 +712,19 @@ def write_summary(results, out, params, args):
         return  # growth_rates.csv + metadata.json deja ecrits ci-dessus ; la figure est optionnelle
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     modes = [r[0] for r in rows]
     numeric = [r[1] for r in rows]
     target = [r[2] for r in rows]
     fig, ax = plt.subplots(figsize=(6.0, 4.0))
     ax.plot(modes, target, "s-", color="tab:red", label="paper")
     ax.plot(modes, numeric, "o-", color="black", label=args.engine)
-    ax.set(xlabel="azimuthal mode l", ylabel="growth rate gamma",
-           xticks=modes, title="Diocotron growth rates")
+    ax.set(
+        xlabel="azimuthal mode l",
+        ylabel="growth rate gamma",
+        xticks=modes,
+        title="Diocotron growth rates",
+    )
     ax.grid(alpha=0.25)
     ax.legend()
     fig.tight_layout()
@@ -594,29 +732,31 @@ def write_summary(results, out, params, args):
     plt.close(fig)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", choices=("system-schur", "amr-imex"), default="system-schur")
+    parser.add_argument(
+        "--engine", choices=("system-schur", "amr-imex"), default="system-schur"
+    )
     parser.add_argument(
         "--geometry",
         choices=("square", "staircase", "cutcell"),
         default="square",
         help="FV transport sub-domain (system-schur only). 'square' (default) keeps the "
-             "historical full-square Cartesian transport, bit-identical. 'staircase'/'cutcell' "
-             "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
-             "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
-             "effect on the growth rate (the residual gap is ~10-20% cart-vs-polar, not structural).",
+        "historical full-square Cartesian transport, bit-identical. 'staircase'/'cutcell' "
+        "call set_disc_domain(L/2, L/2, R, mode=...) which materialises the disc mask AND "
+        "is routed into System::step transport (adc_cpp #224). Cut-cell has no measurable "
+        "effect on the growth rate (the residual gap is ~10-20% cart-vs-polar, not structural).",
     )
     parser.add_argument(
         "--gauss-policy",
         choices=("restart", "evolve"),
         default="restart",
         help="loi de Gauss du chemin system-schur (System.set_gauss_policy, adc_cpp). "
-             "'restart' (defaut) : solve_fields re-resout -Delta phi = rho a chaque appel "
-             "(bit-identique a l'historique ; 3 solves Poisson par macro-pas Strang). "
-             "'evolve' : seul le premier pas resout le Poisson (phi^0) ; ensuite phi est "
-             "porte in-place par l'etage source Schur (Gauss imposee a t=0 seulement), ce "
-             "qui supprime les solves elliptiques repetes. Sans effet sur --engine amr-imex.",
+        "'restart' (defaut) : solve_fields re-resout -Delta phi = rho a chaque appel "
+        "(bit-identique a l'historique ; 3 solves Poisson par macro-pas Strang). "
+        "'evolve' : seul le premier pas resout le Poisson (phi^0) ; ensuite phi est "
+        "porte in-place par l'etage source Schur (Gauss imposee a t=0 seulement), ce "
+        "qui supprime les solves elliptiques repetes. Sans effet sur --engine amr-imex.",
     )
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
     parser.add_argument("--n", type=int, default=192)
@@ -625,8 +765,12 @@ def parse_args():
     parser.add_argument("--sample-every", type=int, default=10)
     parser.add_argument("--gif-frames", type=int, default=80)
     parser.add_argument("--no-gif", action="store_true")
-    parser.add_argument("--temperature", type=float, default=0.0,
-                        help="paper does not state a numerical theta; default is the cold limit")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="paper does not state a numerical theta; default is the cold limit",
+    )
     parser.add_argument("--beta", type=float, default=1.0e6)
     parser.add_argument("--regrid-every", type=int, default=20)
     parser.add_argument("--refine-threshold", type=float, default=0.05)
@@ -640,16 +784,23 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     args = parse_args()
     if any(mode not in PAPER_GROWTH_RATES for mode in args.modes):
         raise SystemExit("--modes must be selected from 3, 4, 5")
     if args.engine == "system-schur" and mpi_size() > 1:
-        raise SystemExit("system-schur is a single-rank reference; use amr-imex under MPI")
-    if args.geometry in ("staircase", "cutcell") and args.engine != "system-schur":
+        raise SystemExit(
+            "system-schur is a single-rank reference; use amr-imex under MPI"
+        )
+    if (
+        args.geometry in ("staircase", "cutcell")
+        and args.engine != "system-schur"
+    ):
         # set_disc_domain est expose sur System (system-schur), pas sur AmrSystem :
         # le masque disque n'a pas de point d'entree dans le chemin amr-imex.
-        raise SystemExit("--geometry staircase/cutcell is only available with --engine system-schur")
+        raise SystemExit(
+            "--geometry staircase/cutcell is only available with --engine system-schur"
+        )
     if args.engine == "amr-imex" and not args.acknowledge_amr_approximation:
         raise SystemExit(
             "amr-imex uses the same PDE but not the paper Schur stage or initial drift. "
@@ -691,19 +842,30 @@ def main():
     results = []
     for mode in args.modes:
         if mpi_rank() == 0:
-            print("[%s] mode l=%d, n=%d, t_end=%g, dt=%g" % (
-                args.engine, mode, args.n, args.t_end, args.dt))
+            print(
+                "[%s] mode l=%d, n=%d, t_end=%g, dt=%g"
+                % (args.engine, mode, args.n, args.t_end, args.dt)
+            )
         result = run_mode(mode, compiled, params, args)
         results.append(result)
         if mpi_rank() == 0:
             target = PAPER_GROWTH_RATES[mode]
             g_paper = gamma_to_paper_units(result.growth_rate, params.rho_max)
-            print("  gamma_raw_sim = %s | gamma_paper (x2pi/rhobar) = %s | paper %.3f" % (
-                "n/a" if not np.isfinite(result.growth_rate) else "%.6f" % result.growth_rate,
-                "n/a" if g_paper is None else "%.4f" % g_paper,
-                target,
-            ))
-            write_mode_outputs(result, out, params, args.engine, not args.no_gif)
+            print(
+                "  gamma_raw_sim = %s | gamma_paper (x2pi/rhobar) = %s | paper %.3f"
+                % (
+                    (
+                        "n/a"
+                        if not np.isfinite(result.growth_rate)
+                        else "%.6f" % result.growth_rate
+                    ),
+                    "n/a" if g_paper is None else "%.4f" % g_paper,
+                    target,
+                )
+            )
+            write_mode_outputs(
+                result, out, params, args.engine, not args.no_gif
+            )
 
     if mpi_rank() == 0:
         write_summary(results, out, params, args)
