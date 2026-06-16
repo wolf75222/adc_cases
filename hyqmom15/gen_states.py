@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Genere golden/golden_states.csv : les etats echantillons FIGES de la validation HyQMOM.
+"""Genere golden/golden_states.csv, les etats echantillons de validation.
 
-Deterministe (seed fixe). Les goldens MATLAB (golden_fx/fy/vp.csv) sont produits a partir de CE
+Etats FIGES de la validation HyQMOM, generes de facon deterministe (seed
+fixe). Les goldens MATLAB (golden_fx/fy/vp.csv) sont produits a partir de CE
 fichier par golden_gen.m (Octave) sur le code de reference RIEMOM2D : regenerer les etats impose
 de regenerer les goldens (provenance dans le README). Etats choisis pour couvrir : maxwellienne
 au repos / en derive / correlee / haut Mach (regime crossing Ma=20), melanges discrets fortement
 asymetriques (S30 != 0), etat quasi-degenere (variance ~1e-6, test de cancellation sqrt) et etat
 fortement anisotrope (C20/C02 = 100)."""
+
+from __future__ import annotations
 
 import os
 
@@ -15,7 +18,8 @@ import numpy as np
 from model import GAUSSIAN_PARAMS, gaussian_state, mixture_state
 
 
-def build_states():
+def build_states() -> np.ndarray:
+    """Construit les etats echantillons figes de la validation HyQMOM."""
     states = []
     # 1-4 : gaussiennes exactes (oracle Isserlis disponible pour l'ordre 5) -- parametres dans
     # model.GAUSSIAN_PARAMS (source unique, cross-verifiee par run.py contre le CSV fige).
@@ -39,7 +43,7 @@ def build_states():
     return np.array(states)
 
 
-def main():
+def main() -> None:
     here = os.path.dirname(os.path.abspath(__file__))
     out = os.path.join(here, "golden")
     os.makedirs(out, exist_ok=True)

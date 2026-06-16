@@ -12,10 +12,14 @@ Usage (depuis un cas) :
     sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=0.0), ...)
 """
 
+from __future__ import annotations
+
 import adc
 
 
-def diocotron(B0=1.0, alpha=1.0, n_i0=0.0):
+def diocotron(
+    B0: float = 1.0, alpha: float = 1.0, n_i0: float = 0.0
+) -> adc.Model:
     """Derive E x B d'une densite scalaire, fond neutralisant n_i0 (Poisson alpha (n - n0))."""
     return adc.Model(
         state=adc.Scalar(),
@@ -25,7 +29,7 @@ def diocotron(B0=1.0, alpha=1.0, n_i0=0.0):
     )
 
 
-def electron_euler(charge=-1.0, gamma=1.4):
+def electron_euler(charge: float = -1.0, gamma: float = 1.4) -> adc.Model:
     """Euler compressible + force electrostatique + densite de charge (electrons)."""
     return adc.Model(
         state=adc.FluidState(kind="compressible", gamma=gamma),
@@ -35,7 +39,7 @@ def electron_euler(charge=-1.0, gamma=1.4):
     )
 
 
-def ion_isothermal(charge=1.0, cs2=0.5):
+def ion_isothermal(charge: float = 1.0, cs2: float = 0.5) -> adc.Model:
     """Euler isotherme + force electrostatique + densite de charge (ions)."""
     return adc.Model(
         state=adc.FluidState(kind="isothermal", cs2=cs2),
@@ -45,8 +49,13 @@ def ion_isothermal(charge=1.0, cs2=0.5):
     )
 
 
-def euler_poisson(sign=1.0, gamma=1.4, four_pi_G=1.0, rho0=1.0):
-    """Euler compressible + champ self-consistant. sign = +1 auto-gravite, -1 plasma."""
+def euler_poisson(
+    sign: float = 1.0,
+    gamma: float = 1.4,
+    four_pi_G: float = 1.0,
+    rho0: float = 1.0,
+) -> adc.Model:
+    """Euler compressible + champ self-consistant (sign +1 auto-gravite, -1 plasma)."""
     return adc.Model(
         state=adc.FluidState(kind="compressible", gamma=gamma),
         transport=adc.CompressibleFlux(),
@@ -55,9 +64,12 @@ def euler_poisson(sign=1.0, gamma=1.4, four_pi_G=1.0, rho0=1.0):
     )
 
 
-def euler(gamma=1.4):
-    """Euler compressible pur : un gaz isole, sans source ni couplage (f = 0). Sert aux cas
-    multi-fluides non couples (meme flux pour chaque espece, seules les CI different)."""
+def euler(gamma: float = 1.4) -> adc.Model:
+    """Euler compressible pur : un gaz isole, sans source ni couplage (f = 0).
+
+    Sert aux cas multi-fluides non couples (meme flux pour chaque espece, seules
+    les conditions initiales different).
+    """
     return adc.Model(
         state=adc.FluidState(kind="compressible", gamma=gamma),
         transport=adc.CompressibleFlux(),
@@ -66,9 +78,11 @@ def euler(gamma=1.4):
     )
 
 
-def neutral_isothermal(cs2=1.0):
-    """Gaz neutre isotherme : pas de force (charge nulle, n'entre pas dans Poisson). Sert d'espece
-    de fond reactive (ionisation, collisions) dans un plasma."""
+def neutral_isothermal(cs2: float = 1.0) -> adc.Model:
+    """Gaz neutre isotherme : pas de force (charge nulle, hors de Poisson).
+
+    Sert d'espece de fond reactive (ionisation, collisions) dans un plasma.
+    """
     return adc.Model(
         state=adc.FluidState(kind="isothermal", cs2=cs2),
         transport=adc.IsothermalFlux(),

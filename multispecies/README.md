@@ -324,7 +324,7 @@ compiled and imported with the same interpreter that built it (ABI suffix `cpyth
 compiler required for `run.py` (`needs = []`): this case compiles nothing on the fly, everything
 goes through native bricks already in the `adc` module. Expected output of `run.py`:
 
-```
+```text
 [init] masse electrons mass_e0 = 2.304000000000e+03
 [init] separation de charge max|f| = 1.995718e-02
 [t=0.0200] separation de charge max|f| = 1.974902e-02

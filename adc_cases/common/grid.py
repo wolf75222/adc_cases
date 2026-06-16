@@ -7,16 +7,18 @@ Y[j, i] = y_j, on appelle `numpy.meshgrid(..., indexing="xy")`. Plusieurs cas re
 ce meshgrid a la main ; il est centralise ici.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 
-def cell_centers(n, L=1.0):
-    """Coordonnees des centres de cellules le long d'un axe : (i + 0.5)/n * L, i = 0..n-1."""
+def cell_centers(n: int, L: float = 1.0) -> np.ndarray:
+    """Centres de cellules le long d'un axe : (i + 0.5)/n * L, i = 0..n-1."""
     return (np.arange(n) + 0.5) / n * L
 
 
-def meshgrid_xy(n, L=1.0):
-    """Grilles (X, Y) a centres de cellules, convention row-major de la facade `adc`.
+def meshgrid_xy(n: int, L: float = 1.0) -> list[np.ndarray]:
+    """Grilles (X, Y) a centres de cellules, convention de la facade `adc`.
 
     Renvoie X, Y de forme (n, n) avec X[j, i] = x_i et Y[j, i] = y_j (indexing="xy"), de sorte
     que `field[j, i]` corresponde bien au point (X[j, i], Y[j, i]).

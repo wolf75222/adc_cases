@@ -350,7 +350,7 @@ The first element of `PYTHONPATH` brings the `adc` module (C++ binding, ABI suff
 is compiled on the fly, the `_adc.so` binding is already built.
 
 Expected output of the case (real captured values):
-```
+```text
 # n_base=64 regrid_every=10 band_mode=4  n_i0=1.0886
   0     0.1642   2        1.08862269e+00 4.079e-16
   ...

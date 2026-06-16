@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""GIF hero de l'instabilite diocotron suivie par AMR : reproduit le type de la figure hero du
-README adc_cpp (`docs/anim_romeo_diocotron_amr3.gif`), avec les patchs fins du solveur.
+"""GIF hero de l'instabilite diocotron suivie par AMR.
+
+Reproduit le type de la figure hero du README adc_cpp
+(`docs/anim_romeo_diocotron_amr3.gif`), avec les patchs fins du solveur.
 
 ce que montre la figure : un seul panneau, bande de charge horizontale perturbee au mode l=2, qui
 s'enroule en oeil-de-chat (Kelvin-Helmholtz du diocotron), suivie par les cadres de raffinement AMR
@@ -43,7 +45,7 @@ N, L = 144, 1.0
 MODE, DISP, WIDTH = 2, 0.04, 0.06
 B0, ALPHA = 1.0, 1.0
 NFRAMES, STEPS_PER_FRAME, CFL = 44, 6, 0.4
-REGRID_EVERY = 6          # regrid une fois par trame -> les patchs suivent la bande
+REGRID_EVERY = 6  # regrid une fois par trame -> les patchs suivent la bande
 # Seuil de tag au-dessus du plancher (band_density: floor=1.0, pic ~2.0) : sans ca, toute la grille
 # (densite >= 1 partout) serait taggee et le niveau fin tuilerait tout le domaine (non adaptatif).
 THRESHOLD = 1.4
@@ -59,52 +61,90 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIGDIR = os.path.join(HERE, "figures")
 
 
-def build_amr(ne, n_i0):
+def build_amr(ne: np.ndarray, n_i0: float) -> adc.AmrSystem:
     """AmrSystem mono-bloc diocotron : derive E x B + Poisson de charge, 1 niveau fin multi-patch,
     regrid periodique (les patchs se replacent sur la bande a chaque regrid)."""
     sim = adc.AmrSystem(n=N, L=L, regrid_every=REGRID_EVERY, periodic=True)
-    sim.add_block("ne", model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0),
-                  spatial=adc.Spatial(minmod=True), time=adc.Explicit())
+    sim.add_block(
+        "ne",
+        model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0),
+        spatial=adc.Spatial(minmod=True),
+        time=adc.Explicit(),
+    )
     sim.set_refinement(threshold=THRESHOLD)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     sim.set_density("ne", ne)
     return sim
 
 
-def patch_rects_by_level(sim):
-    """Renvoie une liste de (level, x0, y0, w, h) : les patchs fins, niveau + rectangle physique.
-    Lit patch_boxes() (level + coins index) et convertit en [0, L]^2 (dx = L / (n << level))."""
+def patch_rects_by_level(
+    sim: adc.AmrSystem,
+) -> list[tuple[int, float, float, float, float]]:
+    """Convertit les patchs fins du solveur en rectangles physiques par niveau.
+
+    Lit patch_boxes() (niveau + coins en index) et convertit en [0, L]^2
+    avec dx = L / (n << level).
+
+    Returns:
+        Liste de (level, x0, y0, w, h) : un tuple par patch fin, ou (x0, y0)
+        est le coin bas-gauche et (w, h) la taille physique du rectangle.
+    """
     n = sim.nx()
     out = []
     for level, ilo, jlo, ihi, jhi in sim.patch_boxes():
         dx = L / (n << level)
-        out.append((level, ilo * dx, jlo * dx, (ihi - ilo + 1) * dx, (jhi - jlo + 1) * dx))
+        out.append(
+            (
+                level,
+                ilo * dx,
+                jlo * dx,
+                (ihi - ilo + 1) * dx,
+                (jhi - jlo + 1) * dx,
+            )
+        )
     return out
 
 
-def draw_panel(ax, ne, vmax, rects, Rectangle):
+def draw_panel(ax, ne: np.ndarray, vmax: float, rects, Rectangle):
     """Trace un panneau hero : champ inferno sur fond sombre + patchs AMR (colores par niveau)."""
-    im = ax.imshow(ne, origin="lower", cmap="inferno", vmin=FLOOR, vmax=vmax, extent=[0, L, 0, L])
+    im = ax.imshow(
+        ne,
+        origin="lower",
+        cmap="inferno",
+        vmin=FLOOR,
+        vmax=vmax,
+        extent=[0, L, 0, L],
+    )
     for level, x0, y0, w, h in rects:
         col = LEVEL_COLORS.get(level, "#ffffff")
         lw = LEVEL_LW.get(level, 1.3)
-        ax.add_patch(Rectangle((x0, y0), w, h, fill=False, edgecolor=col, lw=lw, alpha=0.95))
+        ax.add_patch(
+            Rectangle(
+                (x0, y0), w, h, fill=False, edgecolor=col, lw=lw, alpha=0.95
+            )
+        )
     ax.set_xticks([])
     ax.set_yticks([])
     return im
 
 
-def git_sha(path):
+def git_sha(path: str) -> str:
+    """Renvoie le SHA HEAD du depot a `path`, ou "unknown" si git echoue."""
     try:
-        return subprocess.check_output(["git", "-C", path, "rev-parse", "HEAD"],
-                                       text=True, stderr=subprocess.DEVNULL).strip()
+        return subprocess.check_output(
+            ["git", "-C", path, "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
     except Exception:  # noqa: BLE001
         return "unknown"
 
 
-def main():
+def main() -> None:
+    """Integre le run AMR, ecrit le GIF hero, le cover PNG et provenance.json."""
     os.makedirs(FIGDIR, exist_ok=True)
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import animation
@@ -117,7 +157,7 @@ def main():
     fields, rects_per_frame, npatch = [], [], []
     for _ in range(NFRAMES):
         fields.append(np.asarray(sim.density("ne")).copy())
-        rects_per_frame.append(patch_rects_by_level(sim))   # patchs de la trame
+        rects_per_frame.append(patch_rects_by_level(sim))  # patchs de la trame
         npatch.append(int(sim.n_patches()))
         for _ in range(STEPS_PER_FRAME):
             sim.step_cfl(CFL)
@@ -128,18 +168,28 @@ def main():
     fig.patch.set_facecolor(bg)
     ax.set_facecolor(bg)
     draw_panel(ax, fields[0], vmax, rects_per_frame[0], Rectangle)
-    ax.set_title("diocotron AMR : densite $n_e$", color="white", fontsize=13, pad=8)
+    ax.set_title(
+        "diocotron AMR : densite $n_e$", color="white", fontsize=13, pad=8
+    )
 
-    def update(k):
+    def update(k: int):
         ax.clear()
         ax.set_facecolor(bg)
         draw_panel(ax, fields[k], vmax, rects_per_frame[k], Rectangle)
-        ax.set_title("diocotron AMR : densite $n_e$", color="white", fontsize=13, pad=8)
+        ax.set_title(
+            "diocotron AMR : densite $n_e$", color="white", fontsize=13, pad=8
+        )
         return []
 
-    anim = animation.FuncAnimation(fig, update, frames=NFRAMES, interval=90, blit=False)
+    anim = animation.FuncAnimation(
+        fig, update, frames=NFRAMES, interval=90, blit=False
+    )
     gif = os.path.join(FIGDIR, "diocotron_amr_hero.gif")
-    anim.save(gif, writer=animation.PillowWriter(fps=12), savefig_kwargs={"facecolor": bg})
+    anim.save(
+        gif,
+        writer=animation.PillowWriter(fps=12),
+        savefig_kwargs={"facecolor": bg},
+    )
     plt.close(fig)
 
     # cover PNG (derniere trame)
@@ -147,43 +197,64 @@ def main():
     figc.patch.set_facecolor(bg)
     axc.set_facecolor(bg)
     draw_panel(axc, fields[-1], vmax, rects_per_frame[-1], Rectangle)
-    axc.set_title("diocotron AMR : densite $n_e$ (etat final, %d patchs)" % npatch[-1],
-                  color="white", fontsize=12, pad=8)
+    axc.set_title(
+        "diocotron AMR : densite $n_e$ (etat final, %d patchs)" % npatch[-1],
+        color="white",
+        fontsize=12,
+        pad=8,
+    )
     cover = os.path.join(FIGDIR, "diocotron_amr_hero_cover.png")
     figc.savefig(cover, dpi=110, facecolor=bg)
     plt.close(figc)
 
-    adc_cpp_root = os.path.abspath(os.path.join(os.path.dirname(adc.__file__), "..", "..", ".."))
-    levels_seen = sorted({lvl for rs in rects_per_frame for (lvl, *_rest) in rs})
+    adc_cpp_root = os.path.abspath(
+        os.path.join(os.path.dirname(adc.__file__), "..", "..", "..")
+    )
+    levels_seen = sorted(
+        {lvl for rs in rects_per_frame for (lvl, *_rest) in rs}
+    )
     prov = {
         "script": "diocotron_amr/make_hero_gif.py",
         "command": "python diocotron_amr/make_hero_gif.py",
         "produces": ["diocotron_amr_hero.gif", "diocotron_amr_hero_cover.png"],
         "reproduit": "le type de docs/anim_romeo_diocotron_amr3.gif (README adc_cpp) : panneau unique, "
-                     "bande mode l=2 enroulee en oeil-de-chat, cadres AMR suivant le coeur dense",
+        "bande mode l=2 enroulee en oeil-de-chat, cadres AMR suivant le coeur dense",
         "physique": "advection E x B + Poisson de charge (multigrille) par le solveur "
-                    "adc.AmrSystem (models.diocotron) ; l'enroulement KH est la sortie du code",
+        "adc.AmrSystem (models.diocotron) ; l'enroulement KH est la sortie du code",
         "cadres": "geometrie exacte des patchs fins via AmrSystem.patch_boxes() / "
-                  "patch_rectangles() (binding patch-boxes). aucun proxy de densite, aucun scipy. "
-                  "Colores par niveau (1=cyan, 2=vert, 3=rouge) ; niveaux observes : %s." % levels_seen,
+        "patch_rectangles() (binding patch-boxes). aucun proxy de densite, aucun scipy. "
+        "Colores par niveau (1=cyan, 2=vert, 3=rouge) ; niveaux observes : %s."
+        % levels_seen,
         "difference_avec_hero": "facade Python AmrSystem = 1 niveau fin multi-patch (niveaux observes "
-                                "ci-dessus) ; le hero ROMEO = moteur C++ multi-niveaux (advance_amr, "
-                                "3 niveaux, GH200)",
+        "ci-dessus) ; le hero ROMEO = moteur C++ multi-niveaux (advance_amr, "
+        "3 niveaux, GH200)",
         "adc_cpp_sha": git_sha(adc_cpp_root),
         "adc_cases_sha": git_sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.AmrSystem, brique models.diocotron, Poisson geometric_mg)",
         "resolution": "%dx%d (grille de base)" % (N, N),
-        "mode": MODE, "disp": DISP, "width": WIDTH, "threshold": THRESHOLD, "regrid_every": REGRID_EVERY,
-        "nframes": NFRAMES, "steps_per_frame": STEPS_PER_FRAME, "cfl": CFL,
-        "n_patches_final": npatch[-1], "n_patches_max": max(npatch), "n_patches_min": min(npatch),
-        "levels_observed": levels_seen, "vmax": vmax,
-        "python": "%d.%d.%d" % sys.version_info[:3], "adc_module": adc.__file__,
+        "mode": MODE,
+        "disp": DISP,
+        "width": WIDTH,
+        "threshold": THRESHOLD,
+        "regrid_every": REGRID_EVERY,
+        "nframes": NFRAMES,
+        "steps_per_frame": STEPS_PER_FRAME,
+        "cfl": CFL,
+        "n_patches_final": npatch[-1],
+        "n_patches_max": max(npatch),
+        "n_patches_min": min(npatch),
+        "levels_observed": levels_seen,
+        "vmax": vmax,
+        "python": "%d.%d.%d" % sys.version_info[:3],
+        "adc_module": adc.__file__,
     }
     with open(os.path.join(FIGDIR, "provenance.json"), "w") as fh:
         json.dump(prov, fh, indent=2)
 
-    print("patchs fins (via patch_boxes) : min=%d max=%d final=%d ; niveaux %s"
-          % (min(npatch), max(npatch), npatch[-1], levels_seen))
+    print(
+        "patchs fins (via patch_boxes) : min=%d max=%d final=%d ; niveaux %s"
+        % (min(npatch), max(npatch), npatch[-1], levels_seen)
+    )
     print("ecrit : %s" % gif)
     print("ecrit : %s" % cover)
 

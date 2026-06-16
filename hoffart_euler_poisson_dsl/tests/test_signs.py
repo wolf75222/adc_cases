@@ -24,6 +24,8 @@ Poisson (signe, documente uniquement, sans import adc lourd)
 Run standalone (`python3 test_signs.py`) ou sous pytest.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import types
@@ -33,7 +35,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _install_fake_adc():
+def _install_fake_adc() -> types.ModuleType:
     """Installe un faux module adc avec un sous-module dsl vide."""
     adc = types.ModuleType("adc")
     dsl = types.ModuleType("adc.dsl")
@@ -44,10 +46,13 @@ def _install_fake_adc():
 
 
 def _import_model():
-    case_root = os.path.dirname(HERE)   # tests/ -> la racine du cas (model.py, run*.py)
+    case_root = os.path.dirname(
+        HERE
+    )  # tests/ -> la racine du cas (model.py, run*.py)
     if case_root not in sys.path:
         sys.path.insert(0, case_root)
     import importlib
+
     # Recharge le module si deja en cache avec un faux adc.
     if "model" in sys.modules:
         return sys.modules["model"]
@@ -58,7 +63,8 @@ def _import_model():
 # (a) drift_velocity_from_potential, verification du signe ExB
 # ---------------------------------------------------------------------------
 
-def test_drift_phi_linear_x():
+
+def test_drift_phi_linear_x() -> None:
     """phi(x,y) = x => grad_phi = (1, 0) => u = 0, v = +1/omega."""
     _install_fake_adc()
     model = _import_model()
@@ -88,7 +94,7 @@ def test_drift_phi_linear_x():
     )
 
 
-def test_drift_phi_linear_y():
+def test_drift_phi_linear_y() -> None:
     """phi(x,y) = y => grad_phi = (0, 1) => u = -1/omega, v = 0."""
     _install_fake_adc()
     model = _import_model()
@@ -115,7 +121,7 @@ def test_drift_phi_linear_y():
     )
 
 
-def test_drift_zero_outside_disc():
+def test_drift_zero_outside_disc() -> None:
     """drift_velocity_from_potential doit mettre u=v=0 hors du disque."""
     _install_fake_adc()
     model = _import_model()
@@ -138,7 +144,8 @@ def test_drift_zero_outside_disc():
 # (b) paper_initial_density, structure azimutale et bornes
 # ---------------------------------------------------------------------------
 
-def test_paper_initial_density_outside_ring():
+
+def test_paper_initial_density_outside_ring() -> None:
     """hors de l'anneau, rho doit valoir rho_min."""
     _install_fake_adc()
     model = _import_model()
@@ -158,7 +165,7 @@ def test_paper_initial_density_outside_ring():
     )
 
 
-def test_paper_initial_density_inside_ring_bounds():
+def test_paper_initial_density_inside_ring_bounds() -> None:
     """dans l'anneau, rho in [rho_max*(1-2*delta), rho_max]."""
     _install_fake_adc()
     model = _import_model()
@@ -178,15 +185,18 @@ def test_paper_initial_density_inside_ring_bounds():
     # sin in [-1,1] => min = rho_max*(1 - 2*delta), max = rho_max
     lo = params.rho_max * (1.0 - 2.0 * delta)
     hi = params.rho_max
-    assert rho[ring].min() >= lo * (1.0 - 1e-10), (
-        "rho min dans l'anneau = %g < rho_max*(1-delta) = %g" % (rho[ring].min(), lo)
+    assert rho[ring].min() >= lo * (
+        1.0 - 1e-10
+    ), "rho min dans l'anneau = %g < rho_max*(1-delta) = %g" % (
+        rho[ring].min(),
+        lo,
     )
-    assert rho[ring].max() <= hi * (1.0 + 1e-10), (
-        "rho max dans l'anneau = %g > rho_max = %g" % (rho[ring].max(), hi)
-    )
+    assert rho[ring].max() <= hi * (
+        1.0 + 1e-10
+    ), "rho max dans l'anneau = %g > rho_max = %g" % (rho[ring].max(), hi)
 
 
-def test_paper_initial_density_azimuthal_structure():
+def test_paper_initial_density_azimuthal_structure() -> None:
     """la densite dans l'anneau doit avoir la structure azimutale sin(l*theta).
 
     Verification via FFT sur un cercle au milieu de l'anneau : le coefficient
@@ -230,9 +240,13 @@ def test_paper_initial_density_azimuthal_structure():
     mask[0] = False
     mask[mode] = False
     c_other_max = coeffs[mask].max() if mask.any() else 0.0
-    assert c_mode > 100.0 * c_other_max, (
-        "mode l=%d : |c_%d|=%g doit dominer les autres modes (max=%g)"
-        % (mode, mode, c_mode, c_other_max)
+    assert (
+        c_mode > 100.0 * c_other_max
+    ), "mode l=%d : |c_%d|=%g doit dominer les autres modes (max=%g)" % (
+        mode,
+        mode,
+        c_mode,
+        c_other_max,
     )
 
 
@@ -246,7 +260,7 @@ def test_paper_initial_density_azimuthal_structure():
 # est donc verifie ci-dessus (test_drift_*) de facon indirecte : si le signe de rhs
 # etait inverse, la vitesse de derive serait opposee et les tests (a) echoueraient.
 #
-# Pour referene : la ligne pertinente est
+# Pour reference : la ligne pertinente est
 #   m.elliptic_rhs(-alpha * rho)        # model.py:129
 
 
@@ -254,7 +268,8 @@ def test_paper_initial_density_azimuthal_structure():
 # Runner
 # ---------------------------------------------------------------------------
 
-def _run_all():
+
+def _run_all() -> None:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
         t()

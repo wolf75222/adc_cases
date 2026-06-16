@@ -1,1 +1,1 @@
-"""Utilitaires communs aux cas : grilles, conditions initiales, invariants, sorties."""
+"""Utilitaires communs aux cas : grilles, CI, invariants, sorties."""

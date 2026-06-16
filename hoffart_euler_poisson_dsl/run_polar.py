@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Modele COMPLET Euler-Poisson isotherme magnetise sur GRILLE POLAIRE (anneau resolu).
+"""Modele COMPLET Euler-Poisson isotherme magnetise sur grille polaire.
 
-Pendant POLAIRE du chemin cartesien ``run.py`` (engine ``system-schur``). Au lieu du
+Pendant POLAIRE du chemin cartesien ``run.py`` (engine ``system-schur``), sur un
+ANNEAU resolu (r, theta). Au lieu du
 carre cartesien plein, le transport tourne sur un ANNEAU (r, theta) : la direction
 RADIALE est portee par un axe de grille, ce qui leve le verrou des bords d'anneau
 cartesiens (cf. docs/HOFFART_GEOMETRY_VERDICT.md : le chemin cartesien plafonne a
@@ -55,6 +56,8 @@ en Python a partir de phi avec EXACTEMENT le stencil du moteur (centre a l'inter
 d'ordre 2 aux parois radiales, enroulement periodique en theta ; grad_theta = (1/r) d phi/d theta).
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import json
@@ -69,7 +72,9 @@ import adc
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from model import (  # noqa: E402
@@ -94,16 +99,19 @@ from results import (  # noqa: E402
 DEFAULT_RMIN = 2.0
 
 
-def i_radial(radius, r_min, dr, nr):
-    """Indice radial de la cellule dont le CENTRE est le plus proche de @p radius.
+def i_radial(radius: float, r_min: float, dr: float, nr: int) -> int:
+    """Indice radial de la cellule dont le CENTRE est le plus proche de radius.
 
-    Centres : r_cell(i) = r_min + (i + 0.5) * dr (convention PolarGeometry::r_cell, mesh/geometry.hpp).
+    Centres : r_cell(i) = r_min + (i + 0.5) * dr (convention PolarGeometry::r_cell,
+    mesh/geometry.hpp).
     """
     return max(0, min(nr - 1, int(round((radius - r_min) / dr - 0.5))))
 
 
-def annular_density(nr, nth, mode, params, r_min):
-    """Densite top-hat annulaire + perturbation azimutale sin(l*theta) (eq. (35) du papier).
+def annular_density(
+    nr: int, nth: int, mode: int, params, r_min: float
+) -> np.ndarray:
+    """Densite top-hat annulaire + perturbation sin(l*theta) (eq. (35) du papier).
 
     Layout polaire attendu par set_density : axe lent = theta (j), axe rapide = r (i), flat[j*nr+i].
     Renvoie un tableau (nth, nr) ; l'appelant l'aplatit (.ravel(), C-order).
@@ -111,17 +119,25 @@ def annular_density(nr, nth, mode, params, r_min):
     dr = (params.radius - r_min) / nr
     dth = 2.0 * math.pi / nth
     rho = np.full((nth, nr), params.rho_min, dtype=np.float64)
-    r = r_min + (np.arange(nr) + 0.5) * dr                       # centres radiaux (axe rapide i)
-    ring = (r >= params.ring_inner) & (r <= params.ring_outer)   # masque radial de l'anneau
+    r = r_min + (np.arange(nr) + 0.5) * dr  # centres radiaux (axe rapide i)
+    ring = (r >= params.ring_inner) & (
+        r <= params.ring_outer
+    )  # masque radial de l'anneau
     for j in range(nth):
         th = (j + 0.5) * dth
-        dper = 1.0 - params.perturbation + params.perturbation * math.sin(mode * th)
+        dper = (
+            1.0
+            - params.perturbation
+            + params.perturbation * math.sin(mode * th)
+        )
         rho[j, ring] = params.rho_max * dper
     return rho
 
 
-def polar_gradient(phi, r_min, dr, nth, nr):
-    """Gradient polaire de phi en base locale, EXACTEMENT le stencil de derive_aux_polar (C++).
+def polar_gradient(
+    phi: np.ndarray, r_min: float, dr: float, nth: int, nr: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Gradient polaire de phi, EXACTEMENT le stencil de derive_aux_polar (C++).
 
     phi : tableau (nth, nr) = phi[theta, r]. Renvoie (grad_r, grad_theta), memes formes :
       grad_r     = d phi/dr     : centre a l'interieur, DECENTRE d'ordre 2 aux deux parois radiales
@@ -130,7 +146,7 @@ def polar_gradient(phi, r_min, dr, nth, nr):
     Le decentrage d'ordre 2 exige nr >= 3 (garanti par adc.PolarMesh / check_geometry).
     """
     dth = 2.0 * math.pi / nth
-    r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]            # (1, nr) centres radiaux
+    r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]  # (1, nr) centres radiaux
 
     grad_r = np.empty_like(phi)
     # interieur : centre (p(i+1) - p(i-1)) / (2 dr)
@@ -138,28 +154,47 @@ def polar_gradient(phi, r_min, dr, nth, nr):
     # paroi interne i=0 : decentre avant ordre 2 (-3 p0 + 4 p1 - p2) / (2 dr)
     grad_r[:, 0] = (-3.0 * phi[:, 0] + 4.0 * phi[:, 1] - phi[:, 2]) / (2.0 * dr)
     # paroi externe i=nr-1 : decentre arriere ordre 2 (3 pN - 4 pN-1 + pN-2) / (2 dr)
-    grad_r[:, -1] = (3.0 * phi[:, -1] - 4.0 * phi[:, -2] + phi[:, -3]) / (2.0 * dr)
+    grad_r[:, -1] = (3.0 * phi[:, -1] - 4.0 * phi[:, -2] + phi[:, -3]) / (
+        2.0 * dr
+    )
 
     # grad_theta = (1/r) (p(j+1) - p(j-1)) / (2 dth), theta periodique (np.roll = enroulement d'indice).
-    grad_theta = (np.roll(phi, -1, axis=0) - np.roll(phi, 1, axis=0)) / (2.0 * dth * r)
+    grad_theta = (np.roll(phi, -1, axis=0) - np.roll(phi, 1, axis=0)) / (
+        2.0 * dth * r
+    )
     return grad_r, grad_theta
 
 
-def polar_radial_derivative(field, r_min, dr, nth, nr):
-    """d field/dr en base locale, MEME stencil radial que polar_gradient (branche grad_r).
+def polar_radial_derivative(
+    field: np.ndarray, r_min: float, dr: float, nth: int, nr: int
+) -> np.ndarray:
+    """d field/dr, MEME stencil radial que polar_gradient (branche grad_r).
 
     Reutilise pour d_r rho dans le terme de pression de l'equilibre. field : (nth, nr).
     Centre a l'interieur, decentre d'ordre 2 aux deux parois radiales (i=0 et i=nr-1).
     """
     d_r = np.empty_like(field)
     d_r[:, 1:-1] = (field[:, 2:] - field[:, :-2]) / (2.0 * dr)
-    d_r[:, 0] = (-3.0 * field[:, 0] + 4.0 * field[:, 1] - field[:, 2]) / (2.0 * dr)
-    d_r[:, -1] = (3.0 * field[:, -1] - 4.0 * field[:, -2] + field[:, -3]) / (2.0 * dr)
+    d_r[:, 0] = (-3.0 * field[:, 0] + 4.0 * field[:, 1] - field[:, 2]) / (
+        2.0 * dr
+    )
+    d_r[:, -1] = (3.0 * field[:, -1] - 4.0 * field[:, -2] + field[:, -3]) / (
+        2.0 * dr
+    )
     return d_r
 
 
-def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
-    r"""v_theta(r) de l'EQUILIBRE ROTATIF axisymetrique (bilan radial de quantite de mouvement).
+def equilibrium_v_theta(
+    rho: np.ndarray,
+    grad_r: np.ndarray,
+    r_min: float,
+    dr: float,
+    nth: int,
+    nr: int,
+    params,
+    cs2: float,
+) -> np.ndarray:
+    r"""v_theta(r) de l'EQUILIBRE ROTATIF axisymetrique (bilan radial du moment).
 
     Derivation E1 (verifiee dans la source adc_cpp ; cf. en-tete de ce fichier). A l'etat
     stationnaire (v_r = 0, d_t = 0, axisymetrique) le membre de droite RADIAL des DEUX etages du
@@ -195,19 +230,23 @@ def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
     contre-tournante parasite) est ecartee. Tout est calcule par cellule avec EXACTEMENT le stencil
     radial du moteur (polar_gradient / polar_radial_derivative) -> coherence avec l'operateur discret.
 
-    @param grad_r  d phi/dr deja calcule (meme stencil que derive_aux_polar).
-    @return v_theta : tableau (nth, nr), composante PHYSIQUE azimutale (base locale e_theta).
+    Args:
+        grad_r: d phi/dr deja calcule (meme stencil que derive_aux_polar).
+
+    Returns:
+        v_theta : tableau (nth, nr), composante PHYSIQUE azimutale (base locale
+        e_theta).
     """
     B = params.omega
-    r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]            # (1, nr) centres radiaux
+    r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]  # (1, nr) centres radiaux
     # terme de pression cs2 (d_r rho)/rho (saut net aux bords du top-hat : physique, pas lisse).
     if cs2 != 0.0:
         d_r_rho = polar_radial_derivative(rho, r_min, dr, nth, nr)
         pressure_term = cs2 * d_r_rho / rho
     else:
         pressure_term = 0.0
-    forcing = grad_r + pressure_term                            # d_r phi + cs2 (d_r rho)/rho
-    disc = B * B + (4.0 / r) * forcing                          # discriminant de la quadratique reduite
+    forcing = grad_r + pressure_term  # d_r phi + cs2 (d_r rho)/rho
+    disc = B * B + (4.0 / r) * forcing  # discriminant de la quadratique reduite
     # Garde-fou : disc >= 0 (vrai pour le bump phi positif a paroi Dirichlet ; en pratique disc ~ B^2
     # >> 0). Borne a 0 pour ne jamais propager un NaN si une cellule de bord devie de peu.
     disc = np.maximum(disc, 0.0)
@@ -215,8 +254,10 @@ def equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, cs2):
     return 2.0 * forcing / (B + np.sqrt(disc))
 
 
-def build_polar_system(nr, nth, mode, params, args):
-    """Anneau polaire + bloc isotherme natif + Poisson polaire + B_z + etage Schur condense.
+def build_polar_system(
+    nr: int, nth: int, mode: int, params, args: argparse.Namespace
+) -> adc.System:
+    """Assemble l'anneau polaire : bloc isotherme, Poisson, B_z, etage Schur.
 
     Init : (A) densite top-hat (+ perturbation seed) ; (B) 1er solve Poisson -> phi ; (C) v_r = ExB
     (-grad_theta/B) ET v_theta = EQUILIBRE ROTATIF (racine de la quadratique de bilan radial,
@@ -229,7 +270,9 @@ def build_polar_system(nr, nth, mode, params, args):
     r_min = args.r_min
     dr = (params.radius - r_min) / nr
 
-    sim = adc.System(mesh=adc.PolarMesh(r_min=r_min, r_max=params.radius, nr=nr, ntheta=nth))
+    sim = adc.System(
+        mesh=adc.PolarMesh(r_min=r_min, r_max=params.radius, nr=nr, ntheta=nth)
+    )
     # Poisson polaire : -Delta phi = alpha rho (le solveur porte la metrique r dr dtheta ; le
     # second membre par cellule vient de la brique elliptique du bloc). Dirichlet phi=0 aux parois
     # radiales, theta toujours periodique cote solveur polaire.
@@ -240,29 +283,38 @@ def build_polar_system(nr, nth, mode, params, args):
 
     model = adc.Model(
         state=adc.FluidState(kind="isothermal", cs2=args.cs2),
-        transport=adc.IsothermalFlux(),                  # -> IsothermalFluxPolar (3 var + courbure)
-        source=adc.NoSource(),                           # la source est l'etage Schur condense
-        elliptic=adc.BackgroundDensity(alpha=params.alpha, n0=0.0),  # -alpha rho au second membre
+        transport=adc.IsothermalFlux(),  # -> IsothermalFluxPolar (3 var + courbure)
+        source=adc.NoSource(),  # la source est l'etage Schur condense
+        elliptic=adc.BackgroundDensity(
+            alpha=params.alpha, n0=0.0
+        ),  # -alpha rho au second membre
     )
     # Politique de splitting : Lie (adc.Split, defaut) ou Strang (adc.Strang, 2e ordre, --strang).
     split_factory = adc.Strang if args.strang else adc.Split
     sim.add_equation(
         "ne",
         model=model,
-        spatial=adc.FiniteVolume(limiter=args.limiter, riemann="rusanov", variables="conservative"),
+        spatial=adc.FiniteVolume(
+            limiter=args.limiter, riemann="rusanov", variables="conservative"
+        ),
         time=split_factory(
             hyperbolic=adc.Explicit(method="ssprk3"),
-            source=adc.CondensedSchur(kind="electrostatic_lorentz", theta=args.theta,
-                                      alpha=params.alpha),
+            source=adc.CondensedSchur(
+                kind="electrostatic_lorentz",
+                theta=args.theta,
+                alpha=params.alpha,
+            ),
         ),
     )
 
     # (A) densite top-hat + perturbation ; vitesse au repos.
-    rho = annular_density(nr, nth, mode, params, r_min)          # (nth, nr)
-    sim.set_density("ne", rho.ravel())                          # flat[j*nr+i]
+    rho = annular_density(nr, nth, mode, params, r_min)  # (nth, nr)
+    sim.set_density("ne", rho.ravel())  # flat[j*nr+i]
     # (B) premier solve Poisson -> phi.
     sim.solve_fields()
-    phi = np.asarray(sim.potential(), dtype=np.float64).reshape(nth, nr)   # phi[theta, r]
+    phi = np.asarray(sim.potential(), dtype=np.float64).reshape(
+        nth, nr
+    )  # phi[theta, r]
     # (C) v_r = ExB (-grad_theta/B, point fixe de l'etage source) ; v_theta = EQUILIBRE ROTATIF
     # (racine de la quadratique de bilan radial : centrifuge + pression + electrique + Lorentz). Meme
     # stencil radial que le moteur (polar_gradient). L'ancien v_theta = grad_r/B (ExB pur) portait une
@@ -279,17 +331,21 @@ def build_polar_system(nr, nth, mode, params, args):
     if getattr(args, "ic", "equilibrium") == "exb":
         v_theta = grad_r / B
     else:
-        v_theta = equilibrium_v_theta(rho, grad_r, r_min, dr, nth, nr, params, args.cs2)
+        v_theta = equilibrium_v_theta(
+            rho, grad_r, r_min, dr, nth, nr, params, args.cs2
+        )
     # (D) etat conservatif (3, ntheta, nr) comp-major (rho, mom_r, mom_theta), aplati C-order.
-    U = np.stack([rho, rho * v_r, rho * v_theta], axis=0)        # (3, nth, nr)
+    U = np.stack([rho, rho * v_r, rho * v_theta], axis=0)  # (3, nth, nr)
     sim.set_state("ne", U.ravel())
     # (E) re-solve : phi coherent avec l'etat drift avant le 1er pas de transport.
     sim.solve_fields()
     return sim
 
 
-def compute_frozen_residual(params, args):
-    r"""Residu d'equilibre GELE R_eq = step(U_eq) - U_eq (option c, bilan discret bien pose).
+def compute_frozen_residual(
+    params, args: argparse.Namespace
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Residu d'equilibre GELE R_eq = step(U_eq) - U_eq (option c, well-balanced).
 
     Le modele complet polaire n'est PAS discretement bien pose a la raideur du papier
     (B_z = omega = 1e12) : l'etage hyperbolique (WENO5 + Rusanov au saut top-hat de l'anneau) et
@@ -316,29 +372,39 @@ def compute_frozen_residual(params, args):
     MEME pas que la boucle de production (R_eq est la derive PAR PAS A CE dt ; step()-R_eq n'a U_eq pour
     point fixe qu'a ce dt). La sonde est ensuite jetee.
 
-    @return (U_eq, R_eq) : tableaux (3, ntheta, nr) comp-major (rho, mom_r, mom_theta).
+    Returns:
+        (U_eq, R_eq) : tableaux (3, ntheta, nr) comp-major (rho, mom_r, mom_theta).
     """
     nr, nth = args.nr, args.ntheta
     dt = args.dt
     # perturbation=0 -> annular_density ignore le terme sin(l theta) : anneau strictement axisymetrique
     # quel que soit l'argument mode (ici 1). Meme nr/ntheta/cs2/theta/B/dt que la production -> R_eq
     # correspond exactement a la derive du schema de production sur SON equilibre.
-    flat_params = PaperParameters(final_time=params.final_time, temperature=params.temperature,
-                                  perturbation=0.0)
+    flat_params = PaperParameters(
+        final_time=params.final_time,
+        temperature=params.temperature,
+        perturbation=0.0,
+    )
     probe = build_polar_system(nr, nth, mode=1, params=flat_params, args=args)
-    U_eq = np.asarray(probe.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
+    U_eq = np.asarray(probe.get_state("ne"), dtype=np.float64).reshape(
+        3, nth, nr
+    )
     # build_polar_system a deja pose U_eq et resolu phi ; on impose explicitement l'etat puis un
     # solve_fields pour garantir un phi coherent avec U_eq avant le pas sonde (step() re-resout aussi
     # en tete de macro-pas, mais on reste explicite pour la robustesse du contrat).
     probe.set_state("ne", U_eq.ravel())
     probe.solve_fields()
-    probe.step(dt)                        # UN macro-pas complet : SSPRK3 hyperbolique + Schur polaire
+    probe.step(dt)  # UN macro-pas complet : SSPRK3 hyperbolique + Schur polaire
     U1 = np.asarray(probe.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
-    R_eq = U1 - U_eq                       # derive parasite O(1) du schema sur l'anneau axisymetrique
+    R_eq = (
+        U1 - U_eq
+    )  # derive parasite O(1) du schema sur l'anneau axisymetrique
     return U_eq, R_eq
 
 
-def step_frozen_subtracted(sim, dt, R_eq, nth, nr):
+def step_frozen_subtracted(
+    sim: adc.System, dt: float, R_eq: np.ndarray, nth: int, nr: int
+) -> None:
     """Un pas de la carte CORRIGEE U <- step(U) - R_eq (option c), puis solve_fields.
 
     Avance le sim d'un macro-pas (Split/Strang : SSPRK3 hyperbolique + etage Schur polaire), relit
@@ -349,10 +415,12 @@ def step_frozen_subtracted(sim, dt, R_eq, nth, nr):
     sim.step(dt)
     U = np.asarray(sim.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
     sim.set_state("ne", (U - R_eq).ravel())
-    sim.solve_fields()                     # phi coherent avec l'etat corrige (pour l'observable phi[:, i_r0])
+    sim.solve_fields()  # phi coherent avec l'etat corrige (pour l'observable phi[:, i_r0])
 
 
-def mode_amplitude_polar(sim, mode, i_r0, nth, nr):
+def mode_amplitude_polar(
+    sim: adc.System, mode: int, i_r0: int, nth: int, nr: int
+) -> float:
     """Amplitude du mode l de phi sur le cercle r=r0 (colonne native phi[:, i_r0]).
 
     phi est rendu (ny, nx) = (ntheta, nr) (cf. to_2d(s.ny(), s.nx())). Le cercle r=r0 est EXACTEMENT
@@ -366,9 +434,10 @@ def mode_amplitude_polar(sim, mode, i_r0, nth, nr):
     return 2.0 * abs(coeffs[mode])
 
 
-def fit_growth(times, amplitudes, mode, rhobar=1.0):
-    """Pente BRUTE sur la fenetre papier MAPPEE en temps sim (T3 : t_sim=2pi/rhobar * t_paper).
+def fit_growth(times, amplitudes, mode: int, rhobar: float = 1.0) -> float:
+    """Pente BRUTE sur la fenetre papier MAPPEE en temps sim (T3).
 
+    Mapping : t_sim = 2pi/rhobar * t_paper.
     Comme le chemin cartesien, le solveur polaire tourne en horloge ExB-naturelle ; la fenetre
     papier (T_d) doit etre mappee avant le fit (sinon transitoire). gamma_raw_sim ; conversion
     x2pi/rhobar a l'enregistrement. NB : la repro quantitative du polaire COMPLET n'est PAS
@@ -383,13 +452,19 @@ def fit_growth(times, amplitudes, mode, rhobar=1.0):
     return float(np.polyfit(times[mask], np.log(amplitudes[mask]), 1)[0])
 
 
-def run_mode(mode, params, args, R_eq=None):
-    """Avance le mode l sur l'anneau polaire et renvoie (temps, amplitudes, gamma, masse initiale).
+def run_mode(
+    mode: int, params, args: argparse.Namespace, R_eq: np.ndarray | None = None
+) -> dict:
+    """Avance le mode l sur l'anneau polaire et mesure son taux de croissance.
 
-    Si @p R_eq est fourni (mode --frozen-equilibrium), la carte d'avancement est step()-R_eq (option c,
+    Si R_eq est fourni (mode --frozen-equilibrium), la carte d'avancement est step()-R_eq (option c,
     soustraction du residu d'equilibre gele) avec un pas FIXE args.dt ; le chemin CFL adaptatif
     (step_cfl) est alors INTERDIT car il s'effondre sur l'equilibre quasi-stationnaire (estimation de
     vitesse -> 0 -> dt explose -> NaN). Sinon, comportement historique (step() nu, --cfl autorise).
+
+    Returns:
+        dict avec mode, times, amplitudes (np.ndarray), gamma (pente brute) et la
+        masse FV polaire avant/apres (mass0, mass1).
     """
     nr, nth = args.nr, args.ntheta
     r_min = args.r_min
@@ -398,7 +473,7 @@ def run_mode(mode, params, args, R_eq=None):
     frozen = R_eq is not None
 
     sim = build_polar_system(nr, nth, mode, params, args)
-    mass0 = float(sim.mass("ne"))                              # masse FV polaire (sum rho r dr dtheta)
+    mass0 = float(sim.mass("ne"))  # masse FV polaire (sum rho r dr dtheta)
 
     times, amplitudes = [], []
     step = 0
@@ -408,7 +483,10 @@ def run_mode(mode, params, args, R_eq=None):
             amp = mode_amplitude_polar(sim, mode, i_r0, nth, nr)
             phi_finite = np.isfinite(np.asarray(sim.potential())).all()
             if not phi_finite or not np.isfinite(amp):
-                raise FloatingPointError("potentiel/amplitude non fini a t=%g (mode l=%d)" % (t, mode))
+                raise FloatingPointError(
+                    "potentiel/amplitude non fini a t=%g (mode l=%d)"
+                    % (t, mode)
+                )
             times.append(t)
             amplitudes.append(amp)
         if t >= args.t_end - 0.5 * args.dt:
@@ -417,21 +495,33 @@ def run_mode(mode, params, args, R_eq=None):
             # Option c : pas FIXE + soustraction du residu gele (R_eq est calcule a ce dt).
             step_frozen_subtracted(sim, args.dt, R_eq, nth, nr)
         elif args.cfl > 0.0:
-            sim.step_cfl(args.cfl)                            # pas stable CFL polaire (chemin historique)
+            sim.step_cfl(args.cfl)  # pas stable CFL polaire (chemin historique)
         else:
             sim.step(min(args.dt, args.t_end - t))
         step += 1
         if step > args.max_steps:
-            raise RuntimeError("max_steps atteint avant t_end (mode l=%d)" % mode)
+            raise RuntimeError(
+                "max_steps atteint avant t_end (mode l=%d)" % mode
+            )
 
     gamma = fit_growth(times, amplitudes, mode, rhobar=params.rho_max)
     mass1 = float(sim.mass("ne"))
-    return dict(mode=mode, times=np.asarray(times), amplitudes=np.asarray(amplitudes),
-                gamma=gamma, mass0=mass0, mass1=mass1)
+    return dict(
+        mode=mode,
+        times=np.asarray(times),
+        amplitudes=np.asarray(amplitudes),
+        gamma=gamma,
+        mass0=mass0,
+        mass1=mass1,
+    )
 
 
-def write_mode_amplitude(result, out):
-    """amplitude.csv par mode (toujours, matplotlib optionnel) : temps, amplitude, amplitude/initiale."""
+def write_mode_amplitude(result: dict, out: str) -> None:
+    """Ecrit amplitude.csv par mode (temps, amplitude, ratio) + PNG optionnel.
+
+    Colonnes du CSV : time, amplitude, amplitude_over_initial. La figure PNG est
+    facultative : toute panne matplotlib est toleree sans casser le run de donnees.
+    """
     mode_dir = os.path.join(out, "mode_%d" % result["mode"])
     os.makedirs(mode_dir, exist_ok=True)
     with open(os.path.join(mode_dir, "amplitude.csv"), "w", newline="") as f:
@@ -446,42 +536,83 @@ def write_mode_amplitude(result, out):
     # sur certains noeuds) sans jamais abandonner le run de donnees.
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=(6.2, 4.0))
-        normalized = result["amplitudes"] / max(float(result["amplitudes"][0]), 1.0e-300)
+        normalized = result["amplitudes"] / max(
+            float(result["amplitudes"][0]), 1.0e-300
+        )
         ax.semilogy(result["times"], normalized, color="black", lw=1.5)
         lo, hi = PAPER_FIT_WINDOWS[result["mode"]]
-        ax.axvspan(lo, hi, color="tab:blue", alpha=0.12, label="paper fit window")
-        ax.set(xlabel="time", ylabel=r"$|c_l(t)|/|c_l(0)|$",
-               title="Polaire l=%d, gamma=%s" % (
-                   result["mode"],
-                   "n/a" if not np.isfinite(result["gamma"]) else "%.4f" % result["gamma"]))
+        ax.axvspan(
+            lo, hi, color="tab:blue", alpha=0.12, label="paper fit window"
+        )
+        ax.set(
+            xlabel="time",
+            ylabel=r"$|c_l(t)|/|c_l(0)|$",
+            title="Polaire l=%d, gamma=%s"
+            % (
+                result["mode"],
+                (
+                    "n/a"
+                    if not np.isfinite(result["gamma"])
+                    else "%.4f" % result["gamma"]
+                ),
+            ),
+        )
         ax.grid(alpha=0.25, which="both")
         ax.legend()
         fig.tight_layout()
         fig.savefig(os.path.join(mode_dir, "amplitude.png"), dpi=180)
         plt.close(fig)
-    except Exception as exc:  # noqa: BLE001 (figure optionnelle : ne jamais casser le run de donnees)
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 (figure optionnelle : ne jamais casser le run de donnees)
         print("  (figure amplitude ignoree : %s)" % exc)
 
 
-def write_summary(results, out, params, args):
-    """growth_rates.csv (BRUT) + measurement_record (CSV/JSON) + metadata.json. matplotlib optionnel."""
+def write_summary(
+    results: list, out: str, params, args: argparse.Namespace
+) -> None:
+    """Ecrit growth_rates.csv (BRUT), le measurement_record et metadata.json.
+
+    La figure recap PNG est facultative : toute panne matplotlib est toleree sans
+    casser le run de donnees.
+    """
     # T3 : gamma_raw_sim (fenetre MAPPEE) + gamma_paper_units = raw*2pi/rhobar ; err vs paper_units.
     rhobar = params.rho_max
     rows = []
     for r in results:
         target = PAPER_GROWTH_RATES[r["mode"]]
         g_paper = gamma_to_paper_units(r["gamma"], rhobar)
-        error = (100.0 * (g_paper - target) / target) if g_paper is not None else float("nan")
-        rows.append((r["mode"], r["gamma"], ("" if g_paper is None else g_paper), target, error))
+        error = (
+            (100.0 * (g_paper - target) / target)
+            if g_paper is not None
+            else float("nan")
+        )
+        rows.append(
+            (
+                r["mode"],
+                r["gamma"],
+                ("" if g_paper is None else g_paper),
+                target,
+                error,
+            )
+        )
 
     with open(os.path.join(out, "growth_rates.csv"), "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["mode", "gamma_raw_sim", "gamma_paper_units", "gamma_paper",
-                         "relative_error_percent"])
+        writer.writerow(
+            [
+                "mode",
+                "gamma_raw_sim",
+                "gamma_paper_units",
+                "gamma_paper",
+                "relative_error_percent",
+            ]
+        )
         writer.writerows(rows)
 
     # Enregistrement de mesure (graine de la table de validation Phase 2), engine='polar-schur'
@@ -500,7 +631,7 @@ def write_summary(results, out, params, args):
             dt=args.dt,
             splitting=("Strang" if args.strang else "Lie"),
             schur_theta=args.theta,
-            backend="kokkos-serial",   # mono-rang (l'etage Schur polaire l'exige)
+            backend="kokkos-serial",  # mono-rang (l'etage Schur polaire l'exige)
             rhobar=rhobar,
             mpi_size=1,
             adc_cpp_sha_value=cpp_sha,
@@ -533,37 +664,55 @@ def write_summary(results, out, params, args):
         "adc_cases_sha": cases_sha,
         "parameters": params.to_dict(),
         "annulus": {
-            "r_min": args.r_min, "r_max": params.radius,
-            "ring_inner": params.ring_inner, "ring_outer": params.ring_outer,
-            "nr": args.nr, "ntheta": args.ntheta,
+            "r_min": args.r_min,
+            "r_max": params.radius,
+            "ring_inner": params.ring_inner,
+            "ring_outer": params.ring_outer,
+            "nr": args.nr,
+            "ntheta": args.ntheta,
         },
         "numerics": {
-            "finite_volume": "%s + Rusanov (polaire)" % (
-                "WENO5-Z" if args.limiter == "weno5" else args.limiter),
+            "finite_volume": "%s + Rusanov (polaire)"
+            % ("WENO5-Z" if args.limiter == "weno5" else args.limiter),
             "limiter": args.limiter,
-            "time": "SSPRK3 + CondensedSchur(theta=%g) (%s)" % (
-                args.theta, "Strang" if args.strang else "Lie"),
-            "dt": args.dt, "cfl": args.cfl, "nr": args.nr, "ntheta": args.ntheta, "mpi_size": 1,
+            "time": "SSPRK3 + CondensedSchur(theta=%g) (%s)"
+            % (args.theta, "Strang" if args.strang else "Lie"),
+            "dt": args.dt,
+            "cfl": args.cfl,
+            "nr": args.nr,
+            "ntheta": args.ntheta,
+            "mpi_size": 1,
             "frozen_equilibrium": bool(args.frozen_equilibrium),
             "frozen_equilibrium_note": (
-                "option c (well-balanced discret) : R_eq = step(U_eq) - U_eq precalcule UNE FOIS sur "
-                "l'anneau axisymetrique (perturbation=0) puis SOUSTRAIT a chaque pas (U <- step(U) - "
-                "R_eq), faisant de U_eq un point fixe discret EXACT et annulant la derive parasite "
-                "O(1) du schema (qui produisait NaN ~ t 0.02). PAS FIXE OBLIGATOIRE (le CFL adaptatif "
-                "s'effondre sur l'equilibre quasi-stationnaire)."
-            ) if args.frozen_equilibrium else "desactive (chemin historique step() nu)",
+                (
+                    "option c (well-balanced discret) : R_eq = step(U_eq) - U_eq precalcule UNE FOIS sur "
+                    "l'anneau axisymetrique (perturbation=0) puis SOUSTRAIT a chaque pas (U <- step(U) - "
+                    "R_eq), faisant de U_eq un point fixe discret EXACT et annulant la derive parasite "
+                    "O(1) du schema (qui produisait NaN ~ t 0.02). PAS FIXE OBLIGATOIRE (le CFL adaptatif "
+                    "s'effondre sur l'equilibre quasi-stationnaire)."
+                )
+                if args.frozen_equilibrium
+                else "desactive (chemin historique step() nu)"
+            ),
         },
         "mass_conservation": {
-            "mode_%d" % r["mode"]: {
-                "mass0": r["mass0"], "mass1": r["mass1"],
-                "rel_drift": (abs(r["mass1"] - r["mass0"]) / max(abs(r["mass0"]), 1e-300)),
-            } for r in results
+            "mode_%d"
+            % r["mode"]: {
+                "mass0": r["mass0"],
+                "mass1": r["mass1"],
+                "rel_drift": (
+                    abs(r["mass1"] - r["mass0"]) / max(abs(r["mass0"]), 1e-300)
+                ),
+            }
+            for r in results
         },
         "fidelity": {
             "same_pde": True,
             "polar_grid": True,
             "rotating_equilibrium_ic": True,
-            "frozen_equilibrium_residual_subtraction": bool(args.frozen_equilibrium),
+            "frozen_equilibrium_residual_subtraction": bool(
+                args.frozen_equilibrium
+            ),
             "paper_schur_source": True,
             "quantitative_comparison_enabled": True,
             "quantitative_paper_claim": False,
@@ -586,106 +735,208 @@ def write_summary(results, out, params, args):
     # On tolere toute panne matplotlib (absent / ABI bancale) sans casser le run.
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+
         modes = [r[0] for r in rows]
         numeric = [r[1] for r in rows]
         target = [r[2] for r in rows]
         fig, ax = plt.subplots(figsize=(6.0, 4.0))
         ax.plot(modes, target, "s-", color="tab:red", label="paper")
         ax.plot(modes, numeric, "o-", color="black", label="full-polar-schur")
-        ax.set(xlabel="azimuthal mode l", ylabel="growth rate gamma",
-               xticks=modes, title="Diocotron growth rates (polar grid)")
+        ax.set(
+            xlabel="azimuthal mode l",
+            ylabel="growth rate gamma",
+            xticks=modes,
+            title="Diocotron growth rates (polar grid)",
+        )
         ax.grid(alpha=0.25)
         ax.legend()
         fig.tight_layout()
         fig.savefig(os.path.join(out, "growth_rates.png"), dpi=180)
         plt.close(fig)
-    except Exception as exc:  # noqa: BLE001 (figure optionnelle : ne jamais casser le run de donnees)
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 (figure optionnelle : ne jamais casser le run de donnees)
         print("(figure growth_rates ignoree : %s)" % exc)
 
 
-def mpi_size():
-    for key in ("OMPI_COMM_WORLD_SIZE", "PMI_SIZE", "PMIX_SIZE", "SLURM_NTASKS"):
+def mpi_size() -> int:
+    """Nombre de rangs MPI lu dans l'environnement (defaut 1 hors lanceur)."""
+    for key in (
+        "OMPI_COMM_WORLD_SIZE",
+        "PMI_SIZE",
+        "PMIX_SIZE",
+        "SLURM_NTASKS",
+    ):
         if key in os.environ:
             return int(os.environ[key])
     return 1
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Definit et parse les arguments de ligne de commande du runner polaire."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--modes", type=int, nargs="+", default=[3, 4, 5])
-    parser.add_argument("--nr", type=int, default=256, help="cellules radiales (anneau)")
-    parser.add_argument("--ntheta", type=int, default=256, help="cellules azimutales (periodiques)")
-    parser.add_argument("--r-min", dest="r_min", type=float, default=DEFAULT_RMIN,
-                        help="bord interne du domaine polaire (> 0 ; evite la singularite r=0)")
+    parser.add_argument(
+        "--nr", type=int, default=256, help="cellules radiales (anneau)"
+    )
+    parser.add_argument(
+        "--ntheta",
+        type=int,
+        default=256,
+        help="cellules azimutales (periodiques)",
+    )
+    parser.add_argument(
+        "--r-min",
+        dest="r_min",
+        type=float,
+        default=DEFAULT_RMIN,
+        help="bord interne du domaine polaire (> 0 ; evite la singularite r=0)",
+    )
     parser.add_argument("--t-end", dest="t_end", type=float, default=10.0)
-    parser.add_argument("--dt", type=float, default=1.0e-3,
-                        help="pas de temps (utilise si --cfl <= 0 ; sinon step_cfl)")
-    parser.add_argument("--cfl", type=float, default=0.0,
-                        help="si > 0 : pas adaptatif step_cfl(cfl) ; sinon pas fixe --dt")
-    parser.add_argument("--cs2", type=float, default=1.0e-4,
-                        help="vitesse du son au carre. Defaut 1e-4 (petit mais NON nul) pour la "
-                             "stricte hyperbolicite sur la grille polaire (le papier autorise "
-                             "theta >= 0). Mettre 0 pour la limite froide exacte du papier.")
-    parser.add_argument("--theta", type=float, default=0.5,
-                        help="theta du CondensedSchur (0.5 Crank-Nicolson, 1 Euler retrograde)")
-    parser.add_argument("--ic", choices=["equilibrium", "exb"], default="equilibrium",
-                        help="IC azimutale : equilibrium = bilan radial exact (historique) ; exb = "
-                             "derive ExB pure (limite du papier ; re-testable post-fix-seam, ADC-78)")
-    parser.add_argument("--limiter", choices=["weno5", "minmod"], default="weno5",
-                        help="reconstruction FV. weno5 = historique (overshoote au saut top-hat -> "
-                             "rho<0, suspect de la divergence t=0.01, ADC-62) ; minmod = TVD, "
-                             "preserve la positivite (fix valide cote cartesien, ADC-74)")
-    parser.add_argument("--strang", action="store_true",
-                        help="splitting de Strang (2e ordre) au lieu de Lie (defaut)")
+    parser.add_argument(
+        "--dt",
+        type=float,
+        default=1.0e-3,
+        help="pas de temps (utilise si --cfl <= 0 ; sinon step_cfl)",
+    )
+    parser.add_argument(
+        "--cfl",
+        type=float,
+        default=0.0,
+        help="si > 0 : pas adaptatif step_cfl(cfl) ; sinon pas fixe --dt",
+    )
+    parser.add_argument(
+        "--cs2",
+        type=float,
+        default=1.0e-4,
+        help="vitesse du son au carre. Defaut 1e-4 (petit mais NON nul) pour la "
+        "stricte hyperbolicite sur la grille polaire (le papier autorise "
+        "theta >= 0). Mettre 0 pour la limite froide exacte du papier.",
+    )
+    parser.add_argument(
+        "--theta",
+        type=float,
+        default=0.5,
+        help="theta du CondensedSchur (0.5 Crank-Nicolson, 1 Euler retrograde)",
+    )
+    parser.add_argument(
+        "--ic",
+        choices=["equilibrium", "exb"],
+        default="equilibrium",
+        help="IC azimutale : equilibrium = bilan radial exact (historique) ; exb = "
+        "derive ExB pure (limite du papier ; re-testable post-fix-seam, ADC-78)",
+    )
+    parser.add_argument(
+        "--limiter",
+        choices=["weno5", "minmod"],
+        default="weno5",
+        help="reconstruction FV. weno5 = historique (overshoote au saut top-hat -> "
+        "rho<0, suspect de la divergence t=0.01, ADC-62) ; minmod = TVD, "
+        "preserve la positivite (fix valide cote cartesien, ADC-74)",
+    )
+    parser.add_argument(
+        "--strang",
+        action="store_true",
+        help="splitting de Strang (2e ordre) au lieu de Lie (defaut)",
+    )
     # --- Option c : soustraction du residu d'equilibre gele (well-balanced discret) -----------------
-    parser.add_argument("--frozen-equilibrium", dest="frozen_equilibrium",
-                        action="store_true", default=True,
-                        help="DEFAUT ON : bilan discret bien pose par soustraction du residu "
-                             "d'equilibre GELE R_eq = step(U_eq) - U_eq (option c). U_eq devient un "
-                             "point fixe discret EXACT (step()-R_eq), la derive parasite O(1) "
-                             "axisymetrique du schema (qui faisait NaN ~ t 0.02) est annulee a chaque "
-                             "pas. EXIGE un pas FIXE --dt (le --cfl adaptatif s'effondre sur "
-                             "l'equilibre quasi-stationnaire -> dt explose -> NaN ; il est ignore "
-                             "dans ce mode).")
-    parser.add_argument("--no-frozen-equilibrium", dest="frozen_equilibrium",
-                        action="store_false",
-                        help="DESACTIVE l'option c : chemin historique step() nu (NaN ~ t 0.02 a la "
-                             "raideur du papier ; conserve pour comparaison / debogage seulement).")
-    parser.add_argument("--frozen-check-const", dest="frozen_check_const", type=float, default=1.0e3,
-                        help="constante C du critere de stationarite a la precision machine "
-                             "(max_n ||U^n - U_eq||_inf <= C eps_mach ||U_eq||_inf, defaut 1e3). "
-                             "N'agit que sur --check-equilibrium quand --frozen-equilibrium est ON.")
-    parser.add_argument("--sample-every", dest="sample_every", type=int, default=10)
-    parser.add_argument("--perturbation", dest="perturbation", type=float, default=0.1,
-                        help="amplitude delta du mode azimutal initial sin(l theta) (eq. 35 du "
-                             "papier, defaut 0.1). N'agit PAS sur --check-equilibrium ni sur le "
-                             "calcul du residu gele R_eq (qui imposent perturbation=0, anneau "
-                             "axisymetrique). Diagnostic : varier delta discrimine le mecanisme "
-                             "de divergence du chemin perturbe (derive parasite O(delta) residuelle "
-                             "vs instabilite numerique exponentielle delta-independante).")
-    parser.add_argument("--max-steps", dest="max_steps", type=int, default=2_000_000)
-    parser.add_argument("--quick", action="store_true", help="smoke minuscule (parse/assemblage)")
-    parser.add_argument("--check-equilibrium", dest="check_equilibrium", action="store_true",
-                        help="auto-test de STATIONARITE : force perturbation=0 (anneau axisymetrique), "
-                             "avance quelques pas et verifie que l'amplitude de CHAQUE mode azimutal "
-                             "reste plate (pas de croissance, pas de NaN). C'est la validation cle que "
-                             "l'IC d'equilibre est genuinement stationnaire AVANT de mesurer une "
-                             "croissance. Code de sortie non nul si l'equilibre derive.")
-    parser.add_argument("--check-tol", dest="check_tol", type=float, default=0.05,
-                        help="tolerance relative de derive d'amplitude pour --check-equilibrium "
-                             "(defaut 5%% : amplitude finale / initiale - 1 <= tol pour chaque mode).")
-    parser.add_argument("--check-modes", dest="check_modes", type=int, nargs="+", default=[1, 2, 3, 4, 5],
-                        help="modes azimutaux surveilles par --check-equilibrium (defaut 1..5).")
-    parser.add_argument("--max-steps-check", dest="max_steps_check", type=int, default=200,
-                        help="nombre de pas avances par --check-equilibrium (defaut 200).")
+    parser.add_argument(
+        "--frozen-equilibrium",
+        dest="frozen_equilibrium",
+        action="store_true",
+        default=True,
+        help="DEFAUT ON : bilan discret bien pose par soustraction du residu "
+        "d'equilibre GELE R_eq = step(U_eq) - U_eq (option c). U_eq devient un "
+        "point fixe discret EXACT (step()-R_eq), la derive parasite O(1) "
+        "axisymetrique du schema (qui faisait NaN ~ t 0.02) est annulee a chaque "
+        "pas. EXIGE un pas FIXE --dt (le --cfl adaptatif s'effondre sur "
+        "l'equilibre quasi-stationnaire -> dt explose -> NaN ; il est ignore "
+        "dans ce mode).",
+    )
+    parser.add_argument(
+        "--no-frozen-equilibrium",
+        dest="frozen_equilibrium",
+        action="store_false",
+        help="DESACTIVE l'option c : chemin historique step() nu (NaN ~ t 0.02 a la "
+        "raideur du papier ; conserve pour comparaison / debogage seulement).",
+    )
+    parser.add_argument(
+        "--frozen-check-const",
+        dest="frozen_check_const",
+        type=float,
+        default=1.0e3,
+        help="constante C du critere de stationarite a la precision machine "
+        "(max_n ||U^n - U_eq||_inf <= C eps_mach ||U_eq||_inf, defaut 1e3). "
+        "N'agit que sur --check-equilibrium quand --frozen-equilibrium est ON.",
+    )
+    parser.add_argument(
+        "--sample-every", dest="sample_every", type=int, default=10
+    )
+    parser.add_argument(
+        "--perturbation",
+        dest="perturbation",
+        type=float,
+        default=0.1,
+        help="amplitude delta du mode azimutal initial sin(l theta) (eq. 35 du "
+        "papier, defaut 0.1). N'agit PAS sur --check-equilibrium ni sur le "
+        "calcul du residu gele R_eq (qui imposent perturbation=0, anneau "
+        "axisymetrique). Diagnostic : varier delta discrimine le mecanisme "
+        "de divergence du chemin perturbe (derive parasite O(delta) residuelle "
+        "vs instabilite numerique exponentielle delta-independante).",
+    )
+    parser.add_argument(
+        "--max-steps", dest="max_steps", type=int, default=2_000_000
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="smoke minuscule (parse/assemblage)",
+    )
+    parser.add_argument(
+        "--check-equilibrium",
+        dest="check_equilibrium",
+        action="store_true",
+        help="auto-test de STATIONARITE : force perturbation=0 (anneau axisymetrique), "
+        "avance quelques pas et verifie que l'amplitude de CHAQUE mode azimutal "
+        "reste plate (pas de croissance, pas de NaN). C'est la validation cle que "
+        "l'IC d'equilibre est genuinement stationnaire AVANT de mesurer une "
+        "croissance. Code de sortie non nul si l'equilibre derive.",
+    )
+    parser.add_argument(
+        "--check-tol",
+        dest="check_tol",
+        type=float,
+        default=0.05,
+        help="tolerance relative de derive d'amplitude pour --check-equilibrium "
+        "(defaut 5%% : amplitude finale / initiale - 1 <= tol pour chaque mode).",
+    )
+    parser.add_argument(
+        "--check-modes",
+        dest="check_modes",
+        type=int,
+        nargs="+",
+        default=[1, 2, 3, 4, 5],
+        help="modes azimutaux surveilles par --check-equilibrium (defaut 1..5).",
+    )
+    parser.add_argument(
+        "--max-steps-check",
+        dest="max_steps_check",
+        type=int,
+        default=200,
+        help="nombre de pas avances par --check-equilibrium (defaut 200).",
+    )
     return parser.parse_args()
 
 
-def check_equilibrium_frozen(params, args):
-    r"""STATIONARITE A LA PRECISION MACHINE (frozen-equilibrium ON, la VRAIE validation de l'option c).
+def check_equilibrium_frozen(
+    params, args: argparse.Namespace
+) -> tuple[bool, list]:
+    r"""Stationarite a la PRECISION MACHINE : la vraie validation de l'option c.
 
+    Test actif quand --frozen-equilibrium est ON.
     Le test laxiste base-amplitude (check_equilibrium ci-dessous) NORMALISE la derive par l'echelle de
     fond O(1) ; il MASQUE l'echec discret car la derive parasite O(1) y parait "petite" en relatif. La
     validation GENUINE est : avec soustraction du residu gele, U_eq DOIT etre un point fixe discret
@@ -698,12 +949,17 @@ def check_equilibrium_frozen(params, args):
     s'accumule lineairement en N ; C eps couvre largement). Floor ABSOLU calcule sur l'echelle de U_eq,
     PAS sur le fond 1e12 : c'est la correction precise de l'ancien check laxiste qui cachait l'echec.
 
-    @return (ok, report) : ok bool ; report = liste d'un seul dict (max_dev, floor, n_steps, finite).
+    Returns:
+        (ok, report) : ok bool ; report = liste d'un seul dict (max_dev, floor,
+        n_steps, finite).
     """
     nr, nth = args.nr, args.ntheta
 
-    flat_params = PaperParameters(final_time=params.final_time, temperature=params.temperature,
-                                  perturbation=0.0)
+    flat_params = PaperParameters(
+        final_time=params.final_time,
+        temperature=params.temperature,
+        perturbation=0.0,
+    )
     U_eq, R_eq = compute_frozen_residual(flat_params, args)
     sim = build_polar_system(nr, nth, mode=1, params=flat_params, args=args)
     # Repart EXACTEMENT de U_eq (le meme etat que celui ayant servi a calculer R_eq) -> point fixe.
@@ -720,21 +976,33 @@ def check_equilibrium_frozen(params, args):
     finite = True
     for _ in range(n_steps):
         step_frozen_subtracted(sim, args.dt, R_eq, nth, nr)
-        U = np.asarray(sim.get_state("ne"), dtype=np.float64).reshape(3, nth, nr)
-        if not np.isfinite(U).all() or not np.isfinite(np.asarray(sim.potential())).all():
+        U = np.asarray(sim.get_state("ne"), dtype=np.float64).reshape(
+            3, nth, nr
+        )
+        if (
+            not np.isfinite(U).all()
+            or not np.isfinite(np.asarray(sim.potential())).all()
+        ):
             finite = False
             max_dev = float("inf")
             break
         max_dev = max(max_dev, float(np.max(np.abs(U - U_eq))))
 
     ok = finite and (max_dev <= floor)
-    report = [dict(max_dev=max_dev, floor=floor, n_steps=n_steps, finite=finite,
-                   state_scale=state_scale)]
+    report = [
+        dict(
+            max_dev=max_dev,
+            floor=floor,
+            n_steps=n_steps,
+            finite=finite,
+            state_scale=state_scale,
+        )
+    ]
     return ok, report
 
 
-def check_equilibrium(params, args):
-    """STATIONARITE : anneau d'equilibre SANS perturbation -> chaque mode azimutal reste plat.
+def check_equilibrium(params, args: argparse.Namespace) -> tuple[bool, list]:
+    """STATIONARITE : anneau d'equilibre SANS perturbation, chaque mode reste plat.
 
     Pose perturbation=0 (rho axisymetrique top-hat), construit l'IC d'equilibre (v_r=0 a O(eps), v_theta
     = racine du bilan radial), avance args.max_steps_check pas et verifie pour chaque mode l de
@@ -746,7 +1014,9 @@ def check_equilibrium(params, args):
     soustraction de residu. Avec --frozen-equilibrium (defaut), main() route vers
     check_equilibrium_frozen qui exige la STATIONARITE A LA PRECISION MACHINE (le vrai test de l'option c).
 
-    @return (ok, report) : ok bool ; report = liste de dicts par mode (amp0, amp_max, rel_drift, finite).
+    Returns:
+        (ok, report) : ok bool ; report = liste de dicts par mode (amp0, amp_max,
+        rel_drift, finite).
     """
     nr, nth = args.nr, args.ntheta
     r_min = args.r_min
@@ -754,8 +1024,11 @@ def check_equilibrium(params, args):
     i_r0 = i_radial(params.ring_inner, r_min, dr, nr)
 
     # perturbation=0 -> anneau strictement axisymetrique (l'equilibre rotatif doit y etre stationnaire).
-    flat_params = PaperParameters(final_time=params.final_time, temperature=params.temperature,
-                                  perturbation=0.0)
+    flat_params = PaperParameters(
+        final_time=params.final_time,
+        temperature=params.temperature,
+        perturbation=0.0,
+    )
     sim = build_polar_system(nr, nth, mode=1, params=flat_params, args=args)
 
     modes = sorted(set(args.check_modes))
@@ -768,10 +1041,20 @@ def check_equilibrium(params, args):
         else:
             sim.step(args.dt)
         if not np.isfinite(np.asarray(sim.potential())).all():
-            return False, [dict(mode=l, amp0=amp0[l], amp_max=float("inf"),
-                                rel_drift=float("inf"), finite=False) for l in modes]
+            return False, [
+                dict(
+                    mode=l,
+                    amp0=amp0[l],
+                    amp_max=float("inf"),
+                    rel_drift=float("inf"),
+                    finite=False,
+                )
+                for l in modes
+            ]
         for l in modes:
-            amp_max[l] = max(amp_max[l], mode_amplitude_polar(sim, l, i_r0, nth, nr))
+            amp_max[l] = max(
+                amp_max[l], mode_amplitude_polar(sim, l, i_r0, nth, nr)
+            )
 
     report = []
     # Echelle de reference : amplitude du mode dominant initial (sinon, pour un anneau purement
@@ -785,11 +1068,20 @@ def check_equilibrium(params, args):
         finite = np.isfinite(amp_max[l])
         mode_ok = finite and (rel <= args.check_tol)
         ok = ok and mode_ok
-        report.append(dict(mode=l, amp0=amp0[l], amp_max=amp_max[l], rel_drift=rel, finite=finite))
+        report.append(
+            dict(
+                mode=l,
+                amp0=amp0[l],
+                amp_max=amp_max[l],
+                rel_drift=rel,
+                finite=finite,
+            )
+        )
     return ok, report
 
 
-def main():
+def main() -> None:
+    """Point d'entree : parse, valide, check d'equilibre, sinon boucle des modes."""
     args = parse_args()
     if any(mode not in PAPER_GROWTH_RATES for mode in args.modes):
         raise SystemExit("--modes doit etre choisi parmi 3, 4, 5")
@@ -797,7 +1089,8 @@ def main():
     if mpi_size() > 1:
         raise SystemExit(
             "run_polar.py est mono-rang : l'etage Schur condense polaire refuse n_ranks>1 "
-            "(le solveur polaire = boite unique). Lancer avec 1 seul rang (ntasks=1).")
+            "(le solveur polaire = boite unique). Lancer avec 1 seul rang (ntasks=1)."
+        )
     # Pre-enregistrement : la comparaison du modele complet DOIT utiliser les fenetres verbatim du
     # papier (Fig. 5.4). Verrou contre toute fenetre adaptative (fit_growth lit PAPER_FIT_WINDOWS).
     verify_paper_windows(PAPER_FIT_WINDOWS)
@@ -817,14 +1110,19 @@ def main():
     # (l'estimation de vitesse s'effondre a ~0 sur l'equilibre quasi-stationnaire -> dt ~ 1e28 -> NaN
     # instantane). On force donc args.cfl <= 0 et on previent si l'utilisateur avait demande --cfl.
     if args.frozen_equilibrium and args.cfl > 0.0:
-        print("[frozen-equilibrium] --cfl=%g IGNORE : l'option c exige un pas fixe (le CFL adaptatif "
-              "s'effondre sur l'equilibre quasi-stationnaire). Utilisation de --dt=%g."
-              % (args.cfl, args.dt))
+        print(
+            "[frozen-equilibrium] --cfl=%g IGNORE : l'option c exige un pas fixe (le CFL adaptatif "
+            "s'effondre sur l'equilibre quasi-stationnaire). Utilisation de --dt=%g."
+            % (args.cfl, args.dt)
+        )
         args.cfl = 0.0
 
     # --strang bascule build_polar_system sur adc.Strang (2e ordre) ; sinon adc.Split (Lie, defaut).
-    params = PaperParameters(final_time=args.t_end, temperature=args.cs2,
-                             perturbation=args.perturbation)
+    params = PaperParameters(
+        final_time=args.t_end,
+        temperature=args.cs2,
+        perturbation=args.perturbation,
+    )
 
     # --check-equilibrium : auto-test de stationarite (perturbation=0). C'est la validation cle de
     # l'IC d'equilibre AVANT toute mesure de croissance ; sort sans ecrire de growth_rates.csv.
@@ -833,35 +1131,68 @@ def main():
             # VRAIE validation de l'option c : stationarite a la PRECISION MACHINE (U_eq point fixe
             # discret exact de step()-R_eq). Le critere base-amplitude (laxiste, normalise par le fond
             # O(1)) MASQUAIT l'echec discret ; ici floor = C eps_mach ||U_eq||_inf.
-            print("[check-equilibrium] FROZEN : anneau axisymetrique (perturbation=0), "
-                  ">= %d pas, critere PRECISION MACHINE (C=%g)" % (
-                      max(args.max_steps_check, 200), args.frozen_check_const))
+            print(
+                "[check-equilibrium] FROZEN : anneau axisymetrique (perturbation=0), "
+                ">= %d pas, critere PRECISION MACHINE (C=%g)"
+                % (max(args.max_steps_check, 200), args.frozen_check_const)
+            )
             ok, report = check_equilibrium_frozen(params, args)
             row = report[0]
-            print("  max_dev=%.3e floor=%.3e (= C eps ||U_eq||_inf, ||U_eq||_inf=%.3e) "
-                  "n_steps=%d finite=%s -> %s" % (
-                      row["max_dev"], row["floor"], row["state_scale"], row["n_steps"], row["finite"],
-                      "OK" if ok else "DERIVE"))
+            print(
+                "  max_dev=%.3e floor=%.3e (= C eps ||U_eq||_inf, ||U_eq||_inf=%.3e) "
+                "n_steps=%d finite=%s -> %s"
+                % (
+                    row["max_dev"],
+                    row["floor"],
+                    row["state_scale"],
+                    row["n_steps"],
+                    row["finite"],
+                    "OK" if ok else "DERIVE",
+                )
+            )
             if ok:
-                print("[check-equilibrium] OK : U_eq est un point fixe discret a la precision machine "
-                      "(option c : derive axisymetrique O(1) annulee par R_eq).")
+                print(
+                    "[check-equilibrium] OK : U_eq est un point fixe discret a la precision machine "
+                    "(option c : derive axisymetrique O(1) annulee par R_eq)."
+                )
                 return
             raise SystemExit(
                 "[check-equilibrium] ECHEC : ||U^n - U_eq||_inf=%.3e depasse le floor machine %.3e. "
                 "La soustraction du residu gele ne rend PAS U_eq point fixe (bug dans R_eq ou la "
-                "carte step()-R_eq)." % (row["max_dev"], row["floor"]))
-        print("[check-equilibrium] anneau axisymetrique (perturbation=0), %d pas, modes %s, tol=%g"
-              % (args.max_steps_check, args.check_modes, args.check_tol))
+                "carte step()-R_eq)." % (row["max_dev"], row["floor"])
+            )
+        print(
+            "[check-equilibrium] anneau axisymetrique (perturbation=0), %d pas, modes %s, tol=%g"
+            % (args.max_steps_check, args.check_modes, args.check_tol)
+        )
         ok, report = check_equilibrium(params, args)
         for row in report:
-            print("  mode l=%d : amp0=%.3e amp_max=%.3e rel_drift=%.3e finite=%s -> %s" % (
-                row["mode"], row["amp0"], row["amp_max"], row["rel_drift"], row["finite"],
-                "OK" if (row["finite"] and row["rel_drift"] <= args.check_tol) else "DERIVE"))
+            print(
+                "  mode l=%d : amp0=%.3e amp_max=%.3e rel_drift=%.3e finite=%s -> %s"
+                % (
+                    row["mode"],
+                    row["amp0"],
+                    row["amp_max"],
+                    row["rel_drift"],
+                    row["finite"],
+                    (
+                        "OK"
+                        if (
+                            row["finite"] and row["rel_drift"] <= args.check_tol
+                        )
+                        else "DERIVE"
+                    ),
+                )
+            )
         if ok:
-            print("[check-equilibrium] OK : l'equilibre rotatif est stationnaire (chaque mode plat).")
+            print(
+                "[check-equilibrium] OK : l'equilibre rotatif est stationnaire (chaque mode plat)."
+            )
             return
-        raise SystemExit("[check-equilibrium] ECHEC : l'equilibre derive (un mode croit ou NaN). "
-                         "L'IC n'est PAS un etat stationnaire du modele complet.")
+        raise SystemExit(
+            "[check-equilibrium] ECHEC : l'equilibre derive (un mode croit ou NaN). "
+            "L'IC n'est PAS un etat stationnaire du modele complet."
+        )
 
     out = case_output_dir("hoffart_euler_poisson_dsl_polar_schur")
 
@@ -869,24 +1200,49 @@ def main():
     # modes. R_eq est GELE (constant) et reutilise pour CHAQUE mode/pas (step()-R_eq).
     R_eq = None
     if args.frozen_equilibrium:
-        print("[frozen-equilibrium] precalcul du residu gele R_eq = step(U_eq) - U_eq "
-              "(perturbation=0, dt=%g)" % args.dt)
+        print(
+            "[frozen-equilibrium] precalcul du residu gele R_eq = step(U_eq) - U_eq "
+            "(perturbation=0, dt=%g)" % args.dt
+        )
         _, R_eq = compute_frozen_residual(params, args)
-        print("  ||R_eq||_inf = %.3e (derive parasite O(1) du schema sur l'anneau axisymetrique)"
-              % float(np.max(np.abs(R_eq))))
+        print(
+            "  ||R_eq||_inf = %.3e (derive parasite O(1) du schema sur l'anneau axisymetrique)"
+            % float(np.max(np.abs(R_eq)))
+        )
 
     results = []
     for mode in args.modes:
-        print("[polar-schur] mode l=%d, nr=%d, ntheta=%d, t_end=%g, %s%s"
-              % (mode, args.nr, args.ntheta, args.t_end,
-                 ("cfl=%g" % args.cfl) if args.cfl > 0.0 else ("dt=%g" % args.dt),
-                 " [frozen-eq]" if args.frozen_equilibrium else ""))
+        print(
+            "[polar-schur] mode l=%d, nr=%d, ntheta=%d, t_end=%g, %s%s"
+            % (
+                mode,
+                args.nr,
+                args.ntheta,
+                args.t_end,
+                (
+                    ("cfl=%g" % args.cfl)
+                    if args.cfl > 0.0
+                    else ("dt=%g" % args.dt)
+                ),
+                " [frozen-eq]" if args.frozen_equilibrium else "",
+            )
+        )
         result = run_mode(mode, params, args, R_eq=R_eq)
         results.append(result)
         target = PAPER_GROWTH_RATES[mode]
-        print("  gamma = %s (paper %.3f) ; masse rel drift = %.2e" % (
-            "n/a" if not np.isfinite(result["gamma"]) else "%.6f" % result["gamma"],
-            target, abs(result["mass1"] - result["mass0"]) / max(abs(result["mass0"]), 1e-300)))
+        print(
+            "  gamma = %s (paper %.3f) ; masse rel drift = %.2e"
+            % (
+                (
+                    "n/a"
+                    if not np.isfinite(result["gamma"])
+                    else "%.6f" % result["gamma"]
+                ),
+                target,
+                abs(result["mass1"] - result["mass0"])
+                / max(abs(result["mass0"]), 1e-300),
+            )
+        )
         write_mode_amplitude(result, out)
 
     write_summary(results, out, params, args)

@@ -29,6 +29,8 @@ Invariants verifies (assert)
     qui est precisement le terme source qui alimente le Poisson couple.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import adc
 
@@ -38,18 +40,26 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import models  # noqa: E402  (compositions de briques nommees, cote application)
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases import (
+    models,
+)  # noqa: E402  (compositions de briques nommees, cote application)
 from adc_cases.common.checks import (  # noqa: E402
-    assert_finite, assert_mass_conserved, assert_positive)
+    assert_finite,
+    assert_mass_conserved,
+    assert_positive,
+)
 
 
-def main():
+def main() -> None:
     # --- Systeme : grille 48x48, deux especes de charges opposees --------------
     sim = adc.System(
-        n=48,             # grille 48x48, petite pour rester rapide
-        L=1.0,            # domaine carre [0, L]^2
-        periodic=True,    # conditions aux limites periodiques
+        n=48,  # grille 48x48, petite pour rester rapide
+        L=1.0,  # domaine carre [0, L]^2
+        periodic=True,  # conditions aux limites periodiques
     )
 
     # Electrons : Euler complet, charge -1, reconstruction minmod, temps explicite.
@@ -122,10 +132,12 @@ def main():
     # --- Verification des invariants physiques (utilitaires partages) -----------
     # Conservation de la masse par espece (coeur de la demo de couplage), en absolu
     # comme historiquement.
-    drift_e = assert_mass_conserved(mass_e1, mass_e0, tol=1e-9, label="electrons",
-                                    relative=False)
-    drift_i = assert_mass_conserved(mass_i1, mass_i0, tol=1e-9, label="ions",
-                                    relative=False)
+    drift_e = assert_mass_conserved(
+        mass_e1, mass_e0, tol=1e-9, label="electrons", relative=False
+    )
+    drift_i = assert_mass_conserved(
+        mass_i1, mass_i0, tol=1e-9, label="ions", relative=False
+    )
     print(f"[diag] derive masse electrons |dM_e| = {drift_e:.3e}")
     print(f"[diag] derive masse ions      |dM_i| = {drift_i:.3e}")
 

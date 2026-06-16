@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Figures de diagnostic du cas `plasma` (validation : Poisson + ionisation + collision).
+"""Figures de diagnostic du cas `plasma` (Poisson + ionisation + collision).
 
-Re-joue exactement la physique de `run.py` (memes CI, meme recette, meme nombre de pas et meme
-CFL) mais instrumente la boucle pas-a-pas pour enregistrer l'historique des diagnostics, puis
-trace trois figures sous `figures/` :
+Cas `validation` : re-joue exactement la physique de `run.py` (memes CI, meme
+recette, meme nombre de pas et meme CFL) mais instrumente la boucle pas-a-pas
+pour enregistrer l'historique des diagnostics, puis trace trois figures sous
+`figures/` :
   1. densities.png   : densites moyennes e / i / n vs t (la modulation e- a 5 % se moyenne).
   2. ionization.png  : bilan d'ionisation (n_i monte, n_g descend, n_i + n_g plat) + erreur de
                        conservation en echelle log + impulsion totale (collision).
@@ -16,6 +17,9 @@ PNG produits ici sont des diagnostics du tutoriel (le guide autorise `<cas>/figu
 seulement pour une reproduction). On les ecrit neanmoins dans figures/ pour le tutoriel, avec
 provenance, en assumant qu'ils ne tournent pas en CI.
 """
+
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -28,7 +32,9 @@ import adc
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 from adc_cases import recipes  # noqa: E402
 from adc_cases.common.checks import relative_drift  # noqa: E402
 
@@ -40,29 +46,42 @@ NSTEPS, CFL = 20, 0.3
 K_ION, K_COL = 0.3, 0.5
 
 
-def build_system():
+def build_system() -> adc.System:
     """Memes CI et meme recette que run.py (faible separation de charge electronique)."""
     x = (np.arange(N) + 0.5) / N
     ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones((N, N))
     sim = adc.System(n=N, L=L, periodic=True)
-    recipes.plasma(sim, ne=ne, ni=np.ones((N, N)), ng=np.ones((N, N)),
-                   ionization_rate=K_ION, collision_rate=K_COL)
+    recipes.plasma(
+        sim,
+        ne=ne,
+        ni=np.ones((N, N)),
+        ng=np.ones((N, N)),
+        ionization_rate=K_ION,
+        collision_rate=K_COL,
+    )
     return sim
 
 
-def total_momentum(sim, block):
+def total_momentum(sim: adc.System, block: str) -> tuple[float, float]:
     """Impulsion totale (somme cellule) d'un bloc fluide : (sum rho u, sum rho v)."""
-    st = np.array(sim._s.get_state(block))  # (ncomp, n, n), comp 1 = rho u, comp 2 = rho v
+    st = np.array(
+        sim.get_state(block)
+    )  # (ncomp, n, n), comp 1 = rho u, comp 2 = rho v
     return float(st[1].sum()), float(st[2].sum())
 
 
-def run_with_history():
+def run_with_history() -> tuple[dict, dict]:
     """Avance NSTEPS pas, enregistre a chaque pas t, masses e/i/n, |phi|max, impulsion totale."""
     sim = build_system()
     sim.solve_fields()
     species = ("electrons", "ions", "neutrals")
-    hist = {"t": [], "mass": {s: [] for s in species}, "phimax": [],
-            "px_tot": [], "py_tot": []}
+    hist = {
+        "t": [],
+        "mass": {s: [] for s in species},
+        "phimax": [],
+        "px_tot": [],
+        "py_tot": [],
+    }
 
     def snapshot():
         hist["t"].append(float(sim.time()))
@@ -86,18 +105,35 @@ def run_with_history():
     return hist, dens
 
 
-def fig_densities(hist):
+def fig_densities(hist: dict) -> str:
+    """Trace densities.png : densites moyennes e/i/n vs t. Renvoie le chemin."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     t = np.array(hist["t"])
     n2 = N * N  # mass() = somme des densites ; densite moyenne = mass / n^2
     fig, ax = plt.subplots(figsize=(7.2, 4.6))
-    colors = {"electrons": "tab:blue", "ions": "tab:red", "neutrals": "tab:green"}
-    labels = {"electrons": r"$\bar n_e$ (electrons)", "ions": r"$\bar n_i$ (ions)",
-              "neutrals": r"$\bar n_g$ (neutres)"}
+    colors = {
+        "electrons": "tab:blue",
+        "ions": "tab:red",
+        "neutrals": "tab:green",
+    }
+    labels = {
+        "electrons": r"$\bar n_e$ (electrons)",
+        "ions": r"$\bar n_i$ (ions)",
+        "neutrals": r"$\bar n_g$ (neutres)",
+    }
     for s in ("electrons", "ions", "neutrals"):
-        ax.plot(t, np.array(hist["mass"][s]) / n2, "-o", ms=3, color=colors[s], label=labels[s])
+        ax.plot(
+            t,
+            np.array(hist["mass"][s]) / n2,
+            "-o",
+            ms=3,
+            color=colors[s],
+            label=labels[s],
+        )
     ax.set_xlabel("t")
     ax.set_ylabel(r"densite moyenne $\bar n = \sum_{cell} n / N^2$")
     ax.set_title("Densites moyennes des trois especes (ionisation + collision)")
@@ -110,10 +146,18 @@ def fig_densities(hist):
     return out
 
 
-def fig_ionization(hist):
+def fig_ionization(hist: dict) -> tuple[str, float, float]:
+    """Trace ionization.png : bilan d'ionisation, derive de masse, impulsion.
+
+    Returns:
+        Le chemin du PNG, la derive relative finale de n_i + n_g et la variation
+        finale d'impulsion x du couple ion+neutre.
+    """
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     t = np.array(hist["t"])
     mi = np.array(hist["mass"]["ions"])
     mg = np.array(hist["mass"]["neutrals"])
@@ -125,7 +169,9 @@ def fig_ionization(hist):
 
     ax = axes[0]
     ax.plot(t, mi, "-o", ms=3, color="tab:red", label=r"$M_i=\sum n_i$ (ions)")
-    ax.plot(t, mg, "-o", ms=3, color="tab:green", label=r"$M_g=\sum n_g$ (neutres)")
+    ax.plot(
+        t, mg, "-o", ms=3, color="tab:green", label=r"$M_g=\sum n_g$ (neutres)"
+    )
     ax.plot(t, s, "-s", ms=3, color="black", label=r"$M_i+M_g$ (conserve)")
     ax.set_xlabel("t")
     ax.set_ylabel("masse (somme des densites)")
@@ -144,8 +190,14 @@ def fig_ionization(hist):
     ax.grid(alpha=0.3, which="both")
 
     ax = axes[2]
-    ax.plot(t, px - px[0], "-o", ms=3, color="tab:orange",
-            label=r"$\Delta(P_x^{ion}+P_x^{neutre})$")
+    ax.plot(
+        t,
+        px - px[0],
+        "-o",
+        ms=3,
+        color="tab:orange",
+        label=r"$\Delta(P_x^{ion}+P_x^{neutre})$",
+    )
     ax.set_xlabel("t")
     ax.set_ylabel("variation d'impulsion totale (x)")
     ax.set_title("Impulsion ion+neutre : friction + champ E sur ions")
@@ -159,16 +211,23 @@ def fig_ionization(hist):
     return out, float(drel[-1]), float(px[-1] - px[0])
 
 
-def fig_density_map(dens):
+def fig_density_map(dens: dict) -> str:
+    """Trace density_map.png : cartes 2D de densite e/i/n. Renvoie le chemin."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.4))
-    titles = {"electrons": "electrons n_e (etat final)",
-              "ions": "ions n_i (etat final)",
-              "neutrals": "neutres n_g (etat final)"}
+    titles = {
+        "electrons": "electrons n_e (etat final)",
+        "ions": "ions n_i (etat final)",
+        "neutrals": "neutres n_g (etat final)",
+    }
     for ax, s in zip(axes, ("electrons", "ions", "neutrals")):
-        im = ax.imshow(dens[s], origin="lower", extent=[0, L, 0, L], cmap="viridis")
+        im = ax.imshow(
+            dens[s], origin="lower", extent=[0, L, 0, L], cmap="viridis"
+        )
         ax.set_title(titles[s])
         ax.set_xlabel("x")
         ax.set_ylabel("y")
@@ -180,15 +239,23 @@ def fig_density_map(dens):
     return out
 
 
-def git_sha(path):
+def git_sha(path: str) -> str:
+    """SHA HEAD du depot a `path`, ou "unknown" si indisponible (provenance)."""
     try:
-        return subprocess.check_output(["git", "-C", path, "rev-parse", "HEAD"],
-                                       stderr=subprocess.DEVNULL).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "-C", path, "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
     except Exception:
         return "unknown"
 
 
-def main():
+def main() -> None:
+    """Joue le run instrumente, ecrit les 3 PNG + provenance.json, resume."""
     os.makedirs(FIGDIR, exist_ok=True)
     hist, dens = run_with_history()
 
@@ -202,10 +269,14 @@ def main():
     me0, me1 = hist["mass"]["electrons"][0], hist["mass"]["electrons"][-1]
     prov = {
         "script": "plasma/make_figures.py",
-        "command": ("PYTHONPATH=.../adc_cpp/build-master/python:.../adc_cases-deeptut "
-                    "python3.12 make_figures.py"),
+        "command": (
+            "PYTHONPATH=.../adc_cpp/build-master/python:.../adc_cases-deeptut "
+            "python3.12 make_figures.py"
+        ),
         "produces": ["densities.png", "ionization.png", "density_map.png"],
-        "adc_cpp_sha": git_sha("/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"),
+        "adc_cpp_sha": git_sha(
+            "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"
+        ),
         "adc_cases_sha": git_sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.System, recette models/recipes.plasma)",
         "resolution": "48x48",

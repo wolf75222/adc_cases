@@ -184,7 +184,7 @@ is the key difference from the other `*_dsl` cases (`needs = ["cxx"]`).
 
 Expected output of `run.py` (captured, macOS arm64, identical across 3 runs):
 
-```
+```text
 modele declare en formules : 4 variables ['rho', 'rho_u', 'rho_v', 'E']
 apres 120 pas : drho_max=0.123  |v|_max=0.027
 masse : drel=0.00e+00   dynamique : max|dp|=0.394

@@ -100,6 +100,8 @@ Lancer
 numpy seul, leger (deux 2x2 par mode). Aucune dependance au moteur adc.
 """
 
+from __future__ import annotations
+
 import math
 
 import numpy as np
@@ -107,8 +109,8 @@ import numpy as np
 
 # Geometrie 6:8:16 du papier (Sec 5.3). r0, r1 = bords de l'anneau ; R = mur conducteur.
 R0, R1, RW = 6.0, 8.0, 16.0
-RHO_MAX = 1.0       # rhobar = rho_max dans la conversion 2pi/rhobar
-OMEGA_D = 1.0       # frequence diocotron cyclique du papier (lignes 313-317)
+RHO_MAX = 1.0  # rhobar = rho_max dans la conversion 2pi/rhobar
+OMEGA_D = 1.0  # frequence diocotron cyclique du papier (lignes 313-317)
 
 # Cibles du papier (Sec 5.3, eq (5.1), Fig 5.4(d), theorie lineaire [13]).
 PAPER = {3: 0.772, 4: 0.911, 5: 0.683}
@@ -120,7 +122,7 @@ RE_ANA = {3: 0.33144, 4: 0.43859, 5: 0.54747}
 RATIO_ANA = {3: 0.3708, 4: 0.3309, 5: 0.1998}
 
 
-def equilibrium_drift(r, r0, r1, wd):
+def equilibrium_drift(r, r0, r1, wd) -> float:
     """Frequence angulaire de derive ExB d'equilibre omega_E(r) du top-hat [r0, r1].
 
     omega_E(r) = (alpha/|Omega|) M(r)/r^2 avec M(r) = int_0^r rho0 s ds (top-hat). En
@@ -133,7 +135,7 @@ def equilibrium_drift(r, r0, r1, wd):
     return 0.5 * wd * (r1 * r1 - r0 * r0) / (r * r)
 
 
-def diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D):
+def diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D) -> np.ndarray:
     """Matrice 2x2 du probleme aux valeurs propres diocotron (colonne creuse top-hat).
 
     Les deux degres de liberte sont les deplacements des bords interne (r0) et externe
@@ -146,9 +148,11 @@ def diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D):
     if not (0.0 < r0 < r1 < R):
         raise ValueError("geometrie invalide : exige 0 < r0 < r1 < R")
 
-    wd = 2.0 * math.pi * omega_d  # echelle angulaire de derive (cyclique -> angulaire)
+    wd = (
+        2.0 * math.pi * omega_d
+    )  # echelle angulaire de derive (cyclique -> angulaire)
 
-    w_in = equilibrium_drift(r0, r0, r1, wd)   # = 0 (rien d'enferme sous r0)
+    w_in = equilibrium_drift(r0, r0, r1, wd)  # = 0 (rien d'enferme sous r0)
     w_out = equilibrium_drift(r1, r0, r1, wd)  # rotation au bord externe
 
     # geometrie des ondes de surface, mur Dirichlet en R (forme standard colonne creuse)
@@ -166,22 +170,24 @@ def diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D):
     )
 
 
-def growth_rate(l, r0=R0, r1=R1, R=RW, omega_d=OMEGA_D):
+def growth_rate(l, r0=R0, r1=R1, R=RW, omega_d=OMEGA_D) -> float:
     """gamma_l = max Im(omega) en unites omega_d (sans 2 pi applique apres coup)."""
     eigs = np.linalg.eigvals(diocotron_matrix(l, r0, r1, R, omega_d))
     return float(np.max(np.abs(eigs.imag)))
 
 
-def real_frequency_exb(l, r0=R0, r1=R1, R=RW):
+def real_frequency_exb(l, r0=R0, r1=R1, R=RW) -> float:
     """|Re(omega)| en unite ExB-naturelle (matrice avec wd = omega_d, sans 2 pi).
 
     Sert au controle croise : doit retrouver RE_ANA (rotation propre du mode publiee).
     """
-    eigs = np.linalg.eigvals(diocotron_matrix(l, r0, r1, R, omega_d=1.0 / (2.0 * math.pi)))
+    eigs = np.linalg.eigvals(
+        diocotron_matrix(l, r0, r1, R, omega_d=1.0 / (2.0 * math.pi))
+    )
     return float(np.max(np.abs(eigs.real)))
 
 
-def scale_invariant_ratio(l, r0=R0, r1=R1, R=RW):
+def scale_invariant_ratio(l, r0=R0, r1=R1, R=RW) -> float:
     """Im/Re : invariant d'echelle (independant de l'unite de temps), controle du MODE."""
     eigs = np.linalg.eigvals(diocotron_matrix(l, r0, r1, R, omega_d=OMEGA_D))
     im = np.max(np.abs(eigs.imag))
@@ -194,8 +200,10 @@ def scale_invariant_ratio(l, r0=R0, r1=R1, R=RW):
 TOL = 0.01
 
 
-def self_check():
-    """Asserts reels : (1) gamma_l brut (unite omega_d, sans 2 pi) = cible papier a <1% ;
+def self_check() -> None:
+    """Verifie les trois cibles analytiques par assertions (leve si hors marge).
+
+    (1) gamma_l brut (unite omega_d, sans 2 pi) = cible papier a <1% ;
     (2) Re(ExB) = RE_ANA a <1% (controle croise) ; (3) Im/Re = RATIO_ANA a <2%
     (invariant d'echelle, prouve que le MODE complexe est le bon).
     """
@@ -206,16 +214,21 @@ def self_check():
             % (l, g, PAPER[l])
         )
         re = real_frequency_exb(l)
-        assert abs(re - RE_ANA[l]) / RE_ANA[l] < TOL, (
-            "Re_%d=%.5f hors tolerance vs RE_ANA %.5f" % (l, re, RE_ANA[l])
-        )
+        assert (
+            abs(re - RE_ANA[l]) / RE_ANA[l] < TOL
+        ), "Re_%d=%.5f hors tolerance vs RE_ANA %.5f" % (l, re, RE_ANA[l])
         ratio = scale_invariant_ratio(l)
-        assert abs(ratio - RATIO_ANA[l]) / RATIO_ANA[l] < 2.0 * TOL, (
-            "Im/Re_%d=%.4f hors tolerance vs RATIO_ANA %.4f" % (l, ratio, RATIO_ANA[l])
+        assert (
+            abs(ratio - RATIO_ANA[l]) / RATIO_ANA[l] < 2.0 * TOL
+        ), "Im/Re_%d=%.4f hors tolerance vs RATIO_ANA %.4f" % (
+            l,
+            ratio,
+            RATIO_ANA[l],
         )
 
 
-def main():
+def main() -> None:
+    """Affiche la table gamma_l vs papier (Re, Im/Re) puis lance self_check()."""
     print(
         "valeur propre analytique Petri/Davidson, colonne creuse top-hat [%g,%g], mur R=%g"
         % (R0, R1, RW)
@@ -248,7 +261,18 @@ def main():
         rel_re = 100.0 * abs(re - RE_ANA[l]) / RE_ANA[l]
         print(
             "%3d %14.5f %10.4f %10.5f %7.3f%% | %10.5f %10.5f %7.3f%% | %8.4f %8.4f"
-            % (l, g, PAPER[l], abs(g - PAPER[l]), rel, re, RE_ANA[l], rel_re, ratio, RATIO_ANA[l])
+            % (
+                l,
+                g,
+                PAPER[l],
+                abs(g - PAPER[l]),
+                rel,
+                re,
+                RE_ANA[l],
+                rel_re,
+                ratio,
+                RATIO_ANA[l],
+            )
         )
     print()
     # asserts reels : leve AssertionError (donc sortie non nulle / CI rouge) si hors marge.

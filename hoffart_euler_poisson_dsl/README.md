@@ -107,7 +107,7 @@ without resolving them, which the implicit source stage allows (section 6).
 
 The system, with `Omega = omega e_z` so `m x Omega = (omega m_y, -omega m_x)`:
 
-```
+```text
 d_t rho + div(m)                          = 0
 d_t m   + div(m m^T/rho + p I)            = -rho grad(phi) + m x Omega
 -Delta phi = alpha rho,   p = theta rho
@@ -218,7 +218,7 @@ The source stage `adc.CondensedSchur(theta=0.5, alpha=...)` advances the source 
 over the cyclotron and plasma scales without resolving them. The Lorentz force is inverted by a 2x2
 eliminator
 
-```
+```text
 B^-1 = 1/(1+w^2) [[1, w], [-w, 1]],   w = theta dt B_z,
 ```
 
@@ -349,7 +349,7 @@ hard, you need much larger problems.
 
 ## 11. Folder structure
 
-```
+```text
 hoffart_euler_poisson_dsl/
 ├── model.py        modèle Euler-Poisson magnétisé en DSL (commenté), paramètres, densité + dérive initiales
 ├── run.py          CAS cartésien system-schur : assemblage, mesure paper-faithful (fenêtres mappées,

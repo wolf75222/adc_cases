@@ -252,5 +252,5 @@ assert that the instability grows on a periodic band, without a figure.
 | `run.py` | analytical (sec. 4) + simulation (sec. 5) + figures + provenance |
 | `figures/*.png`, `diocotron.gif` | versioned assets, regenerated in place |
 | `figures/provenance.json` | adc_cpp/adc_cases SHA, backend, resolution, measured $\gamma$ |
-| `band_instability.py` | lightweight CI variant | 
+| `band_instability.py` | lightweight CI variant |
 | `NORMALIZATION.md` | detail of the $\times 2\pi/\bar\rho$ normalization |

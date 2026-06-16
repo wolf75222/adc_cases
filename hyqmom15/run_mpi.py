@@ -37,6 +37,8 @@ Lancement
   mpirun -np 4 python run_mpi.py    # np=4 : idem
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import time
@@ -51,6 +53,7 @@ sys.path.insert(0, HERE)
 # sans), mais OBLIGATOIRE pour np>1 ; on le signale clairement si absent.
 try:
     from mpi4py import MPI  # noqa: F401
+
     _COMM = MPI.COMM_WORLD
 except ImportError:
     _COMM = None
@@ -66,64 +69,93 @@ from adc import _adc  # noqa: E402
 from model import build_moment_model  # noqa: E402
 from run_diocotron import DEBYE, OMEGA_P, diocotron_state  # noqa: E402
 
-N = 64          # cote de la grille (meme que run_diocotron : fidele au scenario de reference)
-NSTEPS = 12     # 10-20 pas demandes par le smoke ; 12 = milieu de fourchette
+N = 64  # cote de la grille (meme que run_diocotron : fidele au scenario de reference)
+NSTEPS = 12  # 10-20 pas demandes par le smoke ; 12 = milieu de fourchette
 
 
-def _rank_size():
-    """Rang / nombre de rangs vus PAR LE COEUR (my_rank/n_ranks lisent l'etat MPI initialise par
-    mpi4py). En serie pure (sans mpi4py) : 0 / 1."""
+def _rank_size() -> tuple[int, int]:
+    """Rang / nombre de rangs vus PAR LE COEUR.
+
+    my_rank/n_ranks lisent l'etat MPI initialise par mpi4py. En serie pure
+    (sans mpi4py) : 0 / 1.
+    """
     return _adc.my_rank(), _adc.n_ranks()
 
 
-def _barrier():
+def _barrier() -> None:
     if _COMM is not None:
         _COMM.Barrier()
 
 
-def compile_model(rho_bg, backend="aot"):
-    """Compile le modele 15 moments Vlasov-Poisson (sources electriques + Poisson) une seule fois,
-    dans le cache hors source keye (model_hash, abi_key). so_path=None : sur un cache HIT aucune
-    recompilation. Sous MPI on SERIALISE le premier build sur le rang 0 (barriere), puis les autres
-    rangs reutilisent la .so en cache : aucune ecriture concurrente du meme fichier."""
+def compile_model(rho_bg: float, backend: str = "aot"):
+    """Compile le modele 15 moments Vlasov-Poisson une seule fois.
+
+    Sources electriques + Poisson, dans le cache hors source keye (model_hash,
+    abi_key). so_path=None : sur un cache HIT aucune recompilation. Sous MPI on
+    SERIALISE le premier build sur le rang 0 (barriere), puis les autres rangs
+    reutilisent la .so en cache : aucune ecriture concurrente du meme fichier.
+    """
     from adc_cases.common.native import adc_include
 
-    m = build_moment_model(name="hyqmom15_vp", robust=True, with_sources=True,
-                           q_over_m=1.0, omega_c=0.0, debye=DEBYE, rho_background=rho_bg,
-                           omega_p=OMEGA_P, exact_speeds=False)
+    m = build_moment_model(
+        name="hyqmom15_vp",
+        robust=True,
+        with_sources=True,
+        q_over_m=1.0,
+        omega_c=0.0,
+        debye=DEBYE,
+        rho_background=rho_bg,
+        omega_p=OMEGA_P,
+        exact_speeds=False,
+    )
     rank, _ = _rank_size()
     compiled = None
     if rank == 0:
-        compiled = m.compile(None, adc_include(), backend=backend)  # populate cache
+        compiled = m.compile(
+            None, adc_include(), backend=backend
+        )  # populate cache
     _barrier()
     if rank != 0:
         compiled = m.compile(None, adc_include(), backend=backend)  # cache HIT
     return compiled
 
 
-def make_system(n, compiled, solver, riemann="rusanov"):
-    """System periodique + bloc 15 moments compile + Poisson au solveur demande. Memes briques que
-    run_diocotron.build_sim, mais le solveur Poisson est un PARAMETRE (geometric_mg pour le run,
-    fft/fft_spectral pour le test de rejet)."""
+def make_system(
+    n: int, compiled, solver: str, riemann: str = "rusanov"
+) -> adc.System:
+    """System periodique + bloc 15 moments compile + Poisson au solveur demande.
+
+    Memes briques que run_diocotron.build_sim, mais le solveur Poisson est un
+    PARAMETRE (geometric_mg pour le run, fft/fft_spectral pour le test de rejet).
+    """
     sim = adc.System(n=n, L=1.0, periodic=True)
-    sim.add_equation("mom", model=compiled,
-                     spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
-                     time=adc.Explicit())
+    sim.add_equation(
+        "mom",
+        model=compiled,
+        spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
+        time=adc.Explicit(),
+    )
     sim.set_poisson(rhs="charge_density", solver=solver)
     return sim
 
 
-def run_diocotron_mg(n, nsteps, compiled, U0):
-    """Avance le diocotron avec Poisson MG. Renvoie (U_final, phi, mass0, dt_loop_s). La facade
-    get_state/potential est MONO-RANG : seul le rang proprietaire de l'unique boite (rang 0, par la
-    DistributionMapping round-robin box0->rang0) a un etat a relire ; sur les autres rangs ces
-    accesseurs levent (pas de boite locale). On ne lit donc U/phi QUE sur le rang 0 (U=phi=None
-    ailleurs). Le transport et le Poisson, eux, sont COLLECTIFS et tournent sur tous les rangs."""
+def run_diocotron_mg(n: int, nsteps: int, compiled, U0: np.ndarray):
+    """Avance le diocotron avec Poisson MG.
+
+    Renvoie (U_final, phi, mass0, dt_loop_s). La facade get_state/potential est
+    MONO-RANG : seul le rang proprietaire de l'unique boite (rang 0, par la
+    DistributionMapping round-robin box0->rang0) a un etat a relire ; sur les
+    autres rangs ces accesseurs levent (pas de boite locale). On ne lit donc
+    U/phi QUE sur le rang 0 (U=phi=None ailleurs). Le transport et le Poisson,
+    eux, sont COLLECTIFS et tournent sur tous les rangs.
+    """
     rank, _ = _rank_size()
     sim = make_system(n, compiled, "geometric_mg")
     sim.set_state("mom", U0)
     sim.solve_fields()
-    mass0 = float(U0[0].sum())  # masse globale de la CI (la CI complete est connue de tous les rangs)
+    mass0 = float(
+        U0[0].sum()
+    )  # masse globale de la CI (la CI complete est connue de tous les rangs)
     _barrier()
     t0 = time.perf_counter()
     for _ in range(nsteps):
@@ -135,10 +167,16 @@ def run_diocotron_mg(n, nsteps, compiled, U0):
     return U, phi, mass0, dt_loop
 
 
-def check_fft_rejected(n, compiled, U0):
-    """Rejet propre sous MPI : solver='fft' (et 'fft_spectral') doivent lever une RuntimeError a
-    travers le driver, sans interblocage ni segfault. Le coeur leve sur TOUS les rangs (ensure_elliptic
-    est collectif), donc chaque rang catch symetriquement. @return {solver: (verdict, message)}."""
+def check_fft_rejected(n: int, compiled, U0: np.ndarray) -> dict:
+    """Rejet propre sous MPI des solveurs FFT.
+
+    solver='fft' (et 'fft_spectral') doivent lever une RuntimeError a travers le
+    driver, sans interblocage ni segfault. Le coeur leve sur TOUS les rangs
+    (ensure_elliptic est collectif), donc chaque rang catch symetriquement.
+
+    Returns:
+        {solver: (verdict, message)}.
+    """
     out = {}
     for solver in ("fft", "fft_spectral"):
         sim = make_system(n, compiled, solver)
@@ -148,34 +186,43 @@ def check_fft_rejected(n, compiled, U0):
             out[solver] = ("NON-REJETE", "")
         except RuntimeError as e:
             out[solver] = ("rejet RuntimeError", str(e).splitlines()[0])
-        except Exception as e:  # noqa: BLE001 -- on veut le type exact pour le rapport
+        except (
+            Exception
+        ) as e:  # noqa: BLE001 -- on veut le type exact pour le rapport
             out[solver] = (type(e).__name__, str(e).splitlines()[0])
         _barrier()
     return out
 
 
-def _state_path(nranks):
+def _state_path(nranks: int) -> str:
     from adc_cases.common.io import case_output_dir
+
     d = os.path.join(case_output_dir("hyqmom15"), "mpi_smoke")
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, "state_np%d.npz" % nranks)
 
 
-def main():
+def main() -> None:
     rank, nranks = _rank_size()
     # Determinisme bit-a-bit : 1 thread on-node (Kokkos OpenMP a des reductions a ordre non garanti
     # a >1 thread). La parite serie/multi-rang n'a de sens qu'a thread unique.
     try:
         adc.set_threads(1)
-    except Exception:  # noqa: BLE001 -- API absente sur un build sans threads : ignore
+    except (
+        Exception
+    ):  # noqa: BLE001 -- API absente sur un build sans threads : ignore
         pass
 
     if rank == 0:
-        print("=== hyqmom15/run_mpi : diocotron Vlasov-Poisson, Poisson geometric_mg, np=%d ==="
-              % nranks)
+        print(
+            "=== hyqmom15/run_mpi : diocotron Vlasov-Poisson, Poisson geometric_mg, np=%d ==="
+            % nranks
+        )
         if nranks > 1 and _COMM is None:
-            print("ATTENTION : mpi4py absent -> MPI non initialise -> chaque process se croit serie. "
-                  "Installer mpi4py (compile contre la meme libmpi qu'_adc).")
+            print(
+                "ATTENTION : mpi4py absent -> MPI non initialise -> chaque process se croit serie. "
+                "Installer mpi4py (compile contre la meme libmpi qu'_adc)."
+            )
 
     U0 = diocotron_state(N)
     rho_bg = float(U0[0].mean())
@@ -186,7 +233,10 @@ def main():
         rej = check_fft_rejected(N, compiled, U0)
         if rank == 0:
             for solver, (verdict, msg) in rej.items():
-                print("(rejet) solver=%-13s -> %s | %s" % (repr(solver), verdict, msg))
+                print(
+                    "(rejet) solver=%-13s -> %s | %s"
+                    % (repr(solver), verdict, msg)
+                )
 
     # (2) run principal : 12 pas, Poisson MG.
     U, phi, mass0, dt_loop = run_diocotron_mg(N, NSTEPS, compiled, U0)
@@ -198,13 +248,18 @@ def main():
         mass1 = float(U[0].sum())
         drift = abs(mass1 - mass0) / mass0
         phi_finite = bool(np.all(np.isfinite(phi)))
-        print("(run) np=%d : %d pas, etat fini=%s, M00>0=%s, derive masse=%.2e, phi fini=%s, "
-              "boucle=%.3fs" % (nranks, NSTEPS, finite, m00_pos, drift, phi_finite, dt_loop))
+        print(
+            "(run) np=%d : %d pas, etat fini=%s, M00>0=%s, derive masse=%.2e, phi fini=%s, "
+            "boucle=%.3fs"
+            % (nranks, NSTEPS, finite, m00_pos, drift, phi_finite, dt_loop)
+        )
         assert finite and m00_pos and phi_finite, "etat/ phi non fini ou M00<=0"
         assert drift < 1e-12, "masse non conservee (%.2e)" % drift
 
         # Ecrit l'etat final pour la parite (reference np=1, comparaison np>1).
-        np.savez(_state_path(nranks), U=U, phi=phi, mass1=mass1, dt_loop=dt_loop)
+        np.savez(
+            _state_path(nranks), U=U, phi=phi, mass1=mass1, dt_loop=dt_loop
+        )
 
         # (3) parite vs np=1 (si la reference existe).
         ref = _state_path(1)
@@ -213,11 +268,25 @@ def main():
             Uref, phiref = r["U"], r["phi"]
             same_U = bool(np.array_equal(U, Uref))
             same_phi = bool(np.array_equal(phi, phiref))
-            dU = float(np.max(np.abs(U - Uref))) if U.shape == Uref.shape else float("nan")
-            dphi = float(np.max(np.abs(phi - phiref))) if phi.shape == phiref.shape else float("nan")
-            verdict = "BIT-IDENTIQUE" if (same_U and same_phi) else "ECART (voir dU/dphi)"
-            print("(parite) np=%d vs np=1 : %s | dU_max=%.3e dphi_max=%.3e" %
-                  (nranks, verdict, dU, dphi))
+            dU = (
+                float(np.max(np.abs(U - Uref)))
+                if U.shape == Uref.shape
+                else float("nan")
+            )
+            dphi = (
+                float(np.max(np.abs(phi - phiref)))
+                if phi.shape == phiref.shape
+                else float("nan")
+            )
+            verdict = (
+                "BIT-IDENTIQUE"
+                if (same_U and same_phi)
+                else "ECART (voir dU/dphi)"
+            )
+            print(
+                "(parite) np=%d vs np=1 : %s | dU_max=%.3e dphi_max=%.3e"
+                % (nranks, verdict, dU, dphi)
+            )
         print("hyqmom15/run_mpi (np=%d) : OK" % nranks)
 
 

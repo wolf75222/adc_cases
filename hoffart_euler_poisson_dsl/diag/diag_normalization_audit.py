@@ -70,6 +70,8 @@ circulaire). Reproduit ``gamma_raw(l=3, fenetre papier) ~ 0.031`` == la mesure d
 run COMPLET (RESULTS section 1 : 0.0321), confirmant l'equivalence full == reduit.
 """
 
+from __future__ import annotations
+
 import math
 import sys
 import time
@@ -82,12 +84,16 @@ import adc
 # --- params papier (../model.py) ---
 BETA = 1.0e6
 RHO_MAX = 1.0
-ALPHA = BETA * BETA / RHO_MAX            # 1e12
-OMEGA = BETA * BETA                      # 1e12  (= omega_c = |Omega|)
+ALPHA = BETA * BETA / RHO_MAX  # 1e12
+OMEGA = BETA * BETA  # 1e12  (= omega_c = |Omega|)
 OMEGA_C = OMEGA
-OMEGA_D = RHO_MAX * ALPHA / abs(OMEGA)   # = 1   (frequence diocotron, echelle LENTE)
-T_D = 2.0 * math.pi / OMEGA_D            # = 2 pi (periode diocotron)
-FACTOR_ALPHA_OMEGA = ALPHA / OMEGA       # = 1/rho_max = 1 (seule combo a-dimensionnee)
+OMEGA_D = (
+    RHO_MAX * ALPHA / abs(OMEGA)
+)  # = 1   (frequence diocotron, echelle LENTE)
+T_D = 2.0 * math.pi / OMEGA_D  # = 2 pi (periode diocotron)
+FACTOR_ALPHA_OMEGA = (
+    ALPHA / OMEGA
+)  # = 1/rho_max = 1 (seule combo a-dimensionnee)
 
 # --- geometrie de l'anneau (echelle papier 6:8:16) ---
 R0, R1, RW = 6.0, 8.0, 16.0
@@ -98,14 +104,25 @@ ESTABLISHED_WIN = (3.0, 12.0)
 TWO_PI = 2.0 * math.pi
 
 
-def exb_model():
-    """Derive ExB scalaire NORMALISEE -- MEME champ de vitesse que le run complet (alpha/omega=1)."""
-    return adc.Model(state=adc.Scalar(), transport=adc.ExB(B0=1.0),
-                     source=adc.NoSource(), elliptic=adc.ChargeDensity(charge=1.0))
+def exb_model() -> adc.Model:
+    """Modele de derive ExB scalaire NORMALISEE (B0=1, charge=1).
+
+    Champ de vitesse IDENTIQUE a celui du run complet, car alpha/omega = 1 :
+    le 1e12 de alpha et le 1e12 de omega se simplifient dans le transport.
+    """
+    return adc.Model(
+        state=adc.Scalar(),
+        transport=adc.ExB(B0=1.0),
+        source=adc.NoSource(),
+        elliptic=adc.ChargeDensity(charge=1.0),
+    )
 
 
-def ring_ic_cart(n, l):
-    """Anneau cartesien [R0, R1] perturbe au mode l, centre au milieu du carre L = 2 RW."""
+def ring_ic_cart(n: int, l: int) -> np.ndarray:
+    """Densite initiale : anneau cartesien [R0, R1] perturbe au mode l.
+
+    L'anneau est centre au milieu du carre de cote L = 2 RW.
+    """
     L = 2.0 * RW
     h = L / n
     x = (np.arange(n) + 0.5) * h - RW
@@ -116,14 +133,25 @@ def ring_ic_cart(n, l):
     return np.where((r >= R0) & (r <= R1), dper, RHO_MIN)
 
 
-def run_cart(l, n, dt, t_end):
+def run_cart(
+    l: int, n: int, dt: float, t_end: float
+) -> tuple[np.ndarray, np.ndarray]:
     """Run ExB normalise cartesien, dt FIXE (comme run.py). Renvoie (t, c_l(phi a r0))."""
     L = 2.0 * RW
     sim = adc.System(n=n, L=L, periodic=False)
-    sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="dirichlet",
-                    wall="circle", wall_radius=RW)
-    sim.add_block("ne", model=exb_model(), spatial=adc.Spatial(weno5=True),
-                  time=adc.Explicit(method="ssprk3"))
+    sim.set_poisson(
+        rhs="charge_density",
+        solver="geometric_mg",
+        bc="dirichlet",
+        wall="circle",
+        wall_radius=RW,
+    )
+    sim.add_block(
+        "ne",
+        model=exb_model(),
+        spatial=adc.Spatial(weno5=True),
+        time=adc.Explicit(method="ssprk3"),
+    )
     sim.set_density("ne", ring_ic_cart(n, l).reshape(-1))
     h = L / n
     th = np.linspace(0.0, 2.0 * math.pi, 1024, endpoint=False)
@@ -140,8 +168,12 @@ def run_cart(l, n, dt, t_end):
         phi = np.asarray(sim.potential(), float).reshape(n, n)
         if not np.isfinite(phi).all():
             break
-        vals = (phi[j0, i0] * (1 - tx) * (1 - ty) + phi[j0, i0 + 1] * tx * (1 - ty)
-                + phi[j0 + 1, i0] * (1 - tx) * ty + phi[j0 + 1, i0 + 1] * tx * ty)
+        vals = (
+            phi[j0, i0] * (1 - tx) * (1 - ty)
+            + phi[j0, i0 + 1] * tx * (1 - ty)
+            + phi[j0 + 1, i0] * (1 - tx) * ty
+            + phi[j0 + 1, i0 + 1] * tx * ty
+        )
         ts.append(t)
         cs.append((np.fft.rfft(vals) / vals.size)[l])
         if t >= t_end:
@@ -150,7 +182,9 @@ def run_cart(l, n, dt, t_end):
     return np.array(ts), np.array(cs)
 
 
-def gfit(ts, cs, lo, hi):
+def gfit(
+    ts: np.ndarray, cs: np.ndarray, lo: float, hi: float
+) -> tuple[float, int]:
     """Pente de log|c_l| dans [lo, hi]. Renvoie (gamma, n_points)."""
     a = np.abs(cs)
     m = (ts >= lo) & (ts <= hi) & (a > 0)
@@ -159,36 +193,76 @@ def gfit(ts, cs, lo, hi):
     return float(np.polyfit(ts[m], np.log(a[m]), 1)[0]), int(m.sum())
 
 
-def main():
+def main() -> None:
+    """Affiche les echelles dimensionnelles, le test de fenetre et les candidats."""
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 128
     dt, t_end = 2.0e-3, 15.0
 
     sep = "=" * 96
     print(sep)
-    print("ECHELLES DIMENSIONNELLES (params papier beta=%.0e, rho_max=%.0f)" % (BETA, RHO_MAX))
+    print(
+        "ECHELLES DIMENSIONNELLES (params papier beta=%.0e, rho_max=%.0f)"
+        % (BETA, RHO_MAX)
+    )
     print("  alpha             = beta^2/rho_max     = %.3e" % ALPHA)
-    print("  omega_c = |Omega| = beta^2             = %.3e   (champ B_z du run complet)" % OMEGA_C)
-    print("  omega_d = rho_max*alpha/|Omega|        = %.6f      (diocotron, O(1) -- echelle LENTE)" % OMEGA_D)
-    print("  T_d     = 2 pi / omega_d               = %.6f   (periode diocotron == le 2 pi du depot)" % T_D)
-    print("  alpha/omega (seule combo a-dimensionnee) = %.6f  (= 1/rho_max ; le 1e12 se SIMPLIFIE)"
-          % FACTOR_ALPHA_OMEGA)
+    print(
+        "  omega_c = |Omega| = beta^2             = %.3e   (champ B_z du run complet)"
+        % OMEGA_C
+    )
+    print(
+        "  omega_d = rho_max*alpha/|Omega|        = %.6f      (diocotron, O(1) -- echelle LENTE)"
+        % OMEGA_D
+    )
+    print(
+        "  T_d     = 2 pi / omega_d               = %.6f   (periode diocotron == le 2 pi du depot)"
+        % T_D
+    )
+    print(
+        "  alpha/omega (seule combo a-dimensionnee) = %.6f  (= 1/rho_max ; le 1e12 se SIMPLIFIE)"
+        % FACTOR_ALPHA_OMEGA
+    )
     print(sep)
-    print("TEST FENETRE : reduit ExB NORMALISE (B0=1, charge=1) == champ de vitesse du run complet.")
-    print("UN run/mode (dt=%.0e fixe, t_end=%.1f, n=%d), fit fenetre PAPIER (sim) vs ETABLIE." % (dt, t_end, n))
+    print(
+        "TEST FENETRE : reduit ExB NORMALISE (B0=1, charge=1) == champ de vitesse du run complet."
+    )
+    print(
+        "UN run/mode (dt=%.0e fixe, t_end=%.1f, n=%d), fit fenetre PAPIER (sim) vs ETABLIE."
+        % (dt, t_end, n)
+    )
     print("-" * 96)
-    print("  l | win_papier (sim)  g_raw   npts | win_etablie [3,12]  g_raw   npts | ratio etabli/papier")
+    print(
+        "  l | win_papier (sim)  g_raw   npts | win_etablie [3,12]  g_raw   npts | ratio etabli/papier"
+    )
     for l in (3, 4, 5):
         t0 = time.time()
         ts, cs = run_cart(l, n, dt, t_end)
         lo, hi = PAPER_WIN[l]
         g_pap, np_pap = gfit(ts, cs, lo, hi)
         g_eta, np_eta = gfit(ts, cs, *ESTABLISHED_WIN)
-        ratio = g_eta / g_pap if (np.isfinite(g_pap) and g_pap != 0) else float("nan")
-        print("  %d | [%.2f,%.2f]  %.4f  n=%3d | [3.0,12.0]  %.4f  n=%4d | %.2f   (%.0fs, tf=%.1f)"
-              % (l, lo, hi, g_pap, np_pap, g_eta, np_eta, ratio, time.time() - t0,
-                 ts[-1] if len(ts) else 0.0))
+        ratio = (
+            g_eta / g_pap
+            if (np.isfinite(g_pap) and g_pap != 0)
+            else float("nan")
+        )
+        print(
+            "  %d | [%.2f,%.2f]  %.4f  n=%3d | [3.0,12.0]  %.4f  n=%4d | %.2f   (%.0fs, tf=%.1f)"
+            % (
+                l,
+                lo,
+                hi,
+                g_pap,
+                np_pap,
+                g_eta,
+                np_eta,
+                ratio,
+                time.time() - t0,
+                ts[-1] if len(ts) else 0.0,
+            )
+        )
     print(sep)
-    print("CANDIDATS DE SCALING (derives A L'AVANCE ; appliques au g_raw ETABLI l=4) :")
+    print(
+        "CANDIDATS DE SCALING (derives A L'AVANCE ; appliques au g_raw ETABLI l=4) :"
+    )
     ts, cs = run_cart(4, n, dt, t_end)
     g_eta, _ = gfit(ts, cs, *ESTABLISHED_WIN)
     g_pap, _ = gfit(ts, cs, *PAPER_WIN[4])
@@ -196,16 +270,34 @@ def main():
     c2 = g_eta * TWO_PI * FACTOR_ALPHA_OMEGA
     c3 = g_eta / OMEGA_D
     c4 = g_eta * T_D
-    print("  g_raw etabli (l=4, [3,12]) = %.4f   | g_raw fenetre-papier = %.4f" % (g_eta, g_pap))
+    print(
+        "  g_raw etabli (l=4, [3,12]) = %.4f   | g_raw fenetre-papier = %.4f"
+        % (g_eta, g_pap)
+    )
     print("  candidat_1 = g_raw * 2pi          = %.4f" % c1)
-    print("  candidat_2 = g_raw * 2pi * (a/o)  = %.4f   (a/o = %.3f -> == candidat_1)" % (c2, FACTOR_ALPHA_OMEGA))
-    print("  candidat_3 = g_raw / omega_d      = %.4f   (omega_d = %.3f -> NO-OP)" % (c3, OMEGA_D))
-    print("  candidat_4 = g_raw * T_d          = %.4f   (T_d = 2pi -> == candidat_1)" % c4)
+    print(
+        "  candidat_2 = g_raw * 2pi * (a/o)  = %.4f   (a/o = %.3f -> == candidat_1)"
+        % (c2, FACTOR_ALPHA_OMEGA)
+    )
+    print(
+        "  candidat_3 = g_raw / omega_d      = %.4f   (omega_d = %.3f -> NO-OP)"
+        % (c3, OMEGA_D)
+    )
+    print(
+        "  candidat_4 = g_raw * T_d          = %.4f   (T_d = 2pi -> == candidat_1)"
+        % c4
+    )
     print("  cible papier l=4                  = %.4f" % PAPER[4])
     print("-" * 96)
-    print("Tous les candidats DIMENSIONNELLEMENT honnetes s'effondrent sur g_raw*2pi (a/o=1, omega_d=1,")
-    print("T_d=2pi). Le seul facteur libre est 2 pi = T_d. Le 'residu ~3x' est la FENETRE (run.py fitte")
-    print("le transitoire en temps sim), PAS une echelle manquante. Residu final ~20%% = grille cart vs")
+    print(
+        "Tous les candidats DIMENSIONNELLEMENT honnetes s'effondrent sur g_raw*2pi (a/o=1, omega_d=1,"
+    )
+    print(
+        "T_d=2pi). Le seul facteur libre est 2 pi = T_d. Le 'residu ~3x' est la FENETRE (run.py fitte"
+    )
+    print(
+        "le transitoire en temps sim), PAS une echelle manquante. Residu final ~20%% = grille cart vs"
+    )
     print("polaire (section 7ter), seule part NON metrologique.")
 
 

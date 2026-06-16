@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cas "plasma" : electrons + ions + neutres couples (Poisson + ionisation + collision).
+"""Cas "plasma" : electrons + ions + neutres (Poisson + ionisation + collision).
 
 Compose le scenario plasma vise par le tuteur depuis Python via une recette systeme
 (`recipes.plasma`) : trois especes (electrons Euler, ions et neutres isothermes) partageant un
@@ -17,6 +17,9 @@ isolement dans le test des bindings (ici le champ agit aussi sur les ions). L'io
 la densite (comp 0) ; le transfert de quantite de mouvement / energie des particules creees est
 une simplification (cf. la brique add_ionization).
 """
+
+from __future__ import annotations
+
 import numpy as np
 
 import adc
@@ -27,27 +30,43 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import recipes  # noqa: E402  (recettes systeme nommees, cote application)
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases import (
+    recipes,
+)  # noqa: E402  (recettes systeme nommees, cote application)
 from adc_cases.common.checks import relative_drift  # noqa: E402
 
 PI = np.pi
 
 
-def main():
+def main() -> None:
+    """Pose les CI, joue 20 pas, verifie Poisson, ionisation et integrite."""
     n, L = 48, 1.0
     x = (np.arange(n) + 0.5) / n
-    ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones((n, n))  # faible separation de charge
+    ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones(
+        (n, n)
+    )  # faible separation de charge
 
     sim = adc.System(n=n, L=L, periodic=True)
-    recipes.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
-                   ionization_rate=0.3, collision_rate=0.5)  # recette systeme : blocs + couplages
+    recipes.plasma(
+        sim,
+        ne=ne,
+        ni=np.ones((n, n)),
+        ng=np.ones((n, n)),
+        ionization_rate=0.3,
+        collision_rate=0.5,
+    )  # recette systeme : blocs + couplages
 
     sim.solve_fields()
     phi0 = float(np.abs(np.array(sim.potential())).max())
     mi0, mg0 = sim.mass("ions"), sim.mass("neutrals")
 
-    print("== plasma : electrons + ions + neutres (Poisson + ionisation + collision) ==")
+    print(
+        "== plasma : electrons + ions + neutres (Poisson + ionisation + collision) =="
+    )
     print("  |phi|_max = %.3e  (Poisson de systeme actif)" % phi0)
 
     for _ in range(20):
@@ -55,17 +74,34 @@ def main():
 
     mi1, mg1 = sim.mass("ions"), sim.mass("neutrals")
     drel = relative_drift(mi1 + mg1, mi0 + mg0)
-    dens = {s: np.array(sim.density(s)) for s in ("electrons", "ions", "neutrals")}
-    finite_pos = all(np.isfinite(d).all() and float(d.min()) > 0.0 for d in dens.values())
+    dens = {
+        s: np.array(sim.density(s)) for s in ("electrons", "ions", "neutrals")
+    }
+    finite_pos = all(
+        np.isfinite(d).all() and float(d.min()) > 0.0 for d in dens.values()
+    )
 
-    print("  ionisation : n_i %.4f -> %.4f,  n_g %.4f -> %.4f,  (n_i+n_g) drel = %.2e"
-          % (mi0, mi1, mg0, mg1, drel))
-    print("  densites   : min e=%.3e i=%.3e n=%.3e (toutes finies et positives : %s)"
-          % (dens["electrons"].min(), dens["ions"].min(), dens["neutrals"].min(), finite_pos))
+    print(
+        "  ionisation : n_i %.4f -> %.4f,  n_g %.4f -> %.4f,  (n_i+n_g) drel = %.2e"
+        % (mi0, mi1, mg0, mg1, drel)
+    )
+    print(
+        "  densites   : min e=%.3e i=%.3e n=%.3e (toutes finies et positives : %s)"
+        % (
+            dens["electrons"].min(),
+            dens["ions"].min(),
+            dens["neutrals"].min(),
+            finite_pos,
+        )
+    )
 
     assert phi0 > 1e-8, "Poisson inactif (pas de separation de charge ?)"
-    assert mg1 < mg0 - 1e-6 and mi1 > mi0 + 1e-6, "ionisation : on attend neutres -> ions"
-    assert drel < 1e-7, "ionisation : masse n_i + n_g non conservee (drel=%.2e)" % drel
+    assert (
+        mg1 < mg0 - 1e-6 and mi1 > mi0 + 1e-6
+    ), "ionisation : on attend neutres -> ions"
+    assert drel < 1e-7, (
+        "ionisation : masse n_i + n_g non conservee (drel=%.2e)" % drel
+    )
     assert finite_pos, "densite non finie ou negative"
     print("OK plasma")
 

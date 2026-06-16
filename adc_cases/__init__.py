@@ -31,6 +31,8 @@ Le module C++ `adc` (bindings pybind11 d'adc_cpp) reste fourni par le PYTHONPATH
 (cf. README) ; ce paquet ne le construit ni ne le localise.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 
@@ -38,11 +40,12 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def ensure_importable():
-    """Rend le depot importable pour un cas lance directement (sans installation du paquet).
+def ensure_importable() -> None:
+    """Rend le depot importable pour un cas lance directement (sans installation).
 
-    Insere la racine du depot sur `sys.path` si absente (idempotent). Inutile lorsque le
-    paquet est installe (`pip install -e .`), ou `import adc_cases` resout deja tout seul.
+    Insere la racine du depot sur `sys.path` si absente (idempotent). Inutile
+    lorsque le paquet est installe (`pip install -e .`), ou `import adc_cases`
+    resout deja tout seul.
     """
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)

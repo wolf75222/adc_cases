@@ -40,6 +40,8 @@ Sortie : diagnostics numeriques imprimes, puis la ligne finale "OK two_fluid_ap"
 Dependances : numpy + un compilateur C++20 (le solveur AP est compile a la volee).
 """
 
+from __future__ import annotations
+
 import ctypes
 import os
 import sys
@@ -50,8 +52,12 @@ import numpy as np
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases.common import native  # noqa: E402  (build JIT + chargement ctypes, cache hors source)
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases.common import (
+    native,
+)  # noqa: E402  (build JIT + chargement ctypes, cache hors source)
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,32 +65,53 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # Symboles extern "C" exposes par _two_fluid_ap.cpp (cf. ABI plus bas). Leur absence au
 # chargement signe une ABI incompatible et leve une erreur explicite (native.load_symbols).
 TFAP_SYMBOLS = (
-    "tfap_create", "tfap_destroy", "tfap_step", "tfap_advance", "tfap_nx",
-    "tfap_mass_e", "tfap_mass_i", "tfap_max_charge", "tfap_max_dev",
-    "tfap_density_e", "tfap_density_i",
+    "tfap_create",
+    "tfap_destroy",
+    "tfap_step",
+    "tfap_advance",
+    "tfap_nx",
+    "tfap_mass_e",
+    "tfap_mass_i",
+    "tfap_max_charge",
+    "tfap_max_dev",
+    "tfap_density_e",
+    "tfap_density_i",
 )
 
 
 # --- Compilation a la volee du solveur AP -------------------------------------------------
-def _build_lib():
+def _build_lib() -> ctypes.CDLL:
     """Compile _two_fluid_ap.cpp (cache hors source, cle d'ABI) et charge la lib (ctypes).
 
     Delegue a `adc_cases.common.native` : cache dans out/two_fluid_ap/build/ (jamais a cote du
     .cpp), recompilation des que la cle d'ABI change (compilateur, flags, sources, en-tetes du
     coeur), et verification des symboles attendus au chargement (ABI mismatch = erreur explicite).
     """
-    sources = [os.path.join(HERE, "_two_fluid_ap.cpp"), os.path.join(HERE, "two_fluid_ap.hpp")]
+    sources = [
+        os.path.join(HERE, "_two_fluid_ap.cpp"),
+        os.path.join(HERE, "two_fluid_ap.hpp"),
+    ]
     lib_path = native.build_shared("two_fluid_ap", sources)
     return native.load_symbols(lib_path, TFAP_SYMBOLS)
 
 
-def _bind(lib):
+def _bind(lib: ctypes.CDLL) -> ctypes.CDLL:
     """Declare les signatures ctypes des fonctions extern "C" du solveur AP."""
     dptr = ctypes.POINTER(ctypes.c_double)
     lib.tfap_create.restype = ctypes.c_void_p
-    lib.tfap_create.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double,
-                                ctypes.c_double, ctypes.c_double, ctypes.c_int, ctypes.c_double,
-                                ctypes.c_int, ctypes.c_double, ctypes.c_double]
+    lib.tfap_create.argtypes = [
+        ctypes.c_int,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_double,
+        ctypes.c_int,
+        ctypes.c_double,
+        ctypes.c_int,
+        ctypes.c_double,
+        ctypes.c_double,
+    ]
     lib.tfap_destroy.restype = None
     lib.tfap_destroy.argtypes = [ctypes.c_void_p]
     lib.tfap_step.restype = None
@@ -93,7 +120,12 @@ def _bind(lib):
     lib.tfap_advance.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int]
     lib.tfap_nx.restype = ctypes.c_int
     lib.tfap_nx.argtypes = [ctypes.c_void_p]
-    for name in ("tfap_mass_e", "tfap_mass_i", "tfap_max_charge", "tfap_max_dev"):
+    for name in (
+        "tfap_mass_e",
+        "tfap_mass_i",
+        "tfap_max_charge",
+        "tfap_max_dev",
+    ):
         f = getattr(lib, name)
         f.restype = ctypes.c_double
         f.argtypes = [ctypes.c_void_p]
@@ -111,12 +143,51 @@ class TwoFluidAP:
     meme API (step / advance / mass_e / max_charge / ...), mais le solveur vit dans adc_cases.
     """
 
-    def __init__(self, lib, n=64, L=2.0 * np.pi, cse2=1.0, csi2=0.04, omega_pe=5.0,
-                 omega_pi=1.0, stabilize=True, eps=1e-3, upwind_continuity=False,
-                 omega_ce=0.0, omega_ci=0.0):
+    def __init__(
+        self,
+        lib: ctypes.CDLL,
+        n: int = 64,
+        L: float = 2.0 * np.pi,
+        cse2: float = 1.0,
+        csi2: float = 0.04,
+        omega_pe: float = 5.0,
+        omega_pi: float = 1.0,
+        stabilize: bool = True,
+        eps: float = 1e-3,
+        upwind_continuity: bool = False,
+        omega_ce: float = 0.0,
+        omega_ci: float = 0.0,
+    ):
+        """Cree le solveur C++ (grille n x n) et garde son handle opaque.
+
+        Args:
+            lib: bibliotheque ctypes deja liee (cf. _bind).
+            n: cote de la grille carree n x n.
+            L: longueur du domaine carre periodique.
+            cse2, csi2: vitesses du son au carre des electrons et des ions.
+            omega_pe, omega_pi: frequences plasma (echelle de temps raide).
+            stabilize: active le traitement AP-IMEX du terme raide.
+            eps: regularisation de l'elliptique.
+            upwind_continuity: decentre amont le transport de continuite.
+            omega_ce, omega_ci: frequences cyclotron (rotation magnetique).
+
+        Raises:
+            RuntimeError: si la creation du solveur C++ echoue.
+        """
         self._lib = lib
-        self._h = lib.tfap_create(n, L, cse2, csi2, omega_pe, omega_pi, int(stabilize), eps,
-                                  int(upwind_continuity), omega_ce, omega_ci)
+        self._h = lib.tfap_create(
+            n,
+            L,
+            cse2,
+            csi2,
+            omega_pe,
+            omega_pi,
+            int(stabilize),
+            eps,
+            int(upwind_continuity),
+            omega_ce,
+            omega_ci,
+        )
         if not self._h:
             raise RuntimeError("two_fluid_ap : tfap_create a echoue")
 
@@ -126,69 +197,75 @@ class TwoFluidAP:
             self._lib.tfap_destroy(h)
             self._h = None
 
-    def step(self, dt):
+    def step(self, dt: float) -> None:
         self._lib.tfap_step(self._h, dt)
 
-    def advance(self, dt, nsteps):
+    def advance(self, dt: float, nsteps: int) -> None:
         self._lib.tfap_advance(self._h, dt, int(nsteps))
 
-    def nx(self):
+    def nx(self) -> int:
         return self._lib.tfap_nx(self._h)
 
-    def mass_e(self):
+    def mass_e(self) -> float:
         return self._lib.tfap_mass_e(self._h)
 
-    def mass_i(self):
+    def mass_i(self) -> float:
         return self._lib.tfap_mass_i(self._h)
 
-    def max_charge(self):
+    def max_charge(self) -> float:
         return self._lib.tfap_max_charge(self._h)
 
-    def max_dev(self):
+    def max_dev(self) -> float:
         return self._lib.tfap_max_dev(self._h)
 
-    def _density(self, fn):
+    def _density(self, fn) -> np.ndarray:
         n = self.nx()
         out = np.empty(n * n, dtype=np.float64)
         fn(self._h, out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
         return out.reshape(n, n)
 
-    def density_e(self):
+    def density_e(self) -> np.ndarray:
         return self._density(self._lib.tfap_density_e)
 
-    def density_i(self):
+    def density_i(self) -> np.ndarray:
         return self._density(self._lib.tfap_density_i)
 
 
-def _rel_err(a, b):
+def _rel_err(a: float, b: float) -> float:
     """Erreur relative robuste (denominateur protege contre le zero)."""
     return abs(a - b) / max(abs(b), 1e-30)
 
 
-def run_stiff(lib):
+def run_stiff(lib: ctypes.CDLL) -> tuple[float, float, float]:
     """Run 1 : regime raide non magnetise, dt * omega_pe = 5."""
-    omega_pe = 1.0e3   # frequence plasma electronique : echelle de temps raide
-    omega_pi = 20.0    # frequence plasma ionique
+    omega_pe = 1.0e3  # frequence plasma electronique : echelle de temps raide
+    omega_pi = 20.0  # frequence plasma ionique
     n = 64
     solver = TwoFluidAP(lib, n=n, omega_pe=omega_pe, omega_pi=omega_pi)
 
-    dt = 5.0 / 1.0e3                 # dt choisi tel que dt * omega_pe = 5
-    stiffness = dt * omega_pe        # nombre de raideur (>> 1 ici)
+    dt = 5.0 / 1.0e3  # dt choisi tel que dt * omega_pe = 5
+    stiffness = dt * omega_pe  # nombre de raideur (>> 1 ici)
     mass_e0 = solver.mass_e()
 
     solver.advance(dt, 200)
 
-    max_dev = solver.max_dev()       # ecart max a la quasi-neutralite
-    max_charge = solver.max_charge() # charge nette locale max
+    max_dev = solver.max_dev()  # ecart max a la quasi-neutralite
+    max_charge = solver.max_charge()  # charge nette locale max
     mass_e = solver.mass_e()
     mass_rel = _rel_err(mass_e, mass_e0)
 
     print("[run 1 - raide, non magnetise]")
     print("  n=%d  omega_pe=%.3e  omega_pi=%.3e" % (n, omega_pe, omega_pi))
-    print("  dt=%.3e  nsteps=200  dt*omega_pe=%.1f  (explicite exploserait)" % (dt, stiffness))
+    print(
+        "  dt=%.3e  nsteps=200  dt*omega_pe=%.1f  (explicite exploserait)"
+        % (dt, stiffness)
+    )
     print("  max_dev()    = %.6e   (ecart a la quasi-neutralite)" % max_dev)
     print("  max_charge() = %.6e   (charge nette locale)" % max_charge)
-    print("  mass_e: %.6e -> %.6e   (err. relative %.3e)" % (mass_e0, mass_e, mass_rel))
+    print(
+        "  mass_e: %.6e -> %.6e   (err. relative %.3e)"
+        % (mass_e0, mass_e, mass_rel)
+    )
 
     # --- Invariants physiques (propriete AP) ---
     # Le grand pas de temps a bien ete fait sans exploser : valeurs finies.
@@ -196,18 +273,22 @@ def run_stiff(lib):
     assert np.isfinite(max_charge), "max_charge non fini : le schema a explose"
     assert np.isfinite(mass_e), "mass_e non finie : le schema a explose"
     # Propriete AP : la quasi-neutralite est maintenue malgre dt*omega_pe = 5.
-    assert max_dev < 0.1, "max_dev trop grand (%.3e) : quasi-neutralite non maintenue" % max_dev
+    assert max_dev < 0.1, (
+        "max_dev trop grand (%.3e) : quasi-neutralite non maintenue" % max_dev
+    )
     assert max_charge < 0.1, "max_charge trop grand (%.3e)" % max_charge
     # Conservation de la masse electronique.
-    assert mass_rel < 1e-7, "masse electronique non conservee (err. rel. %.3e)" % mass_rel
+    assert mass_rel < 1e-7, (
+        "masse electronique non conservee (err. rel. %.3e)" % mass_rel
+    )
 
     return max_dev, max_charge, mass_rel
 
 
-def run_magnetized(lib):
+def run_magnetized(lib: ctypes.CDLL) -> tuple[float, float, float]:
     """Run 2 : plasma raide magnetise (rotation cyclotron active)."""
-    omega_ce = 4.0   # frequence cyclotron electronique
-    omega_ci = 0.2   # frequence cyclotron ionique
+    omega_ce = 4.0  # frequence cyclotron electronique
+    omega_ci = 0.2  # frequence cyclotron ionique
     n = 64
     solver = TwoFluidAP(lib, n=n, omega_ce=omega_ce, omega_ci=omega_ci)
 
@@ -226,24 +307,35 @@ def run_magnetized(lib):
     print("  dt=%.3e  nsteps=100" % dt)
     print("  max_dev()    = %.6e" % max_dev)
     print("  max_charge() = %.6e" % max_charge)
-    print("  mass_e: %.6e -> %.6e   (err. relative %.3e)" % (mass_e0, mass_e, mass_rel))
+    print(
+        "  mass_e: %.6e -> %.6e   (err. relative %.3e)"
+        % (mass_e0, mass_e, mass_rel)
+    )
 
     # --- Invariants physiques ---
     assert np.isfinite(max_dev), "max_dev non fini : le schema a explose"
     assert np.isfinite(mass_e), "mass_e non finie : le schema a explose"
     # Conservation de la masse electronique sous rotation cyclotron.
-    assert mass_rel < 1e-7, "masse electronique non conservee (err. rel. %.3e)" % mass_rel
+    assert mass_rel < 1e-7, (
+        "masse electronique non conservee (err. rel. %.3e)" % mass_rel
+    )
 
     return max_dev, max_charge, mass_rel
 
 
-def main():
-    print("=== Demo two_fluid_ap : bi-fluide isotherme raide (asymptotic-preserving) ===")
+def main() -> None:
+    print(
+        "=== Demo two_fluid_ap : bi-fluide isotherme raide (asymptotic-preserving) ==="
+    )
     lib = _bind(_build_lib())
     run_stiff(lib)
     run_magnetized(lib)
-    print("Conclusion : schema IMEX / asymptotic-preserving stable et conservatif")
-    print("pour un plasma raide, magnetise ou non (un schema explicite echouerait).")
+    print(
+        "Conclusion : schema IMEX / asymptotic-preserving stable et conservatif"
+    )
+    print(
+        "pour un plasma raide, magnetise ou non (un schema explicite echouerait)."
+    )
     print("OK two_fluid_ap")
 
 

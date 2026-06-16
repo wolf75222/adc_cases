@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15/run_amr" : le modele 15 moments (fermeture HyQMOM) porte sur adc.AmrSystem,
-premier run du bloc compile (build_moment_model, exact_speeds=True) sur une hierarchie AMR.
+"""Cas hyqmom15/run_amr : le modele 15 moments HyQMOM porte sur adc.AmrSystem.
+
+Premier run du bloc compile (build_moment_model, exact_speeds=True) sur une
+hierarchie AMR.
 
 Pourquoi ce cas
 ---------------
@@ -41,6 +43,8 @@ Ne prouve pas : le taux de croissance diocotron sur AMR (horizon court, smoke) ;
 realisabilite long-terme (relaxation15 absente du chemin AMR) ; le MPI (mono-rang).
 """
 
+from __future__ import annotations
+
 import os
 import sys
 
@@ -59,11 +63,13 @@ except ImportError:
 
 import adc  # noqa: E402
 
-N = 48              # grossier AMR (et System de controle) ; fin = 2N
-NSTEPS_SMOKE = 12   # (1) : 10-20 pas, smoke
-NSTEPS_REF = 15     # (2) : meme horizon pour les trois runs
-DT_REF = 8.0e-4     # (2) : dt fixe, CFL fine ~ 0.26 (vitesses ~ 3.3, h_f = 1/96)
-REFINE_THRESHOLD = 0.5   # M00 de l'anneau dans [0.8, 1.0], fond 1e-4 : seuil discriminant
+N = 48  # grossier AMR (et System de controle) ; fin = 2N
+NSTEPS_SMOKE = 12  # (1) : 10-20 pas, smoke
+NSTEPS_REF = 15  # (2) : meme horizon pour les trois runs
+DT_REF = 8.0e-4  # (2) : dt fixe, CFL fine ~ 0.26 (vitesses ~ 3.3, h_f = 1/96)
+REFINE_THRESHOLD = (
+    0.5  # M00 de l'anneau dans [0.8, 1.0], fond 1e-4 : seuil discriminant
+)
 # (2) : seuil L2 relatif dans la zone raffinee, choisi APRES mesure : ecart mesure 3.4e-3
 # pour l'AMR (bord grossier-fin + Poisson composite vs uniforme sur la fenetre) contre
 # 1.1e-1 pour le grossier uniforme (l'AMR rapproche d'un facteur ~30). Marge ~x3 sur la
@@ -73,63 +79,113 @@ REFINE_THRESHOLD = 0.5   # M00 de l'anneau dans [0.8, 1.0], fond 1e-4 : seuil di
 TOL_COHERENCE = 1.0e-2
 
 
-def compile_model(name, rho_bg, target, exact_speeds=True):
-    """Modele Vlasov-Poisson 15 moments de run_diocotron (sources electriques + Poisson),
-    compile en backend='production' (seul chemin .so branchable sur AmrSystem ; il marshale
-    aussi method='euler' cote System, requis pour la parite de schema en (2))."""
+def compile_model(
+    name: str, rho_bg: float, target: str, exact_speeds: bool = True
+):
+    """Compile le modele Vlasov-Poisson 15 moments de run_diocotron en production.
+
+    Modele a sources electriques + Poisson, compile en backend='production' (seul
+    chemin .so branchable sur AmrSystem ; il marshale aussi method='euler' cote
+    System, requis pour la parite de schema en (2)).
+
+    Args:
+        name: nom du modele et base du fichier .so genere.
+        rho_bg: fond neutralisant du Poisson (moyenne du scenario).
+        target: cible du loader ('amr_system' ou 'system').
+        exact_speeds: vitesses d'onde exactes (sinon borne bring-up robuste).
+
+    Returns:
+        Le CompiledModel charge depuis le .so.
+    """
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
 
-    m = build_moment_model(name=name, robust=not exact_speeds, with_sources=True,
-                           q_over_m=1.0, omega_c=0.0, debye=DEBYE, rho_background=rho_bg,
-                           omega_p=OMEGA_P, exact_speeds=exact_speeds)
-    return m.compile(os.path.join(case_output_dir("hyqmom15"), name + ".so"),
-                     adc_include(), backend="production", target=target)
+    m = build_moment_model(
+        name=name,
+        robust=not exact_speeds,
+        with_sources=True,
+        q_over_m=1.0,
+        omega_c=0.0,
+        debye=DEBYE,
+        rho_background=rho_bg,
+        omega_p=OMEGA_P,
+        exact_speeds=exact_speeds,
+    )
+    return m.compile(
+        os.path.join(case_output_dir("hyqmom15"), name + ".so"),
+        adc_include(),
+        backend="production",
+        target=target,
+    )
 
 
-def build_amr(compiled, U0, regrid_every, riemann="hll", time=None):
-    """AmrSystem periodique mono-bloc : raffinement sur M00, Poisson composite geometric_mg,
-    etat conservatif complet (15 composantes) seede sur le grossier puis prolonge."""
+def build_amr(
+    compiled,
+    U0: np.ndarray,
+    regrid_every: int,
+    riemann: str = "hll",
+    time=None,
+) -> adc.AmrSystem:
+    """Construit un AmrSystem periodique mono-bloc seede sur U0.
+
+    Raffinement sur M00, Poisson composite geometric_mg, etat conservatif complet
+    (15 composantes) seede sur le grossier puis prolonge.
+    """
     sim = adc.AmrSystem(n=N, L=1.0, periodic=True, regrid_every=regrid_every)
-    sim.add_equation("mom", compiled,
-                     spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
-                     time=time if time is not None else adc.Explicit())
+    sim.add_equation(
+        "mom",
+        compiled,
+        spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
+        time=time if time is not None else adc.Explicit(),
+    )
     sim.set_refinement(threshold=REFINE_THRESHOLD)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     sim.set_conservative_state("mom", U0)
     return sim
 
 
-def build_system(compiled, U0, n):
+def build_system(compiled, U0: np.ndarray, n: int) -> adc.System:
     """System uniforme de reference, MEME schema temporel que l'AMR (euler avant)."""
     sim = adc.System(n=n, L=1.0, periodic=True)
-    sim.add_equation("mom", model=compiled,
-                     spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
-                     time=adc.Explicit(method="euler"))
+    sim.add_equation(
+        "mom",
+        model=compiled,
+        spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+        time=adc.Explicit(method="euler"),
+    )
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     sim.set_state("mom", U0)
     sim.solve_fields()
     return sim
 
 
-def fine_masks(sim):
-    """Masques de la hierarchie depuis patch_boxes() : cellules fines valides (2N x 2N) et
-    cellules grossieres recouvertes (N x N). Convention [j, i] (j = y, i = x), boites a
-    coins inclusifs dans l'espace d'indices du niveau."""
+def fine_masks(sim) -> tuple[np.ndarray, np.ndarray]:
+    """Masques de la hierarchie depuis patch_boxes().
+
+    Convention [j, i] (j = y, i = x), boites a coins inclusifs dans l'espace
+    d'indices du niveau.
+
+    Returns:
+        (covered, valid) : cellules grossieres recouvertes (N x N) et cellules
+        fines valides (2N x 2N).
+    """
     covered = np.zeros((N, N), dtype=bool)
     valid = np.zeros((2 * N, 2 * N), dtype=bool)
-    for (lev, ilo, jlo, ihi, jhi) in sim.patch_boxes():
+    for lev, ilo, jlo, ihi, jhi in sim.patch_boxes():
         if lev != 1:
             continue
-        valid[jlo:jhi + 1, ilo:ihi + 1] = True
-        covered[jlo // 2:jhi // 2 + 1, ilo // 2:ihi // 2 + 1] = True
+        valid[jlo : jhi + 1, ilo : ihi + 1] = True
+        covered[jlo // 2 : jhi // 2 + 1, ilo // 2 : ihi // 2 + 1] = True
     return covered, valid
 
 
-def composite_mass(sim):
-    """Masse par somme PONDEREE PAR NIVEAU : dx0^2 sur les cellules grossieres NON recouvertes
-    + dx1^2 sur les cellules fines valides. Doit coincider avec sim.mass() (masse du grossier
-    apres sync_down : les cellules recouvertes y valent la moyenne de leurs 4 filles)."""
+def composite_mass(sim) -> float:
+    """Masse par somme ponderee par niveau (dx0^2 grossier + dx1^2 fin).
+
+    dx0^2 sur les cellules grossieres NON recouvertes + dx1^2 sur les cellules
+    fines valides. Doit coincider avec sim.mass() (masse du grossier apres
+    sync_down : les cellules recouvertes y valent la moyenne de leurs 4 filles).
+    """
     covered, valid = fine_masks(sim)
     dx0 = 1.0 / N
     m00_c = np.asarray(sim.level_state(0)).reshape(-1, N, N)[0]
@@ -140,8 +196,8 @@ def composite_mass(sim):
     return total
 
 
-def check_smoke(compiled_amr, U0):
-    """(1) construction + pas finis, positivite, couverture du tagging, masse conservee."""
+def check_smoke(compiled_amr, U0: np.ndarray) -> None:
+    """(1) construction + pas finis, positivite, couverture tagging, masse conservee."""
     sim = build_amr(compiled_amr, U0, regrid_every=4)
     mass0 = sim.mass()
     assert np.isfinite(mass0) and mass0 > 0.0, "masse initiale invalide"
@@ -150,8 +206,12 @@ def check_smoke(compiled_amr, U0):
     covered0, _ = fine_masks(sim)
     ring = U0[0] > REFINE_THRESHOLD
     frac = float((ring & covered0).sum()) / float(ring.sum())
-    assert frac > 0.95, "anneau non couvert par les patchs fins (%.1f %%)" % (100 * frac)
-    assert sim.n_patches() >= 2, "anneau couvert par moins de 2 patchs (%d)" % sim.n_patches()
+    assert frac > 0.95, "anneau non couvert par les patchs fins (%.1f %%)" % (
+        100 * frac
+    )
+    assert sim.n_patches() >= 2, (
+        "anneau couvert par moins de 2 patchs (%d)" % sim.n_patches()
+    )
 
     for _ in range(NSTEPS_SMOKE):
         sim.step_cfl(0.4)
@@ -169,100 +229,153 @@ def check_smoke(compiled_amr, U0):
     drift = abs(sim.mass() - mass0) / mass0
     assert drift < 1e-9, "masse (reflux) non conservee : drel=%.3e" % drift
     dcomp = abs(composite_mass(sim) - sim.mass()) / mass0
-    assert dcomp < 1e-12, ("somme ponderee par niveau != mass() (drel=%.3e) : sync_down "
-                           "incoherent" % dcomp)
-    print("(1) smoke AMR : %d pas (step_cfl 0.4, euler+reflux), %d niveaux, %d patchs, anneau "
-          "couvert a %.0f %%, M00 > 0, phi fini ; masse : derive %.1e, somme par niveau == "
-          "mass() a %.1e -- OK" % (NSTEPS_SMOKE, nlev, sim.n_patches(), 100 * frac, drift, dcomp))
+    assert dcomp < 1e-12, (
+        "somme ponderee par niveau != mass() (drel=%.3e) : sync_down "
+        "incoherent" % dcomp
+    )
+    print(
+        "(1) smoke AMR : %d pas (step_cfl 0.4, euler+reflux), %d niveaux, %d patchs, anneau "
+        "couvert a %.0f %%, M00 > 0, phi fini ; masse : derive %.1e, somme par niveau == "
+        "mass() a %.1e -- OK"
+        % (NSTEPS_SMOKE, nlev, sim.n_patches(), 100 * frac, drift, dcomp)
+    )
 
 
-def check_coherence(compiled_amr, compiled_sys, U0):
-    """(2) AMR (hierarchie figee) vs System uniforme fin, meme IC prolongee, meme dt/schema."""
-    U0f = np.repeat(np.repeat(U0, 2, axis=1), 2, axis=2)  # prolongation constante = seed AMR
+def check_coherence(compiled_amr, compiled_sys, U0: np.ndarray) -> None:
+    """(2) AMR (hierarchie figee) vs System fin, meme IC prolongee, meme dt/schema."""
+    U0f = np.repeat(
+        np.repeat(U0, 2, axis=1), 2, axis=2
+    )  # prolongation constante = seed AMR
 
-    sim_amr = build_amr(compiled_amr, U0, regrid_every=0)   # figee : regrid jamais apres init
+    sim_amr = build_amr(
+        compiled_amr, U0, regrid_every=0
+    )  # figee : regrid jamais apres init
     sim_fine = build_system(compiled_sys, U0f, n=2 * N)
     sim_coarse = build_system(compiled_sys, U0, n=N)
     covered, _ = fine_masks(sim_amr)
-    assert covered.any(), "aucune cellule grossiere recouverte (pas de niveau fin ?)"
+    assert (
+        covered.any()
+    ), "aucune cellule grossiere recouverte (pas de niveau fin ?)"
 
     for _ in range(NSTEPS_REF):
         sim_amr.step(DT_REF)
         sim_fine.step(DT_REF)
         sim_coarse.step(DT_REF)
 
-    rho_amr = np.asarray(sim_amr.density("mom"))                      # grossier post sync_down
+    rho_amr = np.asarray(sim_amr.density("mom"))  # grossier post sync_down
     rho_fine = np.array(sim_fine.get_state("mom"))[0]
-    rho_ref = rho_fine.reshape(N, 2, N, 2).mean(axis=(1, 3))          # restriction 2x2 -> N x N
+    rho_ref = rho_fine.reshape(N, 2, N, 2).mean(
+        axis=(1, 3)
+    )  # restriction 2x2 -> N x N
     rho_coarse = np.array(sim_coarse.get_state("mom"))[0]
     assert np.all(np.isfinite(rho_amr)) and np.all(np.isfinite(rho_ref))
 
     den = float(np.sqrt(np.sum(rho_ref[covered] ** 2)))
     gap_amr = float(np.sqrt(np.sum((rho_amr - rho_ref)[covered] ** 2))) / den
-    gap_coarse = float(np.sqrt(np.sum((rho_coarse - rho_ref)[covered] ** 2))) / den
+    gap_coarse = (
+        float(np.sqrt(np.sum((rho_coarse - rho_ref)[covered] ** 2))) / den
+    )
     # mesures TOUJOURS imprimees avant les asserts : un echec reste diagnosticable.
-    print("(2) coherence grossier/fin (%d pas, dt=%.1e, euler partout) : ecart L2 relatif M00 "
-          "zone raffinee AMR=%.2e (seuil %.1e) ; grossier uniforme=%.2e"
-          % (NSTEPS_REF, DT_REF, gap_amr, TOL_COHERENCE, gap_coarse))
+    print(
+        "(2) coherence grossier/fin (%d pas, dt=%.1e, euler partout) : ecart L2 relatif M00 "
+        "zone raffinee AMR=%.2e (seuil %.1e) ; grossier uniforme=%.2e"
+        % (NSTEPS_REF, DT_REF, gap_amr, TOL_COHERENCE, gap_coarse)
+    )
     assert gap_amr < TOL_COHERENCE, (
         "coherence grossier/fin : ecart L2 relatif %.3e >= %.1e dans la zone raffinee"
-        % (gap_amr, TOL_COHERENCE))
+        % (gap_amr, TOL_COHERENCE)
+    )
     assert gap_amr < gap_coarse, (
         "l'AMR (%.3e) devrait etre plus proche de la reference fine que le grossier uniforme "
-        "(%.3e) dans la zone raffinee" % (gap_amr, gap_coarse))
-    print("    l'AMR rapproche de la reference fine (x%.1f vs grossier uniforme) -- OK"
-          % (gap_coarse / gap_amr))
+        "(%.3e) dans la zone raffinee" % (gap_amr, gap_coarse)
+    )
+    print(
+        "    l'AMR rapproche de la reference fine (x%.1f vs grossier uniforme) -- OK"
+        % (gap_coarse / gap_amr)
+    )
 
 
-def check_rejections(compiled_sys, rho_bg):
-    """(3) rejets propres : aot+amr, .so target system sur AMR, hll sans vitesses signees."""
+def check_rejections(compiled_sys, rho_bg: float):
+    """(3) rejets propres : aot+amr, target system sur AMR, hll sans vitesses signees."""
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
 
     # Modele bring-up (borne k*sqrt(C), PAS de vitesses signees) : sert au rejet (3a) a la
     # compilation puis, compile, au rejet (3c) et au contrepoint rusanov de (4).
-    m_noex = build_moment_model(name="hyqmom15_noex_amr", robust=True, exact_speeds=False,
-                                debye=DEBYE, rho_background=rho_bg)
+    m_noex = build_moment_model(
+        name="hyqmom15_noex_amr",
+        robust=True,
+        exact_speeds=False,
+        debye=DEBYE,
+        rho_background=rho_bg,
+    )
 
     # (3a) backend='aot' ne cible pas l'AMR : rejete a la compilation, AVANT tout codegen.
     try:
-        m_noex.compile(os.path.join(case_output_dir("hyqmom15"), "hyqmom15_aot_amr.so"),
-                       adc_include(), backend="aot", target="amr_system")
-        raise AssertionError("compile(backend='aot', target='amr_system') aurait du lever")
+        m_noex.compile(
+            os.path.join(case_output_dir("hyqmom15"), "hyqmom15_aot_amr.so"),
+            adc_include(),
+            backend="aot",
+            target="amr_system",
+        )
+        raise AssertionError(
+            "compile(backend='aot', target='amr_system') aurait du lever"
+        )
     except ValueError as e:
         assert "amr_system" in str(e)
 
     # (3b) un .so compile pour target='system' est refuse par AmrSystem.add_equation.
     sim = adc.AmrSystem(n=16, L=1.0, periodic=True)
     try:
-        sim.add_equation("mom", compiled_sys,
-                         spatial=adc.FiniteVolume(limiter="none", riemann="hll"))
-        raise AssertionError("AmrSystem a accepte un CompiledModel target='system'")
+        sim.add_equation(
+            "mom",
+            compiled_sys,
+            spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+        )
+        raise AssertionError(
+            "AmrSystem a accepte un CompiledModel target='system'"
+        )
     except ValueError as e:
         assert "amr_system" in str(e) or "target" in str(e)
 
     # (3c) riemann='hll' sans vitesses signees (exact_speeds=False : borne bring-up seule,
     # pas de wave_speeds ni de primitive 'p') : refuse par la facade, avant la frontiere C++.
-    cm_noex = m_noex.compile(os.path.join(case_output_dir("hyqmom15"), "hyqmom15_noex_amr.so"),
-                             adc_include(), backend="production", target="amr_system")
+    cm_noex = m_noex.compile(
+        os.path.join(case_output_dir("hyqmom15"), "hyqmom15_noex_amr.so"),
+        adc_include(),
+        backend="production",
+        target="amr_system",
+    )
     sim = adc.AmrSystem(n=16, L=1.0, periodic=True)
     try:
-        sim.add_equation("mom", cm_noex,
-                         spatial=adc.FiniteVolume(limiter="none", riemann="hll"))
-        raise AssertionError("AmrSystem a accepte riemann='hll' sans vitesses signees")
+        sim.add_equation(
+            "mom",
+            cm_noex,
+            spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
+        )
+        raise AssertionError(
+            "AmrSystem a accepte riemann='hll' sans vitesses signees"
+        )
     except ValueError as e:
         assert "hll" in str(e).lower()
-    print("(3) rejets propres : aot+amr_system (compile), .so target='system' (add_equation), "
-          "hll sans vitesses signees -- OK")
+    print(
+        "(3) rejets propres : aot+amr_system (compile), .so target='system' (add_equation), "
+        "hll sans vitesses signees -- OK"
+    )
     return cm_noex
 
 
-def check_ssprk3_rejected(compiled_amr, cm_noex, U0):
-    """(4) ssprk3 + loader .so : rejet explicite (l'ABI plate ne transporte pas la methode
-    temporelle ; jamais un repli Euler silencieux). En contrepoint, le meme .so bring-up
-    tourne en rusanov + Explicit() (euler avant) : le rejet vise la METHODE, pas le bloc."""
+def check_ssprk3_rejected(compiled_amr, cm_noex, U0: np.ndarray) -> None:
+    """(4) ssprk3 + loader .so : rejet explicite, jamais un repli Euler silencieux.
+
+    L'ABI plate ne transporte pas la methode temporelle. En contrepoint, le meme
+    .so bring-up tourne en rusanov + Explicit() (euler avant) : le rejet vise la
+    METHODE, pas le bloc.
+    """
     try:
-        build_amr(compiled_amr, U0, regrid_every=0, time=adc.Explicit(ssprk3=True))
+        build_amr(
+            compiled_amr, U0, regrid_every=0, time=adc.Explicit(ssprk3=True)
+        )
         raise AssertionError("AmrSystem a accepte ssprk3 sur un loader .so")
     except Exception as e:
         assert "ssprk3" in str(e).lower(), "message inattendu : %s" % e
@@ -270,15 +383,23 @@ def check_ssprk3_rejected(compiled_amr, cm_noex, U0):
     sim = build_amr(cm_noex, U0, regrid_every=0, riemann="rusanov")
     for _ in range(2):
         sim.step_cfl(0.4)
-    assert np.all(np.isfinite(np.asarray(sim.density("mom")))), "bring-up rusanov non fini"
-    print("(4) ssprk3 sur loader .so rejete explicitement ; le meme bloc en rusanov + "
-          "Explicit() (euler avant) tourne -- OK")
+    assert np.all(
+        np.isfinite(np.asarray(sim.density("mom")))
+    ), "bring-up rusanov non fini"
+    print(
+        "(4) ssprk3 sur loader .so rejete explicitement ; le meme bloc en rusanov + "
+        "Explicit() (euler avant) tourne -- OK"
+    )
 
 
-def main():
-    print("=== hyqmom15/run_amr : 15 moments HyQMOM sur AmrSystem (hll exact, MG composite) ===")
+def main() -> None:
+    print(
+        "=== hyqmom15/run_amr : 15 moments HyQMOM sur AmrSystem (hll exact, MG composite) ==="
+    )
     U0 = diocotron_state(N)
-    rho_bg = float(U0[0].mean())  # fond neutralisant : rhs periodique a moyenne nulle
+    rho_bg = float(
+        U0[0].mean()
+    )  # fond neutralisant : rhs periodique a moyenne nulle
     compiled_amr = compile_model("hyqmom15_vp_amr", rho_bg, target="amr_system")
     compiled_sys = compile_model("hyqmom15_vp_fine", rho_bg, target="system")
     check_smoke(compiled_amr, U0)

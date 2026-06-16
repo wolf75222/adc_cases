@@ -65,6 +65,8 @@ Sorties : diagnostics numeriques imprimes (aucune dependance graphique). Invaria
 assert. Le script imprime "OK composition_api" en cas de succes.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import adc
 
@@ -74,21 +76,29 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import models  # noqa: E402  (compositions de briques, cote application)
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases import (
+    models,
+)  # noqa: E402  (compositions de briques, cote application)
 from adc_cases.common.grid import meshgrid_xy  # noqa: E402
 
 
 MASS_TOL = 1e-10
 
 
-def _meshgrid_centres(n, L):
+def _meshgrid_centres(n: int, L: float):
+    """Renvoie le meshgrid (X, Y) des centres de cellules d'une grille n x n."""
     return meshgrid_xy(n, L)
 
 
-def partie_A():
+def partie_A() -> None:
     """Composition heterogene : un schema numerique different par bloc."""
-    print("== Partie (A) : un schema (modele/spatial/temps/sous-pas) par bloc ==")
+    print(
+        "== Partie (A) : un schema (modele/spatial/temps/sous-pas) par bloc =="
+    )
 
     # Config = maillage seul : adc.System ne porte plus la physique (gamma, cs2, B0...).
     sim = adc.System(n=48, L=1.0, periodic=True)
@@ -97,25 +107,37 @@ def partie_A():
     # traitement IMEX (transport explicite + force electrostatique implicite), et
     # 10 sous-pas par macro-pas (les electrons, plus raides, sont sous-cycles).
     # La physique (gamma, charge) est portee par la composition models.electron_euler().
-    sim.add_block("electrons", model=models.electron_euler(),
-                  spatial=adc.Spatial(vanleer=True, flux="hllc"),
-                  time=adc.IMEX(substeps=10))
+    sim.add_block(
+        "electrons",
+        model=models.electron_euler(),
+        spatial=adc.Spatial(vanleer=True, flux="hllc"),
+        time=adc.IMEX(substeps=10),
+    )
     # Ions : fluide isotherme, Minmod + Rusanov, explicite, 1 sous-pas (plus lents).
-    sim.add_block("ions", model=models.ion_isothermal(),
-                  spatial=adc.Spatial(minmod=True, flux="rusanov"),
-                  time=adc.Explicit())
+    sim.add_block(
+        "ions",
+        model=models.ion_isothermal(),
+        spatial=adc.Spatial(minmod=True, flux="rusanov"),
+        time=adc.Explicit(),
+    )
     assert sim.n_species() == 2
     print(f"  n_species              = {sim.n_species()}")
     print(f"  blocs                  = {sim.block_names()}")
-    print("  electrons : electron_euler() | Spatial(vanleer, hllc) | IMEX(substeps=10)")
-    print("  ions      : ion_isothermal() | Spatial(minmod, rusanov) | Explicit()")
+    print(
+        "  electrons : electron_euler() | Spatial(vanleer, hllc) | IMEX(substeps=10)"
+    )
+    print(
+        "  ions      : ion_isothermal() | Spatial(minmod, rusanov) | Explicit()"
+    )
 
     n, L = sim.nx(), 1.0
     X, _ = _meshgrid_centres(n, L)
     # Electrons perturbes (cos), ions uniformes : densite de charge non triviale, donc
     # potentiel non nul, mais charge nette ~ 0 -> Poisson periodique solvable.
     sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="auto")
-    sim.set_density("electrons", (1.0 + 0.02 * np.cos(2.0 * np.pi * X / L)).copy())
+    sim.set_density(
+        "electrons", (1.0 + 0.02 * np.cos(2.0 * np.pi * X / L)).copy()
+    )
     sim.set_density("ions", np.ones((n, n)))
 
     sim.solve_fields()
@@ -129,7 +151,9 @@ def partie_A():
     de = abs(sim.mass("electrons") - m_e0)
     di = abs(sim.mass("ions") - m_i0)
     bouge_e = float(np.max(np.abs(sim.density("electrons") - rho_e0)))
-    print(f"  derive masse electrons = {de:.3e}  (Euler/HLLC/IMEX, 10 sous-pas)")
+    print(
+        f"  derive masse electrons = {de:.3e}  (Euler/HLLC/IMEX, 10 sous-pas)"
+    )
     print(f"  derive masse ions      = {di:.3e}  (isotherme/Rusanov/explicite)")
     print(f"  evolution electrons    = {bouge_e:.3e}  (dynamique non triviale)")
     assert de < MASS_TOL, "masse electronique non conservee"
@@ -137,22 +161,29 @@ def partie_A():
     assert bouge_e > 1e-9, "les electrons devraient evoluer"
 
 
-def partie_B():
-    """Determinisme : un meme modele compose deux fois donne le meme calcul (bit pour bit)."""
-    print("== Partie (B) : determinisme de la composition de briques (bit pour bit) ==")
+def partie_B() -> None:
+    """Determinisme : composer deux fois le meme modele donne le meme calcul."""
+    print(
+        "== Partie (B) : determinisme de la composition de briques (bit pour bit) =="
+    )
 
     n, L = 32, 1.0
     X, _ = _meshgrid_centres(n, L)
     rho0 = (1.0 + 0.1 * np.cos(2.0 * np.pi * X / L)).copy()
-    n_i0 = float(rho0.mean())  # fond neutralisant -> Poisson periodique solvable
+    n_i0 = float(
+        rho0.mean()
+    )  # fond neutralisant -> Poisson periodique solvable
 
     def construire_et_avancer():
         # Le modele diocotron est recompose a partir des briques generiques a chaque
         # appel : memes parametres (B0, alpha, fond n_i0) -> meme spec figee cote C++.
         s = adc.System(n=n, L=L, periodic=True)
-        s.add_block("e", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
-                    spatial=adc.Spatial(minmod=True, flux="rusanov"),
-                    time=adc.Explicit(substeps=1))
+        s.add_block(
+            "e",
+            model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
+            spatial=adc.Spatial(minmod=True, flux="rusanov"),
+            time=adc.Explicit(substeps=1),
+        )
         s.set_poisson()
         s.set_density("e", rho0.copy())
         s.advance(0.002, 12)
@@ -163,10 +194,12 @@ def partie_B():
 
     ecart = float(np.max(np.abs(da - db)))
     print(f"  ecart max (deux compositions independantes) = {ecart:.3e}")
-    assert ecart == 0.0, "la composition de briques doit etre deterministe (bit pour bit)"
+    assert (
+        ecart == 0.0
+    ), "la composition de briques doit etre deterministe (bit pour bit)"
 
 
-def partie_C():
+def partie_C() -> None:
     """Garde-fous : combinaisons invalides => erreur claire, pas un plantage."""
     print("== Partie (C) : garde-fous des combinaisons invalides ==")
 
@@ -175,52 +208,78 @@ def partie_C():
     def doit_lever(fn, why):
         try:
             fn()
-        except Exception as exc:  # pybind traduit std::runtime_error en RuntimeError
+        except (
+            Exception
+        ) as exc:  # pybind traduit std::runtime_error en RuntimeError
             print(f"  rejete ({why}) : {str(exc)[:70]}")
             return
         raise AssertionError(f"aurait du lever : {why}")
 
     # HLLC exige un transport compressible (4 var + pression) : diocotron (transport
     # scalaire ExB) ne peut pas l'utiliser -> rejet a l'ajout du bloc.
-    doit_lever(lambda: sim.add_block(
-        "d", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=0.0),
-        spatial=adc.Spatial(flux="hllc")),
-        "hllc sur diocotron (transport scalaire)")
+    doit_lever(
+        lambda: sim.add_block(
+            "d",
+            model=models.diocotron(B0=1.0, alpha=1.0, n_i0=0.0),
+            spatial=adc.Spatial(flux="hllc"),
+        ),
+        "hllc sur diocotron (transport scalaire)",
+    )
 
     # Source fluide (PotentialForce) posee sur un transport scalaire (Scalar + ExB) :
     # incoherent (la force du potentiel agit sur une quantite de mouvement fluide) ->
     # rejet a l'ajout du bloc. Le modele se compose (state<->transport coherents) mais
     # la source est invalide pour ce transport.
     source_fluide_sur_scalaire = adc.Model(
-        state=adc.Scalar(), transport=adc.ExB(B0=1.0),
+        state=adc.Scalar(),
+        transport=adc.ExB(B0=1.0),
         source=adc.PotentialForce(charge=-1.0),
-        elliptic=adc.BackgroundDensity(alpha=1.0, n0=0.0))
-    doit_lever(lambda: sim.add_block(
-        "s", model=source_fluide_sur_scalaire, spatial=adc.Spatial(minmod=True)),
-        "source PotentialForce sur transport scalaire")
+        elliptic=adc.BackgroundDensity(alpha=1.0, n0=0.0),
+    )
+    doit_lever(
+        lambda: sim.add_block(
+            "s",
+            model=source_fluide_sur_scalaire,
+            spatial=adc.Spatial(minmod=True),
+        ),
+        "source PotentialForce sur transport scalaire",
+    )
 
     # Modele incoherent des la composition : un etat scalaire exige un transport ExB,
     # pas un flux compressible -> adc.Model(...) leve directement.
-    doit_lever(lambda: adc.Model(
-        state=adc.Scalar(), transport=adc.CompressibleFlux(),
-        source=adc.NoSource(), elliptic=adc.BackgroundDensity(alpha=1.0, n0=0.0)),
-        "modele incoherent (Scalar + CompressibleFlux)")
+    doit_lever(
+        lambda: adc.Model(
+            state=adc.Scalar(),
+            transport=adc.CompressibleFlux(),
+            source=adc.NoSource(),
+            elliptic=adc.BackgroundDensity(alpha=1.0, n0=0.0),
+        ),
+        "modele incoherent (Scalar + CompressibleFlux)",
+    )
 
     assert sim.n_species() == 0, "aucun bloc invalide ne doit avoir ete ajoute"
 
 
-def partie_D():
-    """Integrateur temporel ecrit en python : take_step custom, calcul par cellule en C++."""
+def partie_D() -> None:
+    """Integrateur temporel ecrit en Python : take_step custom, calcul en C++."""
     print("== Partie (D) : integrateur temporel custom en Python (SSPRK2) ==")
 
     n, L = 32, 1.0
     X, Y = _meshgrid_centres(n, L)
-    rho0 = (1.0 + 0.1 * np.cos(2.0 * np.pi * X / L) * np.sin(2.0 * np.pi * Y / L)).copy()
-    n_i0 = float(rho0.mean())  # fond neutralisant -> Poisson periodique solvable
+    rho0 = (
+        1.0 + 0.1 * np.cos(2.0 * np.pi * X / L) * np.sin(2.0 * np.pi * Y / L)
+    ).copy()
+    n_i0 = float(
+        rho0.mean()
+    )  # fond neutralisant -> Poisson periodique solvable
 
     sim = adc.System(n=n, L=L, periodic=True)
-    sim.add_block("e", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
-                  spatial=adc.Spatial(minmod=True), time=adc.Explicit())
+    sim.add_block(
+        "e",
+        model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
+        spatial=adc.Spatial(minmod=True),
+        time=adc.Explicit(),
+    )
     sim.set_poisson()
     sim.set_density("e", rho0.copy())
 
@@ -244,13 +303,18 @@ def partie_D():
     assert fini, "l'etat doit rester fini"
 
 
-def main():
+def main() -> None:
+    """Execute les quatre parties (A-D) de la demo et imprime "OK composition_api"."""
     partie_A()
     partie_B()
     partie_C()
     partie_D()
-    print("Systeme compose bloc par bloc depuis Python (modeles = compositions de briques) ;")
-    print("calcul 100 % C++ compile. Le schema en temps lui-meme peut etre ecrit en Python")
+    print(
+        "Systeme compose bloc par bloc depuis Python (modeles = compositions de briques) ;"
+    )
+    print(
+        "calcul 100 % C++ compile. Le schema en temps lui-meme peut etre ecrit en Python"
+    )
     print("(partie D), le calcul par cellule restant en C++.")
     print("OK composition_api")
 

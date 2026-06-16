@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Cas "diocotron_dsl" : le modele diocotron ecrit entierement en formules (adc.dsl.Model),
-puis prouve bit-identique a la composition native de briques (adc_cases.models.diocotron).
+"""Cas diocotron_dsl : modele DSL prouve bit-identique aux briques natives.
+
+Le modele diocotron est ecrit entierement en formules (adc.dsl.Model), puis
+prouve bit-identique a la composition native de briques
+(adc_cases.models.diocotron).
 
 Pourquoi ce cas
 ---------------
@@ -41,6 +44,8 @@ Invariants verifies (assert)
   - croissance de l'instabilite (amplitude finale > amplitude initiale), sur les deux modeles.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 import adc
@@ -52,8 +57,13 @@ try:
 except ImportError:
     import os
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from adc_cases import models  # noqa: E402  (composition native de briques, oracle de reference)
+
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+from adc_cases import (
+    models,
+)  # noqa: E402  (composition native de briques, oracle de reference)
 from adc_cases.common.checks import relative_drift  # noqa: E402
 from adc_cases.common.initial_conditions import band_density  # noqa: E402
 from adc_cases.common.io import case_output_dir  # noqa: E402
@@ -61,14 +71,20 @@ from adc_cases.common.native import adc_include  # noqa: E402
 
 # Parametres physiques partages par les deux modeles (DSL et natif) : ils doivent coincider pour
 # que l'equivalence soit testable (memes conventions de briques).
-B0 = 1.0       # champ magnetique de fond (derive E x B)
-ALPHA = 1.0    # facteur du second membre elliptique alpha (n - n_i0)
+B0 = 1.0  # champ magnetique de fond (derive E x B)
+ALPHA = 1.0  # facteur du second membre elliptique alpha (n - n_i0)
 
 
-def diocotron_dsl_model(n_i0):
-    """Modele diocotron ecrit en formules (adc.dsl.Model), reproduisant a l'identique les briques
-    natives ExBVelocity (transport) et BackgroundDensity (elliptique). @p n_i0 : fond ionique
-    neutralisant (moyenne de la densite initiale, pour la solubilite de Poisson periodique)."""
+def diocotron_dsl_model(n_i0: float) -> dsl.Model:
+    """Modele diocotron ecrit en formules (adc.dsl.Model).
+
+    Reproduit a l'identique les briques natives ExBVelocity (transport) et
+    BackgroundDensity (elliptique).
+
+    Args:
+        n_i0: fond ionique neutralisant (moyenne de la densite initiale, pour la
+            solubilite de Poisson periodique).
+    """
     m = dsl.Model("diocotron_dsl")
 
     # Variable conservative unique : la densite "n" (role canonique Density, comme la brique native).
@@ -101,26 +117,38 @@ def diocotron_dsl_model(n_i0):
     return m
 
 
-def perturbation_amplitude(density):
-    """Amplitude L2 de la perturbation = deviation par rapport a la moyenne en x (cf. cas diocotron).
-    La bande non perturbee est uniforme le long de x (axis=1) ; ce qui reste porte l'instabilite."""
+def perturbation_amplitude(density: np.ndarray) -> float:
+    """Amplitude L2 de la perturbation = deviation par rapport a la moyenne en x.
+
+    La bande non perturbee est uniforme le long de x (axis=1) ; ce qui reste porte
+    l'instabilite (cf. cas diocotron).
+    """
     base = density.mean(axis=1, keepdims=True)
     delta = density - base
     return float(np.sqrt(np.mean(delta * delta)))
 
 
-def make_system(ne0):
-    """Construit un System diocotron periodique vide (sans bloc). Le bloc (natif ou DSL) est ajoute
-    par l'appelant ; tout le reste (grille / Poisson / densite) est identique entre les deux."""
+def make_system(ne0: np.ndarray) -> adc.System:
+    """Construit un System diocotron periodique vide (sans bloc).
+
+    Le bloc (natif ou DSL) est ajoute par l'appelant ; tout le reste (grille /
+    Poisson / densite) est identique entre les deux.
+    """
     return adc.System(n=ne0.shape[0], L=1.0, periodic=True)
 
 
-def run_native(ne0, n_i0, n_steps):
-    """Reference : la composition native de briques (adc_cases.models.diocotron), minmod + Rusanov,
-    explicite. Renvoie (densite finale, temps, masse)."""
+def run_native(ne0: np.ndarray, n_i0: float, n_steps: int) -> tuple:
+    """Reference : la composition native de briques (adc_cases.models.diocotron).
+
+    Schema minmod + Rusanov, explicite. Renvoie (densite finale, temps, masse).
+    """
     sim = make_system(ne0)
-    sim.add_block("ne", model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0),
-                  spatial=adc.Spatial(minmod=True), time=adc.Explicit())
+    sim.add_block(
+        "ne",
+        model=models.diocotron(B0=B0, alpha=ALPHA, n_i0=n_i0),
+        spatial=adc.Spatial(minmod=True),
+        time=adc.Explicit(),
+    )
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")
     sim.set_density("ne", ne0)
     for _ in range(n_steps):
@@ -128,10 +156,13 @@ def run_native(ne0, n_i0, n_steps):
     return np.asarray(sim.density("ne")), sim.time(), sim.mass("ne")
 
 
-def run_dsl(ne0, n_i0, n_steps):
-    """Le meme systeme, mais le bloc "ne" est le modele DSL compile (backend "production" natif si
-    disponible, sinon "aot"). Memes schema (minmod + Rusanov) et integrateur que le natif.
-    Renvoie (densite finale, temps, masse, backend_retenu)."""
+def run_dsl(ne0: np.ndarray, n_i0: float, n_steps: int) -> tuple:
+    """Le meme systeme, mais le bloc "ne" est le modele DSL compile.
+
+    Backend "production" natif si disponible, sinon "aot". Memes schema (minmod +
+    Rusanov) et integrateur que le natif. Renvoie (densite finale, temps, masse,
+    backend_retenu).
+    """
     include = adc_include()
     so_dir = case_output_dir("diocotron_dsl")
     model = diocotron_dsl_model(n_i0)
@@ -146,26 +177,45 @@ def run_dsl(ne0, n_i0, n_steps):
     # par add_compiled_block, sans cle ABI). Les deux donnent un etat bit-identique au natif ; le
     # choix n'affecte pas le resultat verifie.
     import os
+
     for cand in ("production", "aot"):
         try:
-            compiled = model.compile(os.path.join(so_dir, "diocotron_dsl_%s.so" % cand),
-                                     include, backend=cand)
+            compiled = model.compile(
+                os.path.join(so_dir, "diocotron_dsl_%s.so" % cand),
+                include,
+                backend=cand,
+            )
             sim = make_system(ne0)
             # add_equation aiguille sur le backend du CompiledModel (add_native_block / add_compiled_block).
-            sim.add_equation("ne", model=compiled,
-                             spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
-                             time=adc.Explicit())
+            sim.add_equation(
+                "ne",
+                model=compiled,
+                spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov"),
+                time=adc.Explicit(),
+            )
             sim.set_poisson(rhs="charge_density", solver="geometric_mg")
             sim.set_density("ne", ne0)
             for _ in range(n_steps):
                 sim.step_cfl(0.4)
-            return np.asarray(sim.density("ne")), sim.time(), sim.mass("ne"), cand
-        except Exception as exc:  # noqa: BLE001 (diagnostic : on essaie le backend suivant)
-            print("backend %r indisponible (%s), essai suivant" % (cand, type(exc).__name__))
-    raise RuntimeError("aucun backend DSL n'a compile ni execute le modele diocotron")
+            return (
+                np.asarray(sim.density("ne")),
+                sim.time(),
+                sim.mass("ne"),
+                cand,
+            )
+        except (
+            Exception
+        ) as exc:  # noqa: BLE001 (diagnostic : on essaie le backend suivant)
+            print(
+                "backend %r indisponible (%s), essai suivant"
+                % (cand, type(exc).__name__)
+            )
+    raise RuntimeError(
+        "aucun backend DSL n'a compile ni execute le modele diocotron"
+    )
 
 
-def main():
+def main() -> None:
     # --- Condition initiale en bande : meme grille / IC que la variante CI native (mode 2) ---
     n, L = 96, 1.0
     ne0 = band_density(n, L, amp=1.0, width=0.05, mode=2, disp=0.02)
@@ -175,7 +225,9 @@ def main():
 
     amp0 = perturbation_amplitude(ne0)
 
-    print("=== diocotron_dsl : modele ecrit en formules (adc.dsl.Model) vs briques natives ===")
+    print(
+        "=== diocotron_dsl : modele ecrit en formules (adc.dsl.Model) vs briques natives ==="
+    )
     print("grille n = %d x %d, %d pas, CFL = 0.4" % (n, n, n_steps))
     print("fond ionique n_i0 = %.6e (moyenne de ne)" % n_i0)
 
@@ -193,22 +245,43 @@ def main():
     print("max|DSL - natif| = %.3e   bit-identique = %s" % (max_abs, identical))
     assert identical, (
         "le modele DSL n'est pas bit-identique au natif (max|d| = %.3e) : une formule DSL "
-        "diverge d'une brique du coeur (ExBVelocity / BackgroundDensity)" % max_abs)
+        "diverge d'une brique du coeur (ExBVelocity / BackgroundDensity)"
+        % max_abs
+    )
 
     # --- Invariants physiques (sur le modele DSL ; le natif est l'oracle deja valide ailleurs) ---
     amp_dsl = perturbation_amplitude(dd)
-    mass0 = float(ne0.sum())               # masse initiale (sim.mass = somme de la densite, cf. coeur)
-    mass_drift = relative_drift(md, mass0)  # transport advectif -> masse conservee
-    print("amplitude : initiale %.6e -> finale %.6e (facteur %.4f)"
-          % (amp0, amp_dsl, amp_dsl / amp0))
+    mass0 = float(
+        ne0.sum()
+    )  # masse initiale (sim.mass = somme de la densite, cf. coeur)
+    mass_drift = relative_drift(
+        md, mass0
+    )  # transport advectif -> masse conservee
+    print(
+        "amplitude : initiale %.6e -> finale %.6e (facteur %.4f)"
+        % (amp0, amp_dsl, amp_dsl / amp0)
+    )
     print("derive de masse relative (DSL) = %.3e" % mass_drift)
 
-    assert td == tn, "les deux runs n'ont pas avance du meme temps (t_dsl=%.6f, t_natif=%.6f)" % (td, tn)
-    assert md == mn, "masses non identiques entre DSL et natif (m_dsl=%.10e, m_natif=%.10e)" % (md, mn)
-    assert mass_drift < 1e-6, "masse non conservee par le modele DSL (derive %.3e)" % mass_drift
-    assert amp_dsl > amp0, "l'instabilite diocotron n'a pas cru (amp_finale <= amp_initiale)"
+    assert td == tn, (
+        "les deux runs n'ont pas avance du meme temps (t_dsl=%.6f, t_natif=%.6f)"
+        % (td, tn)
+    )
+    assert md == mn, (
+        "masses non identiques entre DSL et natif (m_dsl=%.10e, m_natif=%.10e)"
+        % (md, mn)
+    )
+    assert mass_drift < 1e-6, (
+        "masse non conservee par le modele DSL (derive %.3e)" % mass_drift
+    )
+    assert (
+        amp_dsl > amp0
+    ), "l'instabilite diocotron n'a pas cru (amp_finale <= amp_initiale)"
 
-    print("OK diocotron_dsl (equivalence DSL <-> natif bit-identique, backend %r)" % backend)
+    print(
+        "OK diocotron_dsl (equivalence DSL <-> natif bit-identique, backend %r)"
+        % backend
+    )
 
 
 if __name__ == "__main__":

@@ -353,7 +353,7 @@ time: the model is composed of native bricks already compiled into `adc`.
 
 Captured output (run of 2026-06-08, deterministic over consecutive runs):
 
-```
+```text
 == two_euler : deux Euler independants (meme schema HLLC + recon primitive) ==
   c_electrons/c_ions ~ 10.0 (electrons 100x plus legers)
   masse      : electrons drel=1.02e-14  ions drel=2.22e-16

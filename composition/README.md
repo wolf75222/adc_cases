@@ -264,7 +264,7 @@ importable without installation (the case also has a `sys.path` fallback, in run
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
-```
+```text
 == Partie (A) : un schema (modele/spatial/temps/sous-pas) par bloc ==
   n_species              = 2
   |phi|_max (initial)    = 5.062437e-04

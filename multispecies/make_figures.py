@@ -17,12 +17,17 @@ Lancer (depuis multispecies/) :
   PYTHONPATH=<adc_build>/python:<repo> python3 make_figures.py
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
 
 import matplotlib
-matplotlib.use("Agg")  # backend sans affichage : ecrit des PNG, jamais de fenetre
+
+matplotlib.use(
+    "Agg"
+)  # backend sans affichage : ecrit des PNG, jamais de fenetre
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -41,8 +46,12 @@ NSTEPS = 20
 DELTA = 0.02  # amplitude du cosinus electronique (run.py:80)
 
 
-def build_system():
-    """Compose le systeme multispecies de run.py (deux blocs heterogenes + Poisson couple)."""
+def build_system() -> adc.System:
+    """Compose le systeme multispecies de run.py.
+
+    Deux blocs heterogenes (electrons Euler complet + ions isothermes)
+    couples par un Poisson de systeme charge_density.
+    """
     sim = adc.System(n=N, L=L, periodic=True)
     sim.add_block(
         "electrons",
@@ -65,8 +74,12 @@ def build_system():
     return sim
 
 
-def run_with_history():
-    """Avance 20 pas en relevant la masse par espece a chaque pas (historique du diagnostic)."""
+def run_with_history() -> tuple:
+    """Avance 20 pas en relevant la masse par espece a chaque pas.
+
+    Renvoie (sim, me0, mi0, t, me, mi) : le systeme final et l'historique du
+    diagnostic (masses initiales et series temporelles par espece).
+    """
     sim = build_system()
     me0 = sim.mass("electrons")
     mi0 = sim.mass("ions")
@@ -78,29 +91,50 @@ def run_with_history():
         t.append(sim.time())
         me.append(sim.mass("electrons"))
         mi.append(sim.mass("ions"))
-    return (sim, me0, mi0,
-            np.array(t), np.array(me), np.array(mi))
+    return (sim, me0, mi0, np.array(t), np.array(me), np.array(mi))
 
 
-def fig_mass(t, me, mi, me0, mi0):
-    """Figure 1 : conservation de masse par espece, echelle absolue (montre la derive d'arrondi)."""
+def fig_mass(
+    t: np.ndarray,
+    me: np.ndarray,
+    mi: np.ndarray,
+    me0: float,
+    mi0: float,
+) -> str:
+    """Figure 1 : conservation de masse par espece, echelle absolue.
+
+    Trace la derive M(t) - M(0) de chaque espece, graduee en epsilon machine
+    pour rendre visible le bruit d'arrondi. L'offset M0 est dans le titre.
+
+    Returns:
+        Chemin du PNG ecrit sous figures/.
+    """
     fig, (axe, axi) = plt.subplots(1, 2, figsize=(11, 4.2))
 
-    # Echelle absolue : on trace la derive M(t) - M(0) (l'offset M0 est dans le titre/legende),
-    # graduee en multiples de l'epsilon machine relatif eps*M0 pour montrer que la derive y vit.
-    eps_e = np.finfo(float).eps * me0  # 1 ulp sur M0 ~ 5.1e-13 (= grain du flottant a cette echelle)
+    # Echelle absolue : derive M(t) - M(0) (offset M0 dans le titre/legende),
+    # cadree en multiples de l'epsilon machine relatif eps*M0 pour montrer que
+    # la derive vit dans le grain du flottant, pas dans la physique.
+    eps_e = (
+        np.finfo(float).eps * me0
+    )  # 1 ulp sur M0 ~ 5.1e-13 (grain du flottant a cette echelle)
     span_e = max(np.max(np.abs(me - me0)), eps_e)
     axe.plot(t, me - me0, "o-", color="C0", ms=4, lw=1.2)
     axe.axhline(0.0, color="0.6", ls="--", lw=1.0)
     axe.set_ylim(-4 * span_e, 4 * span_e)
-    axe.set_title(f"electrons : Euler compressible (4 var), $M_e(0)$ = {me0:.6g}")
+    axe.set_title(
+        f"electrons : Euler compressible (4 var), $M_e(0)$ = {me0:.6g}"
+    )
     axe.set_xlabel("t")
     axe.set_ylabel("$M_e(t) - M_e(0)$")
-    axe.text(0.02, 0.06,
-             f"$\\max_t |M_e(t)-M_e(0)|$ = {np.max(np.abs(me-me0)):.2e}\n"
-             f"1 ulp($M_e0$) $\\approx$ {eps_e:.1e}   (tol assert = 1e-9, bien au-dessus du cadre)",
-             transform=axe.transAxes, fontsize=8,
-             bbox=dict(boxstyle="round", fc="white", ec="0.7"))
+    axe.text(
+        0.02,
+        0.06,
+        f"$\\max_t |M_e(t)-M_e(0)|$ = {np.max(np.abs(me-me0)):.2e}\n"
+        f"1 ulp($M_e0$) $\\approx$ {eps_e:.1e}   (tol assert = 1e-9, bien au-dessus du cadre)",
+        transform=axe.transAxes,
+        fontsize=8,
+        bbox=dict(boxstyle="round", fc="white", ec="0.7"),
+    )
 
     eps_i = np.finfo(float).eps * mi0
     span_i = max(np.max(np.abs(mi - mi0)), eps_i)
@@ -110,13 +144,19 @@ def fig_mass(t, me, mi, me0, mi0):
     axi.set_title(f"ions : Euler isotherme (3 var), $M_i(0)$ = {mi0:.6g}")
     axi.set_xlabel("t")
     axi.set_ylabel("$M_i(t) - M_i(0)$")
-    axi.text(0.02, 0.06,
-             f"$\\max_t |M_i(t)-M_i(0)|$ = {np.max(np.abs(mi-mi0)):.2e}\n"
-             f"1 ulp($M_i0$) $\\approx$ {eps_i:.1e}   (tol assert = 1e-9, bien au-dessus du cadre)",
-             transform=axi.transAxes, fontsize=8,
-             bbox=dict(boxstyle="round", fc="white", ec="0.7"))
+    axi.text(
+        0.02,
+        0.06,
+        f"$\\max_t |M_i(t)-M_i(0)|$ = {np.max(np.abs(mi-mi0)):.2e}\n"
+        f"1 ulp($M_i0$) $\\approx$ {eps_i:.1e}   (tol assert = 1e-9, bien au-dessus du cadre)",
+        transform=axi.transAxes,
+        fontsize=8,
+        bbox=dict(boxstyle="round", fc="white", ec="0.7"),
+    )
 
-    fig.suptitle("Conservation de masse par espece (tol assert = 1e-9, en absolu)")
+    fig.suptitle(
+        "Conservation de masse par espece (tol assert = 1e-9, en absolu)"
+    )
     fig.tight_layout()
     out = os.path.join(FIGDIR, "masse.png")
     fig.savefig(out, dpi=130)
@@ -124,20 +164,28 @@ def fig_mass(t, me, mi, me0, mi0):
     return out
 
 
-def fig_density(sim):
-    """Figure 2 : cartes finales de densite n_e et n_i (echelles propres a chaque espece)."""
+def fig_density(sim: adc.System) -> tuple:
+    """Figure 2 : cartes finales de densite n_e et n_i.
+
+    Renvoie (out, de, di) : le chemin de la figure et les deux densites,
+    chacune avec son echelle propre.
+    """
     de = np.asarray(sim.density("electrons"))
     di = np.asarray(sim.density("ions"))
     fig, (axe, axi) = plt.subplots(1, 2, figsize=(11, 4.6))
     ext = [0, L, 0, L]
 
-    ime = axe.imshow(de, origin="lower", extent=ext, cmap="RdBu_r", aspect="equal")
+    ime = axe.imshow(
+        de, origin="lower", extent=ext, cmap="RdBu_r", aspect="equal"
+    )
     axe.set_title(f"$n_e$ (electrons)  [{de.min():.4f}, {de.max():.4f}]")
     axe.set_xlabel("x")
     axe.set_ylabel("y")
     fig.colorbar(ime, ax=axe, fraction=0.046, pad=0.04)
 
-    imi = axi.imshow(di, origin="lower", extent=ext, cmap="RdBu_r", aspect="equal")
+    imi = axi.imshow(
+        di, origin="lower", extent=ext, cmap="RdBu_r", aspect="equal"
+    )
     axi.set_title(f"$n_i$ (ions)  [{di.min():.6f}, {di.max():.6f}]")
     axi.set_xlabel("x")
     axi.set_ylabel("y")
@@ -151,8 +199,12 @@ def fig_density(sim):
     return out, de, di
 
 
-def fig_potential(sim):
-    """Figure 3 : carte de |phi| (Poisson couple) + coupe phi(x) vs solution analytique mono-mode."""
+def fig_potential(sim: adc.System) -> tuple:
+    """Figure 3 : carte de |phi| (Poisson couple) + coupe phi(x).
+
+    Renvoie (out, phi, phi_analytic, phi_cut, resid) : la coupe est comparee
+    a la solution analytique mono-mode du Poisson.
+    """
     phi = np.asarray(sim.potential())
     n = phi.shape[0]
     x = (np.arange(n) + 0.5) / n * L
@@ -166,27 +218,47 @@ def fig_potential(sim):
 
     fig, (axmap, axcut) = plt.subplots(1, 2, figsize=(11, 4.6))
 
-    im = axmap.imshow(np.abs(phi), origin="lower", extent=[0, L, 0, L],
-                      cmap="magma", aspect="equal")
+    im = axmap.imshow(
+        np.abs(phi),
+        origin="lower",
+        extent=[0, L, 0, L],
+        cmap="magma",
+        aspect="equal",
+    )
     axmap.set_title(f"$|\\phi(x,y)|$  (max = {np.abs(phi).max():.3e})")
     axmap.set_xlabel("x")
     axmap.set_ylabel("y")
     fig.colorbar(im, ax=axmap, fraction=0.046, pad=0.04)
 
-    axcut.plot(x, phi_cut, "o", color="C0", ms=4, label="$\\phi$ adc (coupe y = L/2)")
-    axcut.plot(x, phi_analytic, "-", color="C1", lw=1.6,
-               label="$(\\delta/k^2)\\cos(kx)$ analytique")
+    axcut.plot(
+        x, phi_cut, "o", color="C0", ms=4, label="$\\phi$ adc (coupe y = L/2)"
+    )
+    axcut.plot(
+        x,
+        phi_analytic,
+        "-",
+        color="C1",
+        lw=1.6,
+        label="$(\\delta/k^2)\\cos(kx)$ analytique",
+    )
     axcut.axhline(0, color="0.7", lw=0.8)
     axcut.set_title("coupe $\\phi(x)$ vs solution mono-mode du Poisson")
     axcut.set_xlabel("x")
     axcut.set_ylabel("$\\phi$")
     axcut.legend(loc="upper right", fontsize=9)
     resid = float(np.max(np.abs(phi_cut - phi_analytic)))
-    axcut.text(0.02, 0.04, f"$\\max|\\phi_{{adc}}-\\phi_{{ana}}|$ = {resid:.2e}",
-               transform=axcut.transAxes, fontsize=9,
-               bbox=dict(boxstyle="round", fc="white", ec="0.7"))
+    axcut.text(
+        0.02,
+        0.04,
+        f"$\\max|\\phi_{{adc}}-\\phi_{{ana}}|$ = {resid:.2e}",
+        transform=axcut.transAxes,
+        fontsize=9,
+        bbox=dict(boxstyle="round", fc="white", ec="0.7"),
+    )
 
-    fig.suptitle("Potentiel couple : un seul Poisson agrege les charges des deux especes")
+    fig.suptitle(
+        "Potentiel couple : un seul Poisson agrege les charges des deux especes"
+    )
     fig.tight_layout()
     out = os.path.join(FIGDIR, "potentiel.png")
     fig.savefig(out, dpi=130)
@@ -194,16 +266,22 @@ def fig_potential(sim):
     return out, phi, phi_analytic, phi_cut, resid
 
 
-def git_sha(path):
+def git_sha(path: str) -> str:
+    """SHA du HEAD git a `path`, ou "unknown" si indisponible."""
     try:
-        return subprocess.check_output(
-            ["git", "-C", path, "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "-C", path, "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
     except Exception:
         return "unknown"
 
 
-def main():
+def main() -> None:
     sim, me0, mi0, t, me, mi = run_with_history()
 
     f_mass = fig_mass(t, me, mi, me0, mi0)
@@ -221,7 +299,9 @@ def main():
         "script": "multispecies/make_figures.py",
         "command": "python make_figures.py",
         "produces": ["masse.png", "densite.png", "potentiel.png"],
-        "adc_cpp_sha": git_sha("/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"),
+        "adc_cpp_sha": git_sha(
+            "/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp"
+        ),
         "adc_cases_sha": git_sha(os.path.dirname(HERE)),
         "backend": "natif serie (adc.System, deux blocs heterogenes + Poisson de systeme charge_density)",
         "resolution": "48x48",
@@ -262,9 +342,13 @@ def main():
     print("mesures cles :")
     print(f"  M_e0 = {me0:.16e}  M_i0 = {mi0:.16e}")
     print(f"  max|dM_e| = {drift_e:.3e}  max|dM_i| = {drift_i:.3e}")
-    print(f"  n_e in [{de.min():.6f}, {de.max():.6f}]  n_i in [{di.min():.6f}, {di.max():.6f}]")
-    print(f"  |phi|max = {np.abs(phi).max():.6e}  analytic = {np.abs(phi_ana).max():.6e}  "
-          f"resid = {phi_resid:.3e}")
+    print(
+        f"  n_e in [{de.min():.6f}, {de.max():.6f}]  n_i in [{di.min():.6f}, {di.max():.6f}]"
+    )
+    print(
+        f"  |phi|max = {np.abs(phi).max():.6e}  analytic = {np.abs(phi_ana).max():.6e}  "
+        f"resid = {phi_resid:.3e}"
+    )
     print(f"  max|f| final = {qmax1:.6e}")
 
 

@@ -244,7 +244,7 @@ case also has a `sys.path` fallback, in run.py).
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
-```
+```text
 == custom_scheme : transport diocotron 100 % Python, Poisson par adc ==
   |phi|_max initial = 6.124932e-03  (Poisson de adc actif)
   derive de masse relative = 2.040e-16  (flux upwind conservatif)

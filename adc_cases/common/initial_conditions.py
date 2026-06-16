@@ -1,17 +1,27 @@
-"""Conditions initiales reutilisees par plusieurs cas (ecrites en numpy, cote application).
+"""Conditions initiales reutilisees par plusieurs cas (numpy, cote application).
 
 Les CI sont l'unique endroit ou la physique d'un scenario est posee : aucune fonction C++ par
 cas. Ce module factorise les profils partages (bande gaussienne diocotron, anneau, bulle de
 pression Euler). Convention de grille : `field[j, i]` (cf. `adc_cases.common.grid`).
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 from .grid import meshgrid_xy
 
 
-def band_density(n, L=1.0, amp=1.0, width=0.05, mode=2, disp=0.02, floor=1.0):
-    """Bande horizontale de charge perturbee sinusoidalement le long de x (mode azimutal).
+def band_density(
+    n: int,
+    L: float = 1.0,
+    amp: float = 1.0,
+    width: float = 0.05,
+    mode: int = 2,
+    disp: float = 0.02,
+    floor: float = 1.0,
+) -> np.ndarray:
+    """Bande horizontale de charge, perturbee sinusoidalement le long de x.
 
         ne(x, y) = floor + amp * exp(-(y - y0)^2 / width^2),
         y0       = 0.5 L + disp * cos(2 pi mode x / L).
@@ -21,11 +31,19 @@ def band_density(n, L=1.0, amp=1.0, width=0.05, mode=2, disp=0.02, floor=1.0):
     """
     X, Y = meshgrid_xy(n, L)
     y0 = 0.5 * L + disp * np.cos(2.0 * np.pi * mode * X / L)
-    ne = floor + amp * np.exp(-((Y - y0) ** 2) / (width ** 2))
+    ne = floor + amp * np.exp(-((Y - y0) ** 2) / (width**2))
     return np.ascontiguousarray(ne)
 
 
-def ring_density(n, L=1.0, r0=0.15, r1=0.20, mode=4, delta=0.01, floor=1e-3):
+def ring_density(
+    n: int,
+    L: float = 1.0,
+    r0: float = 0.15,
+    r1: float = 0.20,
+    mode: int = 4,
+    delta: float = 0.01,
+    floor: float = 1e-3,
+) -> np.ndarray:
     """Anneau de charge (colonne creuse) perturbe par un mode azimutal `mode`.
 
         ne ~ floor en dehors de l'anneau [r0, r1],
@@ -41,8 +59,16 @@ def ring_density(n, L=1.0, r0=0.15, r1=0.20, mode=4, delta=0.01, floor=1e-3):
     return ne
 
 
-def euler_pressure_blob(n, L=1.0, rho0=1.0, p0=1.0, dp=0.5, sigma2=0.02, gamma=1.4):
-    """Gaz d'Euler au repos avec surpression gaussienne centrale (detente radiale).
+def euler_pressure_blob(
+    n: int,
+    L: float = 1.0,
+    rho0: float = 1.0,
+    p0: float = 1.0,
+    dp: float = 0.5,
+    sigma2: float = 0.02,
+    gamma: float = 1.4,
+) -> np.ndarray:
+    """Gaz d'Euler au repos avec surpression gaussienne centrale.
 
     Renvoie l'etat conservatif U = (rho, rho u, rho v, E) de forme (4, n, n) avec u = v = 0,
     donc E = p / (gamma - 1) ; p = p0 + dp exp(-r^2 / (sigma2 L^2)). Utilise par two_euler et,
@@ -57,6 +83,6 @@ def euler_pressure_blob(n, L=1.0, rho0=1.0, p0=1.0, dp=0.5, sigma2=0.02, gamma=1
     return U
 
 
-def euler_pressure(U, gamma=1.4):
+def euler_pressure(U: np.ndarray, gamma: float = 1.4) -> np.ndarray:
     """Pression d'un etat d'Euler conservatif U = (rho, rho u, rho v, E)."""
     return (gamma - 1.0) * (U[3] - 0.5 * (U[1] ** 2 + U[2] ** 2) / U[0])

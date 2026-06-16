@@ -62,6 +62,8 @@ Lancer
 Options : --n, --omega-c, --cs2, --alpha, --t-end, --csv.
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import math
@@ -76,22 +78,36 @@ from adc import dsl
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 
 from adc_cases.common.io import case_output_dir  # noqa: E402
 from adc_cases.common.native import adc_include  # noqa: E402
 
 CASE = "schur_magnetized_cartesian"
-Q = -1.0  # charge (signe electron) ; le facteur global est absorbe dans alpha / B_z
+Q = (
+    -1.0
+)  # charge (signe electron) ; le facteur global est absorbe dans alpha / B_z
 
 
-def magnetized_model(local_source, cs2):
-    """Fluide isotherme magnetise en formules. local_source=True -> source emise
-    dans le C++ (variante explicite) ; False -> source nulle (l'etage Schur la porte)."""
+def magnetized_model(local_source: bool, cs2: float) -> dsl.Model:
+    """Construit le `dsl.Model` du fluide isotherme magnetise.
+
+    Args:
+        local_source: si True, la source complete (electrostatique +
+            Lorentz) est emise dans le C++ genere (variante explicite) ;
+            si False, la source locale est nulle et l'etage Schur la porte.
+        cs2: carre de la vitesse du son (terme de pression cs2 * rho).
+
+    Returns:
+        Le modele DSL valide (`m.check()` deja appele).
+    """
     tag = "local" if local_source else "schur"
     m = dsl.Model("schurmag_%s" % tag)
     rho, mx, my = m.conservative_vars(
-        "rho", "rho_u", "rho_v", roles=["Density", "MomentumX", "MomentumY"])
+        "rho", "rho_u", "rho_v", roles=["Density", "MomentumX", "MomentumY"]
+    )
     u = m.primitive("u", mx / rho)
     v = m.primitive("v", my / rho)
     gx = m.aux("grad_x")
@@ -100,8 +116,9 @@ def magnetized_model(local_source, cs2):
     cs2p = m.param("cs2", cs2)
     q = m.param("charge", Q)
 
-    m.flux(x=[mx, mx * u + cs2p * rho, mx * v],
-           y=[my, my * u, my * v + cs2p * rho])
+    m.flux(
+        x=[mx, mx * u + cs2p * rho, mx * v], y=[my, my * u, my * v + cs2p * rho]
+    )
     cs = dsl.sqrt(cs2p)
     m.eigenvalues(x=[u - cs, u, u + cs], y=[v - cs, v, v + cs])
 
@@ -121,23 +138,50 @@ def magnetized_model(local_source, cs2):
     return m
 
 
-def initial_state(n):
-    """Densite perturbee (cosinus en x) + vitesse oblique (u=v=0.5) pour que la
-    rotation de Lorentz soit active des le depart."""
+def initial_state(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Densite perturbee (cosinus en x) + vitesse oblique (u=v=0.5).
+
+    La vitesse oblique rend la rotation de Lorentz active des le depart.
+    """
     x = (np.arange(n) + 0.5) / n
     rho0 = 1.0 + 0.05 * np.cos(2.0 * np.pi * x)[None, :] * np.ones((n, n))
     half = 0.5 * np.ones((n, n))
     return rho0, half, half
 
 
-def build(compiled, n, L, omega_c, alpha, schur, theta):
+def build(
+    compiled,
+    n: int,
+    L: float,
+    omega_c: float,
+    alpha: float,
+    schur: bool,
+    theta: float,
+) -> adc.System:
+    """Construit le `sim` (transport explicite + Schur optionnel), champs resolus.
+
+    Args:
+        compiled: modele DSL compile (variante `local` ou `schur`).
+        n: nombre de cellules par direction (grille n x n).
+        L: cote du domaine periodique.
+        omega_c: frequence cyclotron, posee comme champ B_z uniforme.
+        alpha: couplage electrostatique de l'etage source condense.
+        schur: si True, branche `CondensedSchur` via set_source_stage.
+        theta: pondaration implicite de l'etage Schur (0.5 ou 1.0).
+
+    Returns:
+        Le `adc.System` initialise, etat primitif pose et champs resolus.
+    """
     sim = adc.System(n=n, L=L, periodic=True)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="periodic")
     sim.add_equation(
-        "plasma", model=compiled,
-        spatial=adc.FiniteVolume(limiter="minmod", riemann="rusanov",
-                                 variables="conservative"),
-        time=adc.Explicit())  # AOT : SSPRK2 (transport) ; la source vit dans l'etage Schur
+        "plasma",
+        model=compiled,
+        spatial=adc.FiniteVolume(
+            limiter="minmod", riemann="rusanov", variables="conservative"
+        ),
+        time=adc.Explicit(),
+    )  # AOT : SSPRK2 (transport) ; la source vit dans l'etage Schur
     sim.set_magnetic_field(omega_c * np.ones((n, n)))
     if schur:
         # adc.Split n'est pas cable sur backend AOT (l'ABI .so ne transporte pas
@@ -149,21 +193,49 @@ def build(compiled, n, L, omega_c, alpha, schur, theta):
     return sim
 
 
-def is_stable(compiled, n, L, omega_c, alpha, dt, schur, theta, t_end):
+def is_stable(
+    compiled,
+    n: int,
+    L: float,
+    omega_c: float,
+    alpha: float,
+    dt: float,
+    schur: bool,
+    theta: float,
+    t_end: float,
+) -> bool:
     """True si la simulation reste finie / bornee / positive jusqu'a t_end."""
     sim = build(compiled, n, L, omega_c, alpha, schur, theta)
     nst = max(2, int(math.ceil(t_end / dt)))
     for _ in range(nst):
         sim.step(dt)
         d = np.asarray(sim.density("plasma"))
-        if not np.isfinite(d).all() or np.abs(d).max() > 1.0e3 or d.min() < -1.0e-2:
+        if (
+            not np.isfinite(d).all()
+            or np.abs(d).max() > 1.0e3
+            or d.min() < -1.0e-2
+        ):
             return False
     return True
 
 
-def largest_stable_dt(compiled, n, L, omega_c, alpha, schur, theta, t_end,
-                      dt_max=0.5):
-    """Plus grand dt stable sur une echelle geometrique (quart de decade)."""
+def largest_stable_dt(
+    compiled,
+    n: int,
+    L: float,
+    omega_c: float,
+    alpha: float,
+    schur: bool,
+    theta: float,
+    t_end: float,
+    dt_max: float = 0.5,
+) -> float:
+    """Plus grand dt stable, balaye sur une echelle geometrique (quart de decade).
+
+    Returns:
+        Le plus grand dt teste qui reste stable jusqu'a t_end, ou 0.0 si
+        aucun dt de la grille n'est stable.
+    """
     best = 0.0
     for e in range(-16, 5):
         dt = 10.0 ** (e / 4.0)
@@ -174,50 +246,102 @@ def largest_stable_dt(compiled, n, L, omega_c, alpha, schur, theta, t_end,
     return best
 
 
-def parse_args():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+def parse_args() -> argparse.Namespace:
+    """Parse les options CLI (taille, omega_c, cs2, alpha, t_end, csv)."""
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument("--n", type=int, default=16)
     p.add_argument("--L", type=float, default=1.0)
-    p.add_argument("--omega-c", type=float, default=1.0e3,
-                   help="frequence cyclotron B_z (terme raide de Lorentz)")
-    p.add_argument("--cs2", type=float, default=1.0e-4,
-                   help="vitesse du son^2 ; petite => transport non limitant")
-    p.add_argument("--alpha", type=float, default=1.0,
-                   help="couplage electrostatique de l'etage source condense")
+    p.add_argument(
+        "--omega-c",
+        type=float,
+        default=1.0e3,
+        help="frequence cyclotron B_z (terme raide de Lorentz)",
+    )
+    p.add_argument(
+        "--cs2",
+        type=float,
+        default=1.0e-4,
+        help="vitesse du son^2 ; petite => transport non limitant",
+    )
+    p.add_argument(
+        "--alpha",
+        type=float,
+        default=1.0,
+        help="couplage electrostatique de l'etage source condense",
+    )
     p.add_argument("--t-end", type=float, default=1.0)
-    p.add_argument("--csv", action="store_true",
-                   help="ecrit out/%s/dt_stable.csv" % CASE)
+    p.add_argument(
+        "--csv", action="store_true", help="ecrit out/%s/dt_stable.csv" % CASE
+    )
     return p.parse_args()
 
 
-def main():
+def main() -> None:
+    """Compile les deux variantes, mesure le dt stable et imprime le gain Schur."""
     args = parse_args()
     inc = adc_include()
     so_dir = case_output_dir(CASE)
 
     cm_local = magnetized_model(True, args.cs2).compile(
-        os.path.join(so_dir, "schurmag_local.so"), inc, backend="aot")
+        os.path.join(so_dir, "schurmag_local.so"), inc, backend="aot"
+    )
     cm_schur = magnetized_model(False, args.cs2).compile(
-        os.path.join(so_dir, "schurmag_schur.so"), inc, backend="aot")
+        os.path.join(so_dir, "schurmag_schur.so"), inc, backend="aot"
+    )
 
     n, L = args.n, args.L
     h = L / n
-    transport_dt = 0.5 * h / math.sqrt(args.cs2 + 0.5)  # CFL transport approx (u,v=0.5)
+    transport_dt = (
+        0.5 * h / math.sqrt(args.cs2 + 0.5)
+    )  # CFL transport approx (u,v=0.5)
 
-    print("=== %s : effet temporel du Schur (fluide magnetise cartesien raide) ===" % CASE)
-    print("n=%d, L=%g, h=%g | omega_c(B_z)=%g, cs2=%g, alpha=%g, t_end=%g"
-          % (n, L, h, args.omega_c, args.cs2, args.alpha, args.t_end))
-    print("transport-limited dt ~ %.3e ; source-limited explicit dt ~ 1/omega_c = %.3e"
-          % (transport_dt, 1.0 / args.omega_c))
+    print(
+        "=== %s : effet temporel du Schur (fluide magnetise cartesien raide) ==="
+        % CASE
+    )
+    print(
+        "n=%d, L=%g, h=%g | omega_c(B_z)=%g, cs2=%g, alpha=%g, t_end=%g"
+        % (n, L, h, args.omega_c, args.cs2, args.alpha, args.t_end)
+    )
+    print(
+        "transport-limited dt ~ %.3e ; source-limited explicit dt ~ 1/omega_c = %.3e"
+        % (transport_dt, 1.0 / args.omega_c)
+    )
     print()
 
-    de = largest_stable_dt(cm_local, n, L, args.omega_c, args.alpha,
-                           schur=False, theta=0.5, t_end=args.t_end)
-    ds05 = largest_stable_dt(cm_schur, n, L, args.omega_c, args.alpha,
-                             schur=True, theta=0.5, t_end=args.t_end)
-    ds10 = largest_stable_dt(cm_schur, n, L, args.omega_c, args.alpha,
-                             schur=True, theta=1.0, t_end=args.t_end)
+    de = largest_stable_dt(
+        cm_local,
+        n,
+        L,
+        args.omega_c,
+        args.alpha,
+        schur=False,
+        theta=0.5,
+        t_end=args.t_end,
+    )
+    ds05 = largest_stable_dt(
+        cm_schur,
+        n,
+        L,
+        args.omega_c,
+        args.alpha,
+        schur=True,
+        theta=0.5,
+        t_end=args.t_end,
+    )
+    ds10 = largest_stable_dt(
+        cm_schur,
+        n,
+        L,
+        args.omega_c,
+        args.alpha,
+        schur=True,
+        theta=1.0,
+        t_end=args.t_end,
+    )
 
     rows = [
         ("explicit (Lorentz explicite)", de, de * args.omega_c),
@@ -230,15 +354,26 @@ def main():
     print()
     if de > 0:
         print("gain en pas de temps du Schur sur l'explicite :")
-        print("  theta=0.5 -> %.1fx ; theta=1.0 -> %.1fx" % (ds05 / de, ds10 / de))
+        print(
+            "  theta=0.5 -> %.1fx ; theta=1.0 -> %.1fx" % (ds05 / de, ds10 / de)
+        )
     else:
-        print("explicite instable a tout dt teste : gain Schur non borne par le bas")
+        print(
+            "explicite instable a tout dt teste : gain Schur non borne par le bas"
+        )
 
     if args.csv:
         path = os.path.join(so_dir, "dt_stable.csv")
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["method", "dt_stable", "dt_times_omega_c", "gain_over_explicit"])
+            w.writerow(
+                [
+                    "method",
+                    "dt_stable",
+                    "dt_times_omega_c",
+                    "gain_over_explicit",
+                ]
+            )
             for name, dt, prod in rows:
                 gain = dt / de if de > 0 else float("inf")
                 w.writerow([name, dt, prod, gain])
