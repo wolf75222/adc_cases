@@ -66,7 +66,7 @@ $$\lambda_x=\{u-c,\ u,\ u+c\},\quad \lambda_y=\{v-c,\ v,\ v+c\}.$$
 For a DSL case, the central layer is not a named C++ brick: it is the expressions that `adc.dsl`
 interprets. Here, the third layer = numpy host (not a device kernel).
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `for _ in range(120): U = U + pf.cfl_dt(U,h,0.4)*pf.residual(U,h)` (`main` in run.py) | Python composes and integrates | choice of scheme (first-order Rusanov), integrator (forward Euler), step size (CFL 0.4 re-evaluated each step) |
 | `e.set_flux(...)` / `e.set_eigenvalues(...)` -> `HyperbolicModel.flux` / `.max_wave_speed` (in dsl.py) | interpreted tree | `Expr.eval(env)` evaluates $F_x,F_y,\lambda$ in numpy over the whole array; no C++ |

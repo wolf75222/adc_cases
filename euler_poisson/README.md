@@ -68,9 +68,9 @@ It is `adc_cases.models.euler_poisson(sign, gamma, four_pi_G, rho0)` (`euler_poi
 composition `adc.Model(state, transport, source, elliptic)`. The word "euler_poisson" lives in
 `adc_cases`; on the core side these are four generic bricks.
 
-A 3-layer "who computes what" table, each row pinned to a real line:
+A 3-layer "who computes what" table, each row pinned to a real symbol:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `sim.add_block("gas", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.Explicit())` (`run_case` in run.py) | Python composes | choice of model, scheme (MUSCL van Leer + HLLC), integrator (SSPRK2) |
 | `models.euler_poisson(sign=...)` -> `GravityForce` (in source.hpp) / `GravityCoupling` (in elliptic.hpp) | C++ brick freezes | the exact formula of the force ($g=-\nabla\phi$, work on the 4-variable energy) and of the right-hand side ($\mathrm{sign}\cdot 4\pi G(\rho-\rho_0)$) |

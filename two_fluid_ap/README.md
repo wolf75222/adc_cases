@@ -75,9 +75,9 @@ Conservative state per species, 3 components: $U_s=(n_s,m_{s,x},m_{s,y})$.
 
 This case calls no core scenario: the AP two-fluid physics is written here, and borrows from the
 core only generic bricks (mesh, elliptic, parallel). A 3-layer "who computes what" table, each row
-pinned to a real line:
+pinned to a real symbol:
 
-| Line | Layer | What happens |
+| Symbol | Layer | What happens |
 |---|---|---|
 | `TwoFluidAP(lib, n=.., omega_pe=.., stabilize=True)` (`run_stiff`/`run_magnetized` in run.py) | Python driver | choice of physical parameters + AP flag; reads the state via `ctypes` |
 | `TwoFluidAP2D<GeometricMG>` instantiated by `Solver` (in _two_fluid_ap.cpp) | frozen C++ scenario | the full AP integrator: IMEX split, reformulated Poisson, Boris. This is the JIT-compiled `.cpp` |

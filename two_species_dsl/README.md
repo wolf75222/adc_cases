@@ -93,7 +93,7 @@ Two convention subtleties the formulas must honor for the equality to hold:
 3-layer "who computes what" table (the middle layer is no longer a named brick but the
 expressions that `adc.dsl` compiles):
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `add_equation("electrons", model=ce, spatial=FiniteVolume(limiter="minmod", riemann="rusanov"), time=Explicit())` (in `run_dsl`); same for ions | Python composes and diagnoses | choice of scheme (MUSCL minmod + Rusanov, SSPRK2); reading the states to compare against native |
 | `m.flux(...)`, `m.eigenvalues(...)`, `m.source(...)`, `m.elliptic_rhs(...)` (in `electron_dsl_model`/`ion_dsl_model`) that `m.compile(..., backend)` translates into C++ | frozen DSL expressions | the exact convention (flux, spectrum, force $q\rho\mathbf{E}$, RHS $q n$) compiled into a `.so`, cse'd at codegen |

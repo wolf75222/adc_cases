@@ -85,7 +85,7 @@ elliptic bricks of each block). With perturbed electrons $q=-1$ and uniform ions
 
 ### The 3-layer table: who computes what, and where the scheme is frozen
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `sim.add_block("electrons", model=..., spatial=adc.Spatial(vanleer=True, flux="hllc"), time=adc.IMEX(substeps=10))` (`partie_A` in run.py) | Python composes | choice of the model (bricks), the spatial scheme (reconstruction + flux), the time treatment (IMEX + 10 substeps); reads the state via `density`/`potential`/`get_state` |
 | `models.electron_euler()` -> bricks `CompressibleFlux` / `PotentialForce` / `ChargeDensity` (`CompressibleFlux` in hyperbolic.hpp, `PotentialForce` in source.hpp, `ChargeDensity` in elliptic.hpp) | C++ brick freezes the physics | the exact convention of the Euler flux, of the $q\rho E$ force, of the $q n$ right-hand side |

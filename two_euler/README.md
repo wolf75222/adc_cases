@@ -75,7 +75,7 @@ charge): independent blocks, just for solve_fields".
 
 ### 3-layer table: who computes what
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `add_block("electrons", model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())` (`main` in run.py) | Python composes | choice of the Euler model, of the scheme (van Leer + HLLC + primitive recon), of the integrator (SSPRK2); two distinct calls, one per block |
 | `models.euler(GAMMA)` -> `CompressibleFlux` / `NoSource` / `ChargeDensity(0)` (`include/adc/physics/euler.hpp`, `.../source.hpp`) | the C++ brick fixes the physics | the exact convention of the flux $F(U)$, of the wave speed $|v_n|+c$, of the zero right-hand side |

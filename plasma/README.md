@@ -78,7 +78,7 @@ bricks by `adc.Model(state, transport, source, elliptic)`:
 with a zero weight, so they do not contribute to it. Who computes what (3-layer table, anchored on
 the actual lines of `recipes.plasma` (`plasma` in recipes.py), triggered by `main` in run.py):
 
-| Line | Layer | What happens |
+| Symbol | Layer | What happens |
 |---|---|---|
 | `recipes.plasma(sim, ne, ni, ng, ...)` (`main` in run.py) -> `add_block` x3 + `set_poisson` + `add_ionization` + `add_collision` (`plasma` in recipes.py) | Python composes | choice of the 3 models, of the schemes (electrons HLLC+vanleer+primitive; ions/neutrals minmod), of the system Poisson solve, of the 2 couplings |
 | `models.electron_euler/ion_isothermal/neutral_isothermal` -> bricks `CompressibleFlux` / `IsothermalFlux` / `PotentialForce` / `ChargeDensity` (`include/adc/physics/*.hpp`) | C++ brick fixes | the exact convention of the flux, of the force $q\rho\mathbf{E}$, of the Poisson right-hand side $\sum_b q_b n_b$ |

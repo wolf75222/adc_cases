@@ -59,7 +59,7 @@ the quantified consequence of this shear, not the starting point.
 
 This is `adc_cases.models.diocotron(B0, alpha, n_i0)`. Who computes what:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `add_block("ne", model=..., spatial=Spatial(minmod), time=Explicit)` (`make_ring_system` in run.py) | Python composes | choice of the model, the scheme (MUSCL minmod + Rusanov), the integrator (SSPRK2) |
 | `models.diocotron(...)` -> `ExBVelocity` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | the C++ brick fixes the physics | the exact convention of the flux $n v(dir)$, of the eigenvalue $v(dir)$, of the RHS $\alpha(n-n_{i0})$ |

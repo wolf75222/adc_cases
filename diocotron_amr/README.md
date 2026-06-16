@@ -70,7 +70,7 @@ This is exactly `models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0)` (in models.py),
 same model as the parent: only the mesh (AMR), the IC (band) and the BC (periodic) change. Who
 computes what, the three layers pinned to lines of `run.py`:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `sim.add_block("ne", model=models.diocotron(...), spatial=adc.Spatial(none=True))` (`build_sim` in run.py) | Python composes | choice of model, of spatial scheme (NoSlope + Rusanov), carried onto the hierarchy; the explicit integrator is the default of `step_cfl` |
 | `models.diocotron(...)` -> `ExB` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | C++ brick freezes the physics | the exact convention of the flux $n\,v(\mathrm{dir})$, of the eigenvalue $v(\mathrm{dir})$, of the RHS $\alpha(n-n_{i0})$ |

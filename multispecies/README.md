@@ -74,7 +74,7 @@ in __init__.py) and
 in __init__.py): this is what makes the
 coupling physically consistent. Who computes what:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `add_block("electrons", model=models.electron_euler(...), spatial=Spatial(minmod), time=Explicit())` (in run.py); same for ions | Python composes | choice of the model per block, of the scheme (MUSCL minmod + Rusanov), of the integrator (SSPRK2); the two blocks are heterogeneous (4 var vs 3 var) |
 | `models.electron_euler` / `ion_isothermal` -> `CompressibleFlux` / `IsothermalFlux` / `PotentialForce` / `ChargeDensity` (`models.py`, bricks from module `adc`) | C++ brick fixes the physics | exact convention for the flux, the closure ($\gamma$ or $c_s^2$), the force $\frac{q}{m}\rho\mathbf{E}$, the $q\,n$ term injected into the Poisson |

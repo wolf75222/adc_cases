@@ -48,7 +48,7 @@ In the other brick cases, the middle layer is a frozen C++ transport brick
 (`ExBVelocity`, `CompressibleFlux`). Here the transport layer moves up to the Python side: `adc`
 now occupies only the elliptic layer. The table reflects this shift.
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `drift(...)` + `divergence_upwind(...)` + SSPRK2 loop (in `main`, in run.py) | Python computes the transport | $\nabla\phi$ reconstruction (centered differences), ExB velocity, conservative upwind flux, SSPRK2 integrator. The whole advection hot path is in numpy |
 | `poisson_oracle` -> `set_density` + `solve_fields` + `potential` (in run.py) | adc = Poisson oracle (the only call to the library) | the library solves $\nabla^2\phi=\alpha(n-n_{i0})$ and returns $\phi$. A `models.diocotron` block is added solely to provide the elliptic right-hand side `BackgroundDensity` |

@@ -91,7 +91,7 @@ is touched only if the Energy role exists (absent here, the 3-variable isotherma
 The model is written once as `adc.dsl.Model` (`magnetized_model` in run.py), instantiated in
 two variants that share flux/eigenvalues/Poisson and differ only by their source.
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
 | `sim.add_equation("plasma", model=compiled, spatial=adc.FiniteVolume(minmod, rusanov, conservative), time=adc.Explicit())` (`build` in run.py); `sim._s.set_source_stage("plasma", "electrostatic_lorentz", theta, alpha)` (`build` in run.py) | Python composes and measures | choice of transport scheme, wiring of the condensed source stage; the `largest_stable_dt` sweep (in run.py) reads density to judge stability |
 | `m.flux(...)`, `m.eigenvalues(...)`, `m.source([0, q*rho*(-gx)+bz*my, q*rho*(-gy)-bz*mx])` (local) or `m.source([0*rho,0*mx,0*my])` (schur), `m.elliptic_rhs(q*rho)` (`magnetized_model` in run.py) | expressions that `adc.dsl` compiles and freezes | the exact convention of the isothermal flux, the eigenvalues $v_n\pm c_s$, the Lorentz term $(+B_z m_y,-B_z m_x)$, the right-hand side $q\rho$ |
