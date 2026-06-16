@@ -92,10 +92,16 @@ Q = (
 
 
 def magnetized_model(local_source: bool, cs2: float) -> dsl.Model:
-    """Fluide isotherme magnetise en formules.
+    """Construit le `dsl.Model` du fluide isotherme magnetise.
 
-    local_source=True -> source emise dans le C++ (variante explicite) ;
-    False -> source nulle (l'etage Schur la porte).
+    Args:
+        local_source: si True, la source complete (electrostatique +
+            Lorentz) est emise dans le C++ genere (variante explicite) ;
+            si False, la source locale est nulle et l'etage Schur la porte.
+        cs2: carre de la vitesse du son (terme de pression cs2 * rho).
+
+    Returns:
+        Le modele DSL valide (`m.check()` deja appele).
     """
     tag = "local" if local_source else "schur"
     m = dsl.Model("schurmag_%s" % tag)
@@ -152,7 +158,20 @@ def build(
     schur: bool,
     theta: float,
 ) -> adc.System:
-    """Construit le `sim` (transport explicite + etage Schur optionnel) et resout les champs."""
+    """Construit le `sim` (transport explicite + Schur optionnel), champs resolus.
+
+    Args:
+        compiled: modele DSL compile (variante `local` ou `schur`).
+        n: nombre de cellules par direction (grille n x n).
+        L: cote du domaine periodique.
+        omega_c: frequence cyclotron, posee comme champ B_z uniforme.
+        alpha: couplage electrostatique de l'etage source condense.
+        schur: si True, branche `CondensedSchur` via set_source_stage.
+        theta: pondaration implicite de l'etage Schur (0.5 ou 1.0).
+
+    Returns:
+        Le `adc.System` initialise, etat primitif pose et champs resolus.
+    """
     sim = adc.System(n=n, L=L, periodic=True)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg", bc="periodic")
     sim.add_equation(
@@ -211,7 +230,12 @@ def largest_stable_dt(
     t_end: float,
     dt_max: float = 0.5,
 ) -> float:
-    """Plus grand dt stable sur une echelle geometrique (quart de decade)."""
+    """Plus grand dt stable, balaye sur une echelle geometrique (quart de decade).
+
+    Returns:
+        Le plus grand dt teste qui reste stable jusqu'a t_end, ou 0.0 si
+        aucun dt de la grille n'est stable.
+    """
     best = 0.0
     for e in range(-16, 5):
         dt = 10.0 ** (e / 4.0)
@@ -223,6 +247,7 @@ def largest_stable_dt(
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse les options CLI (taille, omega_c, cs2, alpha, t_end, csv)."""
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -255,6 +280,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Compile les deux variantes, mesure le dt stable et imprime le gain Schur."""
     args = parse_args()
     inc = adc_include()
     so_dir = case_output_dir(CASE)

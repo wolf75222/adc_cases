@@ -1,4 +1,4 @@
-"""Conditions initiales reutilisees par plusieurs cas (ecrites en numpy, cote application).
+"""Conditions initiales reutilisees par plusieurs cas (numpy, cote application).
 
 Les CI sont l'unique endroit ou la physique d'un scenario est posee : aucune fonction C++ par
 cas. Ce module factorise les profils partages (bande gaussienne diocotron, anneau, bulle de
@@ -21,7 +21,7 @@ def band_density(
     disp: float = 0.02,
     floor: float = 1.0,
 ) -> np.ndarray:
-    """Bande horizontale de charge perturbee sinusoidalement le long de x (mode azimutal).
+    """Bande horizontale de charge, perturbee sinusoidalement le long de x.
 
         ne(x, y) = floor + amp * exp(-(y - y0)^2 / width^2),
         y0       = 0.5 L + disp * cos(2 pi mode x / L).
@@ -68,7 +68,7 @@ def euler_pressure_blob(
     sigma2: float = 0.02,
     gamma: float = 1.4,
 ) -> np.ndarray:
-    """Gaz d'Euler au repos avec surpression gaussienne centrale (detente radiale).
+    """Gaz d'Euler au repos avec surpression gaussienne centrale.
 
     Renvoie l'etat conservatif U = (rho, rho u, rho v, E) de forme (4, n, n) avec u = v = 0,
     donc E = p / (gamma - 1) ; p = p0 + dp exp(-r^2 / (sigma2 L^2)). Utilise par two_euler et,

@@ -166,6 +166,7 @@ def measure_growth(
 
 
 def parse_args() -> argparse.Namespace:
+    """Lit les options CLI du balayage (modes, resolutions, ordres, t_end)."""
     p = argparse.ArgumentParser(
         description="Balayage diocotron ordre x resolution x mode (mesure)."
     )

@@ -57,7 +57,16 @@ MIN_SOLUTION_GAP = 1e-3
 
 
 def build_sim(ne: np.ndarray, n_i0: float, threshold: float) -> adc.AmrSystem:
-    """Construit un AmrSystem diocotron identique au nominal, au seuil de raffinement pres."""
+    """Construit l'AmrSystem diocotron nominal, au seuil de raffinement pres.
+
+    Args:
+        ne: Densite electronique initiale (bande de charge) sur la grille de base.
+        n_i0: Fond neutralisant ionique (moyenne nulle pour le Poisson periodique).
+        threshold: Seuil du critere de tagging ; au-dessus, la maille est raffinee.
+
+    Returns:
+        Un AmrSystem pret a integrer (bloc diocotron, Poisson de charge, CI posee).
+    """
     sim = adc.AmrSystem(n=N, L=L, regrid_every=10, periodic=True)
     sim.add_block(
         "ne",
@@ -71,6 +80,7 @@ def build_sim(ne: np.ndarray, n_i0: float, threshold: float) -> adc.AmrSystem:
 
 
 def main() -> None:
+    """Joue le run nominal et le run de controle, et verifie toutes les asserts."""
     amp, width, disp = 1.0, 0.05, 0.02
     ne = band_density(N, L, amp=amp, width=width, mode=MODE, disp=disp)
     n_i0 = float(

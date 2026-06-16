@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Trace les figures de la campagne de perf a partir des JSONL (frontend + scaling). AUCUNE physique.
+"""Trace les figures de la campagne de perf depuis les JSONL (frontend + scaling).
 
-Figures FRONTEND (depuis frontend_compare.jsonl) :
+AUCUNE physique. Figures FRONTEND (depuis frontend_compare.jsonl) :
   - barres empilees du TEMPS cold-cache par etage et par front (import / model_build / dsl_compile /
     addblock / state_init / first_step / warmup / run_loop / diag) ;
   - hot ms/pas par front avec barres d'erreur p10-p90 ;
@@ -27,6 +27,7 @@ import sys
 
 
 def _bootstrap() -> None:
+    """Rend adc_cases importable quand le script est lance directement."""
     try:
         import adc_cases  # noqa: F401
     except ImportError:
@@ -36,6 +37,7 @@ def _bootstrap() -> None:
 
 
 def read_jsonl(path: str) -> list:
+    """Lit un fichier JSONL et renvoie la liste des records (lignes vides ignorees)."""
     recs = []
     with open(path) as fh:
         for line in fh:
@@ -57,6 +59,7 @@ def assert_single_build(recs: list, what: str) -> None:
 
 
 def _prov_footer(recs: list) -> str:
+    """Construit le pied de page de provenance (SHA des deux depots + machine)."""
     r = recs[0]
     return "adc_cpp %s@%s | adc_cases %s@%s | %s" % (
         str(r.get("adc_cpp_branch")),
@@ -81,6 +84,7 @@ STAGE_ORDER = [
 
 
 def _front_label(r: dict) -> str:
+    """Etiquette d'axe lisible pour un front (C++ / briques / DSL/cold|warm)."""
     f = r["front"]
     if f == "python_dsl":
         return "DSL/%s" % r.get("dsl_cache", "?")
@@ -88,6 +92,12 @@ def _front_label(r: dict) -> str:
 
 
 def plot_frontend(path: str, figdir: str) -> None:
+    """Genere les quatre figures frontend depuis `path` dans `figdir`.
+
+    Lit frontend_compare.jsonl, refuse de melanger deux builds adc_cpp, puis
+    ecrit : barres empilees du temps cold-cache par etage, hot ms/pas avec
+    p10-p90, step-loop vs advance, et ratio vs C++.
+    """
     import matplotlib
 
     matplotlib.use("Agg")
@@ -207,6 +217,11 @@ def plot_frontend(path: str, figdir: str) -> None:
 
 
 def plot_scaling(path: str, figdir: str) -> None:
+    """Genere les figures de scaling (strong/weak) depuis `path` dans `figdir`.
+
+    Une figure par (backend, workload, scaling) avec au moins deux points a
+    unites distinctes ; ne melange jamais CPU et GPU dans une meme courbe.
+    """
     import matplotlib
 
     matplotlib.use("Agg")

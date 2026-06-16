@@ -1,4 +1,4 @@
-"""Cas "dsl_euler" : Euler compressible ecrit en formules (mini-DSL symbolique adc.dsl).
+"""Cas "dsl_euler" : Euler compressible ecrit en formules (mini-DSL adc.dsl).
 
 Demonstration du principe "Python ecrit les equations, le coeur execute les boucles", version
 prototype interprete CPU. On ne declare aucune brique nommee (pas d'adc.CompressibleFlux) : on ecrit
@@ -38,7 +38,17 @@ GAMMA = 1.4
 
 
 def make_euler() -> dsl.HyperbolicModel:
-    """Euler 2D entierement declaratif : variables -> primitives -> flux -> valeurs propres."""
+    """Construit le modele Euler 2D entierement declaratif (mini-DSL).
+
+    Declare les variables conservatives, les primitives (u, v, p), le flux
+    physique en x/y et les valeurs propres, le tout en expressions symboliques
+    adc.dsl. Aucune brique nommee n'est utilisee.
+
+    Returns:
+        Le modele hyperbolique symbolique, verifie par check() : toutes les
+        variables referencees dans le flux et les valeurs propres sont
+        declarees.
+    """
     e = dsl.HyperbolicModel("euler")
     rho, rhou, rhov, E = e.conservative_vars("rho", "rho_u", "rho_v", "E")
 
@@ -64,6 +74,13 @@ def pressure(U: np.ndarray) -> np.ndarray:
 
 
 def main() -> None:
+    """Joue le cas et verifie masse conservee, dynamique et etat physique.
+
+    Initialise une bulle de pression au centre d'un domaine periodique 64x64,
+    avance 120 pas (Rusanov ordre 1, Euler avant, CFL 0.4) via le flux numpy
+    issu du modele symbolique, puis controle : derive de masse nulle, ondes
+    acoustiques non triviales, rho > 0 et p > 0 partout.
+    """
     euler = make_euler()
     print(
         "modele declare en formules : %d variables %s"

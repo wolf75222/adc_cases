@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cas "safe_euler_periodic" : le CAS SUR de reference de la campagne de perf, en version VALIDATION.
+"""Cas sur "safe_euler_periodic" : version VALIDATION du cas de reference perf.
 
 Euler compressible PUR, periodique, bulle de pression lisse de faible amplitude (rho>0, p>0
 garantis), AUCUNE source ni Poisson : transport pur. C'est le cas que la campagne de perf
@@ -50,7 +50,12 @@ from adc_cases.common.native import adc_include  # noqa: E402
 def run_bricks(n: int, steps: int) -> tuple[np.ndarray, float]:
     """Front BRIQUES : System + add_block(models.euler), dt fixe.
 
-    Renvoie (etat final, masse).
+    Args:
+        n: Cote de la grille carree n x n.
+        steps: Nombre de pas de temps a dt fixe.
+
+    Returns:
+        Tuple (etat final de forme (4, n, n), masse totale).
     """
     dt = sc.dt(n)
     sim = adc.System(n=n, L=sc.L, periodic=True)
@@ -71,7 +76,18 @@ def run_bricks(n: int, steps: int) -> tuple[np.ndarray, float]:
 def run_dsl(n: int, steps: int) -> tuple[np.ndarray, float, str]:
     """Front DSL : compile (production -> aot) + add_equation, MEMES reglages.
 
-    Renvoie (etat, masse, backend).
+    Essaie les backends de compilation dans l'ordre "production" puis "aot",
+    et retient le premier qui compile et execute le modele Euler.
+
+    Args:
+        n: Cote de la grille carree n x n.
+        steps: Nombre de pas de temps a dt fixe.
+
+    Returns:
+        Tuple (etat final de forme (4, n, n), masse totale, nom du backend).
+
+    Raises:
+        RuntimeError: Si aucun backend ne compile ni n'execute le modele.
     """
     dt = sc.dt(n)
     so_dir = case_output_dir("safe_euler_periodic")
@@ -115,6 +131,7 @@ def run_dsl(n: int, steps: int) -> tuple[np.ndarray, float, str]:
 
 
 def main() -> None:
+    """Lance les deux fronts puis verifie equivalence, invariants et dynamique."""
     ap = argparse.ArgumentParser(
         description="Cas sur Euler periodique : validation + equivalence fronts"
     )

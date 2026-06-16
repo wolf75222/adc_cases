@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Cas "diocotron_dsl" : le modele diocotron ecrit entierement en formules (adc.dsl.Model),
-puis prouve bit-identique a la composition native de briques (adc_cases.models.diocotron).
+"""Cas diocotron_dsl : modele DSL prouve bit-identique aux briques natives.
+
+Le modele diocotron est ecrit entierement en formules (adc.dsl.Model), puis
+prouve bit-identique a la composition native de briques
+(adc_cases.models.diocotron).
 
 Pourquoi ce cas
 ---------------

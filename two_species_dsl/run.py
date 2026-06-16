@@ -215,10 +215,18 @@ def run_native(
 
 
 def _compile(model: dsl.Model, tag: str, backend: str):
-    """Compile @p model avec le backend demande, sans fallback interne.
+    """Compile un modele DSL avec le backend demande, sans fallback interne.
 
     Le fallback est gere au niveau de run_dsl pour que les deux especes
-    partagent le meme backend. Renvoie le CompiledModel.
+    partagent le meme backend.
+
+    Args:
+        model: modele DSL a compiler.
+        tag: prefixe du nom de fichier .so ("electron" ou "ion").
+        backend: backend de compilation ("production" ou "aot").
+
+    Returns:
+        Le CompiledModel pret a etre branche au System.
     """
     import os
 

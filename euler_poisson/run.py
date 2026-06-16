@@ -1,4 +1,4 @@
-"""Demo "euler_poisson" : fluide d'Euler couple a Poisson, attractif vs repulsif.
+"""Demo euler_poisson : Euler couple a Poisson, attractif vs repulsif.
 
 Capacite demontree
 ------------------
@@ -90,7 +90,14 @@ def initial_density() -> np.ndarray:
 
 
 def energy_and_momentum(sim: adc.System) -> tuple[float, float, float]:
-    """Diagnostics globaux lus sur l'etat complet (4, n, n) = [rho, rho*u, rho*v, E]."""
+    """Diagnostics globaux lus sur l'etat complet du systeme.
+
+    L'etat (4, n, n) vaut [rho, rho*u, rho*v, E].
+
+    Returns:
+        Triplet (E_tot, p_x, p_y) : energie fluide totale et les deux
+        composantes de l'impulsion totale.
+    """
     U = sim.get_state("gas")
     return U[3].sum(), U[1].sum(), U[2].sum()  # E_tot, p_x, p_y
 
@@ -98,7 +105,14 @@ def energy_and_momentum(sim: adc.System) -> tuple[float, float, float]:
 def run_case(sign: float, label: str) -> dict:
     """Avance un run Euler-Poisson et renvoie un dictionnaire de diagnostics.
 
-    sign = +1.0 -> gravite (attractif) ; sign = -1.0 -> PLASMA (repulsif).
+    Args:
+        sign: Signe du couplage. +1.0 -> gravite (attractif),
+            -1.0 -> plasma (repulsif).
+        label: Etiquette courte prefixant les lignes imprimees.
+
+    Returns:
+        Dictionnaire des diagnostics du run : masse et energie initiales,
+        energie finale, derive de masse et impulsion maximales, temps final.
     """
     sim = adc.System(n=N, L=L, periodic=True)
     sim.add_block(

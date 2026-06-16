@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Modele COMPLET Euler-Poisson isotherme magnetise sur GRILLE POLAIRE (anneau resolu).
+"""Modele COMPLET Euler-Poisson isotherme magnetise sur grille polaire.
 
-Pendant POLAIRE du chemin cartesien ``run.py`` (engine ``system-schur``). Au lieu du
+Pendant POLAIRE du chemin cartesien ``run.py`` (engine ``system-schur``), sur un
+ANNEAU resolu (r, theta). Au lieu du
 carre cartesien plein, le transport tourne sur un ANNEAU (r, theta) : la direction
 RADIALE est portee par un axe de grille, ce qui leve le verrou des bords d'anneau
 cartesiens (cf. docs/HOFFART_GEOMETRY_VERDICT.md : le chemin cartesien plafonne a
@@ -99,9 +100,10 @@ DEFAULT_RMIN = 2.0
 
 
 def i_radial(radius: float, r_min: float, dr: float, nr: int) -> int:
-    """Indice radial de la cellule dont le CENTRE est le plus proche de @p radius.
+    """Indice radial de la cellule dont le CENTRE est le plus proche de radius.
 
-    Centres : r_cell(i) = r_min + (i + 0.5) * dr (convention PolarGeometry::r_cell, mesh/geometry.hpp).
+    Centres : r_cell(i) = r_min + (i + 0.5) * dr (convention PolarGeometry::r_cell,
+    mesh/geometry.hpp).
     """
     return max(0, min(nr - 1, int(round((radius - r_min) / dr - 0.5))))
 
@@ -109,7 +111,7 @@ def i_radial(radius: float, r_min: float, dr: float, nr: int) -> int:
 def annular_density(
     nr: int, nth: int, mode: int, params, r_min: float
 ) -> np.ndarray:
-    """Densite top-hat annulaire + perturbation azimutale sin(l*theta) (eq. (35) du papier).
+    """Densite top-hat annulaire + perturbation sin(l*theta) (eq. (35) du papier).
 
     Layout polaire attendu par set_density : axe lent = theta (j), axe rapide = r (i), flat[j*nr+i].
     Renvoie un tableau (nth, nr) ; l'appelant l'aplatit (.ravel(), C-order).
@@ -135,7 +137,7 @@ def annular_density(
 def polar_gradient(
     phi: np.ndarray, r_min: float, dr: float, nth: int, nr: int
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Gradient polaire de phi en base locale, EXACTEMENT le stencil de derive_aux_polar (C++).
+    """Gradient polaire de phi, EXACTEMENT le stencil de derive_aux_polar (C++).
 
     phi : tableau (nth, nr) = phi[theta, r]. Renvoie (grad_r, grad_theta), memes formes :
       grad_r     = d phi/dr     : centre a l'interieur, DECENTRE d'ordre 2 aux deux parois radiales
@@ -166,7 +168,7 @@ def polar_gradient(
 def polar_radial_derivative(
     field: np.ndarray, r_min: float, dr: float, nth: int, nr: int
 ) -> np.ndarray:
-    """d field/dr en base locale, MEME stencil radial que polar_gradient (branche grad_r).
+    """d field/dr, MEME stencil radial que polar_gradient (branche grad_r).
 
     Reutilise pour d_r rho dans le terme de pression de l'equilibre. field : (nth, nr).
     Centre a l'interieur, decentre d'ordre 2 aux deux parois radiales (i=0 et i=nr-1).
@@ -192,7 +194,7 @@ def equilibrium_v_theta(
     params,
     cs2: float,
 ) -> np.ndarray:
-    r"""v_theta(r) de l'EQUILIBRE ROTATIF axisymetrique (bilan radial de quantite de mouvement).
+    r"""v_theta(r) de l'EQUILIBRE ROTATIF axisymetrique (bilan radial du moment).
 
     Derivation E1 (verifiee dans la source adc_cpp ; cf. en-tete de ce fichier). A l'etat
     stationnaire (v_r = 0, d_t = 0, axisymetrique) le membre de droite RADIAL des DEUX etages du
@@ -228,8 +230,12 @@ def equilibrium_v_theta(
     contre-tournante parasite) est ecartee. Tout est calcule par cellule avec EXACTEMENT le stencil
     radial du moteur (polar_gradient / polar_radial_derivative) -> coherence avec l'operateur discret.
 
-    @param grad_r  d phi/dr deja calcule (meme stencil que derive_aux_polar).
-    @return v_theta : tableau (nth, nr), composante PHYSIQUE azimutale (base locale e_theta).
+    Args:
+        grad_r: d phi/dr deja calcule (meme stencil que derive_aux_polar).
+
+    Returns:
+        v_theta : tableau (nth, nr), composante PHYSIQUE azimutale (base locale
+        e_theta).
     """
     B = params.omega
     r = (r_min + (np.arange(nr) + 0.5) * dr)[None, :]  # (1, nr) centres radiaux
@@ -251,7 +257,7 @@ def equilibrium_v_theta(
 def build_polar_system(
     nr: int, nth: int, mode: int, params, args: argparse.Namespace
 ) -> adc.System:
-    """Anneau polaire + bloc isotherme natif + Poisson polaire + B_z + etage Schur condense.
+    """Assemble l'anneau polaire : bloc isotherme, Poisson, B_z, etage Schur.
 
     Init : (A) densite top-hat (+ perturbation seed) ; (B) 1er solve Poisson -> phi ; (C) v_r = ExB
     (-grad_theta/B) ET v_theta = EQUILIBRE ROTATIF (racine de la quadratique de bilan radial,
@@ -339,7 +345,7 @@ def build_polar_system(
 def compute_frozen_residual(
     params, args: argparse.Namespace
 ) -> tuple[np.ndarray, np.ndarray]:
-    r"""Residu d'equilibre GELE R_eq = step(U_eq) - U_eq (option c, bilan discret bien pose).
+    r"""Residu d'equilibre GELE R_eq = step(U_eq) - U_eq (option c, well-balanced).
 
     Le modele complet polaire n'est PAS discretement bien pose a la raideur du papier
     (B_z = omega = 1e12) : l'etage hyperbolique (WENO5 + Rusanov au saut top-hat de l'anneau) et
@@ -366,7 +372,8 @@ def compute_frozen_residual(
     MEME pas que la boucle de production (R_eq est la derive PAR PAS A CE dt ; step()-R_eq n'a U_eq pour
     point fixe qu'a ce dt). La sonde est ensuite jetee.
 
-    @return (U_eq, R_eq) : tableaux (3, ntheta, nr) comp-major (rho, mom_r, mom_theta).
+    Returns:
+        (U_eq, R_eq) : tableaux (3, ntheta, nr) comp-major (rho, mom_r, mom_theta).
     """
     nr, nth = args.nr, args.ntheta
     dt = args.dt
@@ -428,8 +435,9 @@ def mode_amplitude_polar(
 
 
 def fit_growth(times, amplitudes, mode: int, rhobar: float = 1.0) -> float:
-    """Pente BRUTE sur la fenetre papier MAPPEE en temps sim (T3 : t_sim=2pi/rhobar * t_paper).
+    """Pente BRUTE sur la fenetre papier MAPPEE en temps sim (T3).
 
+    Mapping : t_sim = 2pi/rhobar * t_paper.
     Comme le chemin cartesien, le solveur polaire tourne en horloge ExB-naturelle ; la fenetre
     papier (T_d) doit etre mappee avant le fit (sinon transitoire). gamma_raw_sim ; conversion
     x2pi/rhobar a l'enregistrement. NB : la repro quantitative du polaire COMPLET n'est PAS
@@ -447,12 +455,16 @@ def fit_growth(times, amplitudes, mode: int, rhobar: float = 1.0) -> float:
 def run_mode(
     mode: int, params, args: argparse.Namespace, R_eq: np.ndarray | None = None
 ) -> dict:
-    """Avance le mode l sur l'anneau polaire et renvoie (temps, amplitudes, gamma, masse initiale).
+    """Avance le mode l sur l'anneau polaire et mesure son taux de croissance.
 
-    Si @p R_eq est fourni (mode --frozen-equilibrium), la carte d'avancement est step()-R_eq (option c,
+    Si R_eq est fourni (mode --frozen-equilibrium), la carte d'avancement est step()-R_eq (option c,
     soustraction du residu d'equilibre gele) avec un pas FIXE args.dt ; le chemin CFL adaptatif
     (step_cfl) est alors INTERDIT car il s'effondre sur l'equilibre quasi-stationnaire (estimation de
     vitesse -> 0 -> dt explose -> NaN). Sinon, comportement historique (step() nu, --cfl autorise).
+
+    Returns:
+        dict avec mode, times, amplitudes (np.ndarray), gamma (pente brute) et la
+        masse FV polaire avant/apres (mass0, mass1).
     """
     nr, nth = args.nr, args.ntheta
     r_min = args.r_min
@@ -505,7 +517,11 @@ def run_mode(
 
 
 def write_mode_amplitude(result: dict, out: str) -> None:
-    """amplitude.csv par mode (toujours, matplotlib optionnel) : temps, amplitude, amplitude/initiale."""
+    """Ecrit amplitude.csv par mode (temps, amplitude, ratio) + PNG optionnel.
+
+    Colonnes du CSV : time, amplitude, amplitude_over_initial. La figure PNG est
+    facultative : toute panne matplotlib est toleree sans casser le run de donnees.
+    """
     mode_dir = os.path.join(out, "mode_%d" % result["mode"])
     os.makedirs(mode_dir, exist_ok=True)
     with open(os.path.join(mode_dir, "amplitude.csv"), "w", newline="") as f:
@@ -560,7 +576,11 @@ def write_mode_amplitude(result: dict, out: str) -> None:
 def write_summary(
     results: list, out: str, params, args: argparse.Namespace
 ) -> None:
-    """growth_rates.csv (BRUT) + measurement_record (CSV/JSON) + metadata.json. matplotlib optionnel."""
+    """Ecrit growth_rates.csv (BRUT), le measurement_record et metadata.json.
+
+    La figure recap PNG est facultative : toute panne matplotlib est toleree sans
+    casser le run de donnees.
+    """
     # T3 : gamma_raw_sim (fenetre MAPPEE) + gamma_paper_units = raw*2pi/rhobar ; err vs paper_units.
     rhobar = params.rho_max
     rows = []
@@ -914,8 +934,9 @@ def parse_args() -> argparse.Namespace:
 def check_equilibrium_frozen(
     params, args: argparse.Namespace
 ) -> tuple[bool, list]:
-    r"""STATIONARITE A LA PRECISION MACHINE (frozen-equilibrium ON, la VRAIE validation de l'option c).
+    r"""Stationarite a la PRECISION MACHINE : la vraie validation de l'option c.
 
+    Test actif quand --frozen-equilibrium est ON.
     Le test laxiste base-amplitude (check_equilibrium ci-dessous) NORMALISE la derive par l'echelle de
     fond O(1) ; il MASQUE l'echec discret car la derive parasite O(1) y parait "petite" en relatif. La
     validation GENUINE est : avec soustraction du residu gele, U_eq DOIT etre un point fixe discret
@@ -928,7 +949,9 @@ def check_equilibrium_frozen(
     s'accumule lineairement en N ; C eps couvre largement). Floor ABSOLU calcule sur l'echelle de U_eq,
     PAS sur le fond 1e12 : c'est la correction precise de l'ancien check laxiste qui cachait l'echec.
 
-    @return (ok, report) : ok bool ; report = liste d'un seul dict (max_dev, floor, n_steps, finite).
+    Returns:
+        (ok, report) : ok bool ; report = liste d'un seul dict (max_dev, floor,
+        n_steps, finite).
     """
     nr, nth = args.nr, args.ntheta
 
@@ -979,7 +1002,7 @@ def check_equilibrium_frozen(
 
 
 def check_equilibrium(params, args: argparse.Namespace) -> tuple[bool, list]:
-    """STATIONARITE : anneau d'equilibre SANS perturbation -> chaque mode azimutal reste plat.
+    """STATIONARITE : anneau d'equilibre SANS perturbation, chaque mode reste plat.
 
     Pose perturbation=0 (rho axisymetrique top-hat), construit l'IC d'equilibre (v_r=0 a O(eps), v_theta
     = racine du bilan radial), avance args.max_steps_check pas et verifie pour chaque mode l de
@@ -991,7 +1014,9 @@ def check_equilibrium(params, args: argparse.Namespace) -> tuple[bool, list]:
     soustraction de residu. Avec --frozen-equilibrium (defaut), main() route vers
     check_equilibrium_frozen qui exige la STATIONARITE A LA PRECISION MACHINE (le vrai test de l'option c).
 
-    @return (ok, report) : ok bool ; report = liste de dicts par mode (amp0, amp_max, rel_drift, finite).
+    Returns:
+        (ok, report) : ok bool ; report = liste de dicts par mode (amp0, amp_max,
+        rel_drift, finite).
     """
     nr, nth = args.nr, args.ntheta
     r_min = args.r_min
@@ -1056,7 +1081,7 @@ def check_equilibrium(params, args: argparse.Namespace) -> tuple[bool, list]:
 
 
 def main() -> None:
-    """Point d'entree : parse, valide, eventuel check d'equilibre, sinon boucle des modes."""
+    """Point d'entree : parse, valide, check d'equilibre, sinon boucle des modes."""
     args = parse_args()
     if any(mode not in PAPER_GROWTH_RATES for mode in args.modes):
         raise SystemExit("--modes doit etre choisi parmi 3, 4, 5")

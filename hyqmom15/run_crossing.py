@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15/run_crossing" : sources de la hierarchie de moments + croisement de jets 2D
-(Rusanov, borne bring-up), premiere evolution temporelle du modele HyQMOM.
+"""Sources de la hierarchie de moments + croisement de jets 2D (Rusanov).
+
+Premiere evolution temporelle du modele HyQMOM, sur la borne bring-up.
 
 Pourquoi ce cas
 ---------------

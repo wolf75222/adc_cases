@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "tutorial" : la meme physique diocotron ecrite de trois facons equivalentes, mirroir cote
-adc_cases du tutoriel Sphinx adc_cpp (docs/sphinx/getting_started/tutorial.md).
+"""Cas "tutorial" : la meme physique diocotron ecrite de trois facons.
+
+Mirroir cote adc_cases du tutoriel Sphinx adc_cpp
+(docs/sphinx/getting_started/tutorial.md).
 
 Ce cas est un tutoriel executable. Il montre, de bout en bout et sur une seule physique (le
 diocotron : une densite electronique scalaire transportee par derive E x B, avec un fond ionique
@@ -67,9 +69,11 @@ FIGDIR = os.path.join(HERE, "figures")
 # (2) briques natives : on reconstruit models.diocotron a la main, brique par brique.
 # --------------------------------------------------------------------------------------------------
 def diocotron_from_bricks(n_i0: float) -> adc.Model:
-    """Le modele diocotron compose a partir des quatre briques de role du coeur. C'est, mot pour mot,
-    le corps de adc_cases.models.diocotron (adc_cases/models.py) : un "modele nomme" n'est qu'une
-    composition de briques generiques.
+    """Le modele diocotron compose a partir des quatre briques de role du coeur.
+
+    C'est, mot pour mot, le corps de adc_cases.models.diocotron
+    (adc_cases/models.py) : un "modele nomme" n'est qu'une composition de briques
+    generiques.
 
         state     = Scalar()                     -> une seule variable conservative (la densite n) ;
         transport = ExB(B0)                      -> flux d'advection f = n * v, v = (-dy phi, dx phi)/B0 ;
@@ -88,8 +92,10 @@ def diocotron_from_bricks(n_i0: float) -> adc.Model:
 # (3) formules (DSL) : la meme physique ecrite en expressions symboliques (aucune brique nommee).
 # --------------------------------------------------------------------------------------------------
 def diocotron_from_dsl(n_i0: float) -> dsl.Model:
-    """Le modele diocotron ecrit en formules (adc.dsl.Model). Chaque ligne reproduit la convention
-    exacte de la brique native correspondante, donc la sortie est bit-identique (cf. equivalence).
+    """Le modele diocotron ecrit en formules symboliques (adc.dsl.Model).
+
+    Chaque ligne reproduit la convention exacte de la brique native
+    correspondante, donc la sortie est bit-identique (cf. equivalence).
 
     On declare : la variable conservative n ; les champs auxiliaires phi / grad phi fournis par le
     solveur ; le flux d'advection E x B ; les valeurs propres (vitesses de derive, pour Rusanov/CFL) ;
@@ -118,9 +124,19 @@ def diocotron_from_dsl(n_i0: float) -> dsl.Model:
 
 
 def compile_dsl(model):
-    """Compile le modele DSL en preferant le backend "production" (chemin natif zero-copie, cible du
-    plan) ; en cas d'echec (p.ex. cle ABI du module incompatible avec include/ en local), on retombe
-    sur "aot" (numeriquement identique, host-marshale). Renvoie (CompiledModel, backend_retenu).
+    """Compile le modele DSL, en preferant le backend "production".
+
+    Le backend "production" (chemin natif zero-copie, cible du plan) est essaye
+    en premier ; en cas d'echec (p.ex. cle ABI du module incompatible avec
+    include/ en local), on retombe sur "aot" (numeriquement identique,
+    host-marshale).
+
+    Returns:
+        (CompiledModel, backend_retenu) : le modele compile et le nom du backend
+        qui a reussi a compiler ("production" ou "aot").
+
+    Raises:
+        RuntimeError: si aucun backend ne compile le modele.
     """
     include = adc_include()
     so_dir = case_output_dir("tutorial")
@@ -146,8 +162,10 @@ def compile_dsl(model):
 # Construction du System (commune) + integration avec capture des trames et de l'amplitude.
 # --------------------------------------------------------------------------------------------------
 def make_system(ne0: np.ndarray) -> adc.System:
-    """System diocotron periodique vide : grille, Poisson et densite identiques pour les trois
-    constructions ; seul le bloc (briques via add_block, ou DSL via add_equation) differe.
+    """System diocotron periodique vide, commun aux trois constructions.
+
+    Grille, Poisson et densite sont identiques pour les trois constructions ;
+    seul le bloc (briques via add_block, ou DSL via add_equation) differe.
     """
     return adc.System(n=ne0.shape[0], L=1.0, periodic=True)
 
@@ -160,8 +178,10 @@ def add_bricks_block(sim: adc.System, model: adc.Model) -> None:
 
 
 def add_dsl_block(sim: adc.System, compiled) -> None:
-    """Bloc DSL : add_equation aiguille le CompiledModel vers le bon adder selon son backend. meme
-    schema (minmod + Rusanov) et integrateur que le bloc natif, pour que l'equivalence tienne.
+    """Bloc DSL : add_equation aiguille le CompiledModel selon son backend.
+
+    Meme schema (minmod + Rusanov) et meme integrateur que le bloc natif, pour
+    que l'equivalence tienne.
     """
     sim.add_equation(
         "ne",
@@ -172,8 +192,10 @@ def add_dsl_block(sim: adc.System, compiled) -> None:
 
 
 def perturbation_amplitude(density: np.ndarray) -> float:
-    """Amplitude L2 de la perturbation = ecart-type par rapport a la moyenne le long de x. La bande
-    non perturbee est uniforme en x (axis=1) ; ce qui reste mesure la croissance de l'instabilite.
+    """Amplitude L2 de la perturbation = ecart-type a la moyenne le long de x.
+
+    La bande non perturbee est uniforme en x (axis=1) ; ce qui reste mesure la
+    croissance de l'instabilite.
     """
     base = density.mean(axis=1, keepdims=True)
     delta = density - base
@@ -181,8 +203,14 @@ def perturbation_amplitude(density: np.ndarray) -> float:
 
 
 def run_capture(sim: adc.System, n_steps: int, every: int = 2):
-    """Avance n_steps pas CFL en capturant la densite tous les `every` pas (pour le GIF) et
-    l'amplitude de la perturbation a chaque trame. Renvoie (frames, times, amps, final, t, mass).
+    """Avance n_steps pas CFL en capturant trames et amplitude au fil de l'eau.
+
+    Capture la densite tous les `every` pas (pour le GIF) et l'amplitude de la
+    perturbation a chaque trame.
+
+    Returns:
+        (frames, times, amps, final, t, mass) : trames capturees, temps associes,
+        amplitudes par trame, densite finale, temps final, masse finale de "ne".
     """
     frames, times, amps = [], [], []
     for k in range(n_steps + 1):
@@ -198,6 +226,7 @@ def run_capture(sim: adc.System, n_steps: int, every: int = 2):
 
 
 def git_sha(path: str) -> str:
+    """SHA du HEAD du depot contenant `path`, ou "unknown" si indisponible."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"],

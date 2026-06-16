@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Genere golden/golden_states.csv : les etats echantillons FIGES de la validation HyQMOM.
+"""Genere golden/golden_states.csv, les etats echantillons de validation.
 
-Deterministe (seed fixe). Les goldens MATLAB (golden_fx/fy/vp.csv) sont produits a partir de CE
+Etats FIGES de la validation HyQMOM, generes de facon deterministe (seed
+fixe). Les goldens MATLAB (golden_fx/fy/vp.csv) sont produits a partir de CE
 fichier par golden_gen.m (Octave) sur le code de reference RIEMOM2D : regenerer les etats impose
 de regenerer les goldens (provenance dans le README). Etats choisis pour couvrir : maxwellienne
 au repos / en derive / correlee / haut Mach (regime crossing Ma=20), melanges discrets fortement

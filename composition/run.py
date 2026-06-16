@@ -90,6 +90,7 @@ MASS_TOL = 1e-10
 
 
 def _meshgrid_centres(n: int, L: float):
+    """Renvoie le meshgrid (X, Y) des centres de cellules d'une grille n x n."""
     return meshgrid_xy(n, L)
 
 
@@ -161,7 +162,7 @@ def partie_A() -> None:
 
 
 def partie_B() -> None:
-    """Determinisme : un meme modele compose deux fois donne le meme calcul (bit pour bit)."""
+    """Determinisme : composer deux fois le meme modele donne le meme calcul."""
     print(
         "== Partie (B) : determinisme de la composition de briques (bit pour bit) =="
     )
@@ -260,7 +261,7 @@ def partie_C() -> None:
 
 
 def partie_D() -> None:
-    """Integrateur temporel ecrit en python : take_step custom, calcul par cellule en C++."""
+    """Integrateur temporel ecrit en Python : take_step custom, calcul en C++."""
     print("== Partie (D) : integrateur temporel custom en Python (SSPRK2) ==")
 
     n, L = 32, 1.0
@@ -303,6 +304,7 @@ def partie_D() -> None:
 
 
 def main() -> None:
+    """Execute les quatre parties (A-D) de la demo et imprime "OK composition_api"."""
     partie_A()
     partie_B()
     partie_C()

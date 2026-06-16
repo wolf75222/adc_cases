@@ -63,6 +63,18 @@ from results import (  # noqa: E402
 
 @dataclass
 class Result:
+    """Time history and diagnostics produced by a single-mode diocotron run.
+
+    Attributes:
+        mode: Azimuthal mode number l of the perturbation.
+        times: Sampled simulation times.
+        amplitudes: Mode amplitude |c_l(t)| on the inner ring at each time.
+        growth_rate: Raw slope of log|c_l| in the (mapped) paper fit window.
+        snapshots: (time, density) pairs at the paper snapshot fractions.
+        frames: Density fields sampled on the GIF frame schedule.
+        frame_times: Simulation times matching ``frames``.
+    """
+
     mode: int
     times: np.ndarray
     amplitudes: np.ndarray
@@ -73,6 +85,7 @@ class Result:
 
 
 def mpi_rank() -> int:
+    """Return this process' MPI rank from the environment (0 if serial)."""
     for key in (
         "OMPI_COMM_WORLD_RANK",
         "PMI_RANK",
@@ -85,6 +98,7 @@ def mpi_rank() -> int:
 
 
 def mpi_size() -> int:
+    """Return the MPI world size from the environment (1 if serial)."""
     for key in (
         "OMPI_COMM_WORLD_SIZE",
         "PMI_SIZE",
@@ -97,7 +111,19 @@ def mpi_size() -> int:
 
 
 def compile_model(params, engine: str, out: str):
-    """Compile once across MPI ranks; subsequent ranks reuse the DSL cache."""
+    """Compile the model once across MPI ranks; later ranks hit the cache.
+
+    A file lock serialises the DSL compilation so a single rank builds the
+    shared object and the rest reuse the on-disk cache.
+
+    Args:
+        params: Paper parameters fed to the model builder.
+        engine: ``"system-schur"`` or ``"amr-imex"``; selects source/target.
+        out: Output directory holding the per-engine compile lock file.
+
+    Returns:
+        The compiled model block.
+    """
     source = "schur" if engine == "system-schur" else "local"
     target = "system" if engine == "system-schur" else "amr_system"
     model = magnetic_euler_poisson_model(params, source=source)
@@ -119,6 +145,17 @@ def sample_circle(
     length: float,
     ntheta: int = 2048,
 ) -> np.ndarray:
+    """Bilinearly sample a Cartesian field along a centred circle.
+
+    Args:
+        field: 2D field on a uniform ``n x n`` grid spanning ``[0, length]``.
+        radius: Radius of the sampling circle, centred at the box centre.
+        length: Physical side length of the square domain.
+        ntheta: Number of equispaced angular samples around the circle.
+
+    Returns:
+        The ``ntheta`` interpolated field values, ordered by angle.
+    """
     n = field.shape[0]
     h = length / n
     theta = np.linspace(0.0, 2.0 * math.pi, ntheta, endpoint=False)
@@ -139,6 +176,19 @@ def sample_circle(
 
 
 def mode_amplitude(phi: np.ndarray, mode: int, params) -> float:
+    """Return the amplitude of azimuthal mode ``mode`` on the inner ring.
+
+    Samples ``phi`` along the inner ring and reads off the FFT coefficient of
+    the requested mode.
+
+    Args:
+        phi: Electrostatic potential field on the Cartesian grid.
+        mode: Azimuthal mode number l to extract.
+        params: Paper parameters providing the ring radius and box length.
+
+    Returns:
+        The (two-sided) modal amplitude |c_l|.
+    """
     values = sample_circle(phi, params.ring_inner, params.length)
     coeffs = np.fft.rfft(values) / values.size
     return 2.0 * abs(coeffs[mode])
@@ -150,13 +200,22 @@ def fit_growth(
     mode: int,
     rhobar: float = 1.0,
 ) -> float:
-    """Pente BRUTE de log|c_l| dans la fenetre papier MAPPEE en temps de SIMULATION.
+    """Pente BRUTE de log|c_l| dans la fenetre papier mappee en temps sim.
 
     T3 : la fenetre papier (model.PAPER_FIT_WINDOWS, en temps T_d) est convertie en temps
     sim par ``t_sim = (2pi/rhobar) t_paper`` (le solveur tourne en horloge ExB-naturelle,
     le papier en horloge omega_d cyclique). Fitter la fenetre papier BRUTE sur ``times``
-    (sim) tomberait dans le transitoire -- c'etait l'artefact -95 %. Renvoie gamma_raw_sim ;
-    la conversion en unites papier (x2pi/rhobar) est faite a l'enregistrement.
+    (sim) tomberait dans le transitoire -- c'etait l'artefact -95 %. La conversion en
+    unites papier (x2pi/rhobar) est faite a l'enregistrement.
+
+    Args:
+        times: Temps de simulation echantillonnes.
+        amplitudes: Amplitude |c_l| du mode a chaque temps.
+        mode: Numero de mode azimutal l (indexe PAPER_FIT_WINDOWS).
+        rhobar: Densite de reference (rho_max) liant horloge sim et papier.
+
+    Returns:
+        gamma_raw_sim, la pente brute ; NaN si la fenetre a moins de 4 points.
     """
     lo, hi = paper_to_sim_time_window(PAPER_FIT_WINDOWS[mode], rhobar)
     mask = (times >= lo) & (times <= hi) & (amplitudes > 0.0)
@@ -172,6 +231,27 @@ def build_uniform(
     geometry: str = "square",
     gauss_policy: str = "restart",
 ) -> adc.System:
+    """Build the uniform System for the paper-faithful system-schur path.
+
+    Sets up the circular-wall Poisson solver, magnetic field, WENO5/Strang
+    transport with the condensed Schur source, then seeds the paper drift state
+    via a two-pass Poisson -> drift -> Poisson relaxation.
+
+    Args:
+        compiled: Compiled model block targeting ``System``.
+        rho: Initial density on the ``n x n`` grid.
+        params: Paper parameters (length, radius, omega, alpha, ...).
+        geometry: ``"square"`` (full Cartesian transport, default), or
+            ``"staircase"``/``"cutcell"`` to confine transport to the disc.
+        gauss_policy: ``"restart"`` (re-solve Poisson each ``solve_fields``) or
+            ``"evolve"`` (solve only at t=0, then carry phi in the Schur stage).
+
+    Returns:
+        The initialised ``adc.System`` ready to step.
+
+    Raises:
+        ValueError: If ``geometry`` is not one of the accepted values.
+    """
     n = rho.shape[0]
     sim = adc.System(n=n, L=params.length, periodic=False)
     sim.set_poisson(
@@ -238,15 +318,27 @@ def build_uniform(
 
 
 def amr_initial_drift(params, rho: np.ndarray):
-    """Vitesse de derive initiale du papier ``v0 = -(grad phi0 x Omega)/|Omega|^2`` pour semer l'etat
-    conservatif de l'AMR (Phase B). Resout le Poisson initial ``-Delta phi = alpha rho`` (meme paroi
-    circulaire, resolution = niveau grossier AMR) sur un System uniforme JETABLE, via un compile
-    target='system' du meme modele (le chemin AMR ne resout pas le Poisson au build, et son modele
-    compile cible 'amr_system' n'est pas chargeable dans un System).
+    """Vitesse de derive initiale du papier pour semer l'etat AMR (Phase B).
 
-    SOLVE UNIQUE : contrairement au chemin system-schur (relaxation a deux passes Poisson->derive->
-    Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite SINGLE-PASS, signalee distinctement
-    dans les metadonnees. Renvoie (u0, v0) ; leve si le solve echoue (l'appelant retombe sur set_density).
+    Calcule ``v0 = -(grad phi0 x Omega)/|Omega|^2`` en resolvant le Poisson initial
+    ``-Delta phi = alpha rho`` (meme paroi circulaire, resolution = niveau grossier AMR)
+    sur un System uniforme JETABLE, via un compile target='system' du meme modele (le
+    chemin AMR ne resout pas le Poisson au build, et son modele compile cible
+    'amr_system' n'est pas chargeable dans un System).
+
+    SOLVE UNIQUE : contrairement au chemin system-schur (relaxation a deux passes
+    Poisson->derive->Poisson, cf. build_uniform), on ne fait qu'un solve -> fidelite
+    SINGLE-PASS, signalee distinctement dans les metadonnees.
+
+    Args:
+        params: Parametres papier (alpha, paroi circulaire, omega, ...).
+        rho: Densite initiale definissant la resolution du System sonde.
+
+    Returns:
+        Le couple (u0, v0) de la vitesse de derive sur la grille grossiere.
+
+    Raises:
+        Exception: Si le solve Poisson echoue (l'appelant retombe sur set_density).
     """
     n = rho.shape[0]
     probe_model = magnetic_euler_poisson_model(
@@ -278,6 +370,21 @@ def amr_initial_drift(params, rho: np.ndarray):
 
 
 def build_amr(compiled, rho: np.ndarray, params, args) -> adc.AmrSystem:
+    """Build the dynamic-AMR System for the experimental amr-imex path.
+
+    Configures the circular-wall Poisson solver, refinement threshold and
+    IMEX transport, then seeds the paper drift state when possible (Phase B);
+    on any failure it falls back to the m=0 density-only state.
+
+    Args:
+        compiled: Compiled model block targeting ``AmrSystem``.
+        rho: Initial coarse-level density.
+        params: Paper parameters (length, radius, ...).
+        args: Parsed CLI namespace (regrid/refine/substep/coarse options).
+
+    Returns:
+        The initialised ``adc.AmrSystem`` ready to step.
+    """
     sim = adc.AmrSystem(
         n=rho.shape[0],
         L=params.length,
@@ -332,14 +439,35 @@ def build_amr(compiled, rho: np.ndarray, params, args) -> adc.AmrSystem:
 
 
 def density(sim) -> np.ndarray:
+    """Return the electron density field of ``sim`` as a NumPy array."""
     return np.asarray(sim.density("electrons"))
 
 
 def potential(sim) -> np.ndarray:
+    """Return the electrostatic potential of ``sim`` as a NumPy array."""
     return np.asarray(sim.potential())
 
 
 def run_mode(mode: int, compiled, params, args) -> Result:
+    """Run one azimuthal mode to ``t_end`` and collect its diagnostics.
+
+    Builds the engine-appropriate System, time-steps it while sampling the
+    modal amplitude, density snapshots and GIF frames, then fits the growth
+    rate over the mapped paper window.
+
+    Args:
+        mode: Azimuthal mode number l to perturb.
+        compiled: Compiled model block for the active engine.
+        params: Paper parameters.
+        args: Parsed CLI namespace (engine, n, dt, t_end, sampling, ...).
+
+    Returns:
+        A :class:`Result` holding the time history and diagnostics.
+
+    Raises:
+        FloatingPointError: If the potential or amplitude becomes non-finite.
+        RuntimeError: If ``max_steps`` is reached before ``t_end``.
+    """
     rho0 = paper_initial_density(args.n, mode, params)
     if args.engine == "system-schur":
         sim = build_uniform(
@@ -412,6 +540,16 @@ def run_mode(mode: int, compiled, params, args) -> Result:
 
 
 def schlieren(rho: np.ndarray, params) -> np.ndarray:
+    """Return a disc-masked schlieren image of the density gradient.
+
+    Args:
+        rho: Density field on the Cartesian grid.
+        params: Paper parameters (length and disc radius).
+
+    Returns:
+        A masked array of the log-compressed gradient magnitude, with cells
+        outside the disc masked out.
+    """
     h = params.length / rho.shape[0]
     gy, gx = np.gradient(rho, h, h, edge_order=2)
     grad = np.hypot(gx, gy)
@@ -428,6 +566,18 @@ def write_mode_outputs(
     engine: str,
     make_gif: bool,
 ) -> None:
+    """Write the per-mode CSV and (if matplotlib is present) figures/GIF.
+
+    Always writes ``amplitude.csv``; the amplitude plot, schlieren snapshot
+    grid and optional diocotron GIF are skipped when matplotlib is missing.
+
+    Args:
+        result: The mode's time history and diagnostics.
+        out: Run output directory; a ``mode_<l>`` subdir is created.
+        params: Paper parameters used for plotting and normalisation.
+        engine: Engine label used in figure titles.
+        make_gif: Whether to render the animated GIF.
+    """
     mode_dir = os.path.join(out, "mode_%d" % result.mode)
     os.makedirs(mode_dir, exist_ok=True)
 
@@ -562,6 +712,18 @@ def write_mode_outputs(
 
 
 def write_summary(results: list, out: str, params, args) -> None:
+    """Write the cross-mode summary: growth_rates CSV, records, metadata, plot.
+
+    Aggregates all modes into ``growth_rates.csv``, the pre-registered
+    measurement records, ``metadata.json`` (provenance, normalisation and
+    fidelity notes) and, when matplotlib is present, ``growth_rates.png``.
+
+    Args:
+        results: One :class:`Result` per mode.
+        out: Run output directory.
+        params: Paper parameters used for normalisation and metadata.
+        args: Parsed CLI namespace (engine, n, dt, geometry, ...).
+    """
     # T3 : on reporte gamma_raw_sim (pente brute, fenetre MAPPEE) ET gamma_paper_units
     # = gamma_raw_sim * 2pi/rhobar ; l'erreur compare gamma_paper_units a la cible.
     rhobar = params.rho_max
@@ -733,6 +895,7 @@ def write_summary(results: list, out: str, params, args) -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the command-line arguments for the diocotron driver."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--engine", choices=("system-schur", "amr-imex"), default="system-schur"
@@ -785,6 +948,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Parse CLI, compile the model, run the requested modes and write output.
+
+    Validates the engine/geometry/MPI combination, applies ``--quick`` presets,
+    runs each azimuthal mode and emits per-mode and summary artefacts on rank 0.
+
+    Raises:
+        SystemExit: On an invalid engine/geometry/MPI/mode combination or when
+            ``--engine amr-imex`` is used without acknowledging the approximation.
+    """
     args = parse_args()
     if any(mode not in PAPER_GROWTH_RATES for mode in args.modes):
         raise SystemExit("--modes must be selected from 3, 4, 5")

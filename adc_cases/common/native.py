@@ -66,9 +66,10 @@ def adc_include() -> str:
 
 
 def _compiler() -> str:
-    """Compilateur C++ : $CXX, sinon cl/clang-cl (Windows) ou c++/g++/clang++ (Unix).
+    """Compilateur C++ : $CXX, sinon cl/clang-cl (Win), c++/g++/clang++ (Unix).
 
-    Leve une RuntimeError si aucun n'est trouve.
+    Raises:
+        RuntimeError: Si aucun compilateur n'est trouve.
     """
     if sys.platform == "win32":
         cxx = (
@@ -97,7 +98,7 @@ def _compiler() -> str:
 
 
 def _kokkos_root() -> str | None:
-    """Racine d'une install Kokkos (ADC_KOKKOS_ROOT / Kokkos_ROOT / KOKKOS_ROOT), ou None."""
+    """Racine Kokkos (ADC_KOKKOS_ROOT / Kokkos_ROOT / KOKKOS_ROOT), ou None."""
     for key in ("ADC_KOKKOS_ROOT", "Kokkos_ROOT", "KOKKOS_ROOT"):
         root = os.environ.get(key)
         if root and os.path.isfile(
@@ -108,7 +109,7 @@ def _kokkos_root() -> str | None:
 
 
 def _libomp_prefix() -> str | None:
-    """Prefixe Homebrew libomp sur macOS (pour -Xpreprocessor -fopenmp), ou None."""
+    """Prefixe Homebrew libomp sur macOS (-Xpreprocessor -fopenmp), ou None."""
     if sys.platform != "darwin":
         return None
     try:
@@ -124,7 +125,7 @@ def _libomp_prefix() -> str | None:
 
 
 def _kokkos_build_flags() -> tuple[list[str], list[str]]:
-    """Flags Kokkos (compilation, lien) pour compiler le solveur natif standalone.
+    """Flags Kokkos (compilation, lien) pour le solveur natif standalone.
 
     adc_cpp est KOKKOS-ONLY : un solveur natif qui inclut les en-tetes adc
     (mesh/for_each) ne compile PAS sans Kokkos (for_each.hpp #error). Comme la
@@ -195,7 +196,7 @@ def _kokkos_build_flags() -> tuple[list[str], list[str]]:
 
 
 def _include_signature(include: str) -> str:
-    """Signature de l'arbre d'en-tetes du coeur (chemin relatif, taille, mtime de chaque .hpp).
+    """Signature de l'arbre d'en-tetes du coeur (chemin, taille, mtime).
 
     Sert de proxy d'ABI : si un en-tete du coeur change, la signature change, donc la cle de
     cache change et la lib est recompilee. Evite de recharger une .so liee a une ABI perimee.
@@ -221,8 +222,10 @@ def _include_signature(include: str) -> str:
 
 
 def _abi_key(cxx: str, flags, sources, include: str) -> str:
-    """Cle d'ABI : hash stable du compilateur, des flags, du contenu des sources et de la
-    signature de l'arbre d'en-tetes du coeur. Deux builds avec la meme cle sont interchangeables.
+    """Cle d'ABI : hash stable du build (compilateur, flags, sources, en-tetes).
+
+    Combine le compilateur, les flags, le contenu des sources et la signature de l'arbre
+    d'en-tetes du coeur. Deux builds avec la meme cle sont interchangeables.
     """
     h = hashlib.sha256()
     h.update(("cxx=" + cxx + "\n").encode())
@@ -243,7 +246,7 @@ def build_shared(
     flags=("-O2",),
     std: str = "c++20",
 ) -> str:
-    """Compile `sources` en bibliotheque partagee, avec cache hors source indexe par cle d'ABI.
+    """Compile `sources` en lib partagee, cache hors source par cle d'ABI.
 
     - `case_name` : nom du cas (sous-dossier de `out/`) ; le cache vit dans `out/<cas>/build/`.
     - `sources`   : liste de chemins .cpp/.hpp (le premier .cpp est compile, les autres servent
@@ -342,7 +345,7 @@ def build_shared(
 
 
 def load_symbols(lib_path: str, symbols) -> ctypes.CDLL:
-    """Charge `lib_path` (ctypes) et verifie que tous les `symbols` attendus existent.
+    """Charge `lib_path` (ctypes) et verifie que tous les `symbols` existent.
 
     Un symbole manquant signe une ABI incompatible (lib obsolete ou source divergent) : on leve
     une RuntimeError explicite ici, au chargement, plutot qu'un AttributeError opaque au premier

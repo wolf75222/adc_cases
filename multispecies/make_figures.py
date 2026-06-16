@@ -103,15 +103,20 @@ def fig_mass(
 ) -> str:
     """Figure 1 : conservation de masse par espece, echelle absolue.
 
-    Montre la derive d'arrondi (l'offset M0 est dans le titre).
+    Trace la derive M(t) - M(0) de chaque espece, graduee en epsilon machine
+    pour rendre visible le bruit d'arrondi. L'offset M0 est dans le titre.
+
+    Returns:
+        Chemin du PNG ecrit sous figures/.
     """
     fig, (axe, axi) = plt.subplots(1, 2, figsize=(11, 4.2))
 
-    # Echelle absolue : on trace la derive M(t) - M(0) (l'offset M0 est dans le titre/legende),
-    # graduee en multiples de l'epsilon machine relatif eps*M0 pour montrer que la derive y vit.
+    # Echelle absolue : derive M(t) - M(0) (offset M0 dans le titre/legende),
+    # cadree en multiples de l'epsilon machine relatif eps*M0 pour montrer que
+    # la derive vit dans le grain du flottant, pas dans la physique.
     eps_e = (
         np.finfo(float).eps * me0
-    )  # 1 ulp sur M0 ~ 5.1e-13 (= grain du flottant a cette echelle)
+    )  # 1 ulp sur M0 ~ 5.1e-13 (grain du flottant a cette echelle)
     span_e = max(np.max(np.abs(me - me0)), eps_e)
     axe.plot(t, me - me0, "o-", color="C0", ms=4, lw=1.2)
     axe.axhline(0.0, color="0.6", ls="--", lw=1.0)

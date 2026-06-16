@@ -201,7 +201,9 @@ TOL = 0.01
 
 
 def self_check() -> None:
-    """Asserts reels : (1) gamma_l brut (unite omega_d, sans 2 pi) = cible papier a <1% ;
+    """Verifie les trois cibles analytiques par assertions (leve si hors marge).
+
+    (1) gamma_l brut (unite omega_d, sans 2 pi) = cible papier a <1% ;
     (2) Re(ExB) = RE_ANA a <1% (controle croise) ; (3) Im/Re = RATIO_ANA a <2%
     (invariant d'echelle, prouve que le MODE complexe est le bon).
     """
@@ -226,6 +228,7 @@ def self_check() -> None:
 
 
 def main() -> None:
+    """Affiche la table gamma_l vs papier (Re, Im/Re) puis lance self_check()."""
     print(
         "valeur propre analytique Petri/Davidson, colonne creuse top-hat [%g,%g], mur R=%g"
         % (R0, R1, RW)

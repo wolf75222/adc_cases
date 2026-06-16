@@ -1,4 +1,4 @@
-"""Modele 2D a 15 moments (fermeture HyQMOM), compose via le generateur adc.moments.
+"""Modele 2D a 15 moments (fermeture HyQMOM) compose via adc.moments.
 
 Etat (ordre partage avec la reference MATLAB RIEMOM2D) :
 
@@ -103,10 +103,16 @@ GAUSSIAN_PARAMS = [
 
 
 def hyqmom_closure(S) -> dict:
-    """Fermeture HyQMOM d'ordre 5 (forme polynomiale de closureS5.m ; attention, les
-    variantes Moments5.m / S5_2D.m du depot MATLAB different sur S32/S23).
+    """Fermeture HyQMOM d'ordre 5 (forme polynomiale de closureS5.m).
 
-    @p S : dict des moments standardises S11..S04 (Expr DSL ou numpy). @return dict S50..S05.
+    Attention : les variantes Moments5.m / S5_2D.m du depot MATLAB different sur
+    S32/S23.
+
+    Args:
+        S: dict des moments standardises S11..S04 (Expr DSL ou numpy).
+
+    Returns:
+        dict des six moments standardises d'ordre 5, S50..S05.
     """
     s11, s30, s21, s12, s03 = S["S11"], S["S30"], S["S21"], S["S12"], S["S03"]
     s40, s31, s22, s13, s04 = S["S40"], S["S31"], S["S22"], S["S13"], S["S04"]
@@ -131,14 +137,25 @@ def hyqmom_closure(S) -> dict:
 
 
 def moment_sources(U, ex, ey, qm, oc) -> list:
-    """Les 15 termes sources de la hierarchie sous force de Lorentz :
+    """Les 15 termes sources de la hierarchie sous force de Lorentz.
+
+    Pour chaque moment :
 
         S[M_pq] = qm (p Ex M_{p-1,q} + q Ey M_{p,q-1}) + oc (p M_{p-1,q+1} - q M_{p+1,q-1})
 
     Le terme electrique abaisse l'ordre, le terme magnetique le conserve : la hierarchie
     d'ordre <= 4 est fermee. Adaptateur nom -> (p, q) au-dessus de
-    adc.moments.lorentz_sources. @p U : dict nom -> Expr/valeur ; @return liste ordonnee
-    comme MOMENT_NAMES (S[M00] = 0)."""
+    adc.moments.lorentz_sources.
+
+    Args:
+        U: dict nom -> Expr/valeur des 15 moments.
+        ex, ey: champ electrique (Expr ou valeurs).
+        qm: rapport charge/masse.
+        oc: pulsation cyclotron.
+
+    Returns:
+        Liste des 15 sources, ordonnee comme MOMENT_NAMES (S[M00] = 0).
+    """
     return gmom.lorentz_sources(
         {pq: U[nm] for pq, nm in zip(MOMENT_PQ, MOMENT_NAMES)}, ex, ey, qm, oc
     )
@@ -161,43 +178,57 @@ def build_moment_model(
     Ma=4.0,
     lamin=1e-12,
 ) -> dsl.Model:
-    """Construit le modele DSL 15 moments avec la fermeture @p closure.
+    """Construit le modele DSL 15 moments avec la fermeture donnee.
 
     L'algebre des moments vient d'adc.moments.build_moment_model (order=4) ; ne restent ici
     que la fermeture, la partition spectrale, la borne de demarrage et le cablage plasma.
 
-    @p robust : False (defaut) = aucune garde, comme le MATLAB (divisions par M00 et racines
-    inconditionnelles) -- requis pour comparer aux goldens. True = planchers lisses
-    max(x, eps) sur M00, C20, C02, appliques la ou ils protegent (racines, divisions de
-    standardisation).
+    Args:
+        name: nom du modele DSL.
+        closure: fermeture d'ordre 5 (par defaut hyqmom_closure).
+        robust: False (defaut) = aucune garde, comme le MATLAB (divisions par M00 et
+            racines inconditionnelles) -- requis pour comparer aux goldens. True =
+            planchers lisses max(x, eps) sur M00, C20, C02, appliques la ou ils
+            protegent (racines, divisions de standardisation).
+        eps_m00, eps_c: planchers du mode robust sur M00 et sur les covariances.
+        with_sources: ajoute la source de Lorentz (moment_sources) -- champ electrique
+            lu dans les canaux aux grad_x/grad_y (E = -grad phi, rempli par le Poisson
+            du systeme), champ magnetique par la constante omega_c (cuite a la
+            compilation).
+        q_over_m: rapport charge/masse de la source de Lorentz.
+        omega_c: pulsation cyclotron (champ magnetique constant) de la source.
+        debye: longueur de Debye adimensionnee (None = pas de Poisson). Emet
+            elliptic_rhs((M00 - rho_background)/debye^2). En periodique, un second membre
+            a moyenne non nulle rend le solveur singulier : rho_background doit valoir la
+            moyenne de M00 du scenario (constante, la masse est conservee) -- l'equivalent
+            de la soustraction de moyenne de poisson_fft.m.
+        rho_background: moyenne de M00 soustraite au second membre du Poisson periodique.
+        omega_p: frequence de la source (constante), borne le pas de temps via
+            dt <= cfl/omega_p. None = pas de borne. ATTENTION (audit ADC-197) : ce n'est
+            PAS equivalent au dt_source de compute_dt.m
+            (= CFL*dx*lambda_flux*k_min^2/max_speed^2) ; la borne ADC est ~500x plus laxe
+            et ne mord jamais (la borne transport gouverne) -- pas de fidelite dt MATLAB.
+        exact_speeds: True = vitesses d'onde signees par valeurs propres du jacobien de
+            flux (autodiff + sous-blocs HYQMOM_BLOCKS) -- requis pour riemann='hll' ; la
+            meme verite spectrale sert a la CFL. False (defaut) = borne de demarrage
+            k*sqrt(C) (cf. K_SPEED).
+        projection: True = emet le projecteur natif relaxation15 via m.projection
+            (ADC-275, hook ADC-177) -- chemin PRODUCTION applique par le System a la fin
+            de chaque macro-pas entier, branche par branche fidele a relaxation.relax15
+            (l'ORACLE). EXIGE exact_speeds=True (le test des VP complexes lit les
+            sous-blocs d'ordre 3 du jacobien de flux). Le temoin de VP complexes passe par
+            dsl.eig_max_im (ADC-289). False (defaut) = aucun hook emis, chemin
+            bit-identique.
+        Ma: nombre de Mach du clamp |s30|, |s03| <= 4 + Ma/2 (cuit dans le projecteur).
+        lamin: seuil de la porte de collision lambda_min(p2p2) <= lamin (cuit dans le
+            projecteur).
 
-    @p with_sources : ajoute la source de Lorentz (moment_sources) -- champ electrique lu
-    dans les canaux aux grad_x/grad_y (E = -grad phi, rempli par le Poisson du systeme),
-    champ magnetique par la constante @p omega_c (cuite a la compilation).
+    Returns:
+        adc.dsl.Model pret a compiler.
 
-    @p debye : longueur de Debye adimensionnee (None = pas de Poisson). Emet
-    elliptic_rhs((M00 - rho_background)/debye^2). En periodique, un second membre a moyenne
-    non nulle rend le solveur singulier : @p rho_background doit valoir la moyenne de M00 du
-    scenario (constante, la masse est conservee) -- l'equivalent de la soustraction de
-    moyenne de poisson_fft.m.
-
-    @p omega_p : frequence de la source (constante), borne le pas de temps via dt <= cfl/omega_p.
-    None = pas de borne. ATTENTION (audit ADC-197) : ce n'est PAS equivalent au dt_source de
-    compute_dt.m (= CFL*dx*lambda_flux*k_min^2/max_speed^2) ; la borne ADC est ~500x plus laxe
-    et ne mord jamais (la borne transport gouverne) -- pas de fidelite dt MATLAB.
-
-    @p exact_speeds : True = vitesses d'onde signees par valeurs propres du jacobien de flux
-    (autodiff + sous-blocs HYQMOM_BLOCKS) -- requis pour riemann='hll' ; la meme verite
-    spectrale sert a la CFL. False (defaut) = borne de demarrage k*sqrt(C) (cf. K_SPEED).
-
-    @p projection : True = emet le projecteur natif relaxation15 via m.projection (ADC-275, hook
-    ADC-177) -- chemin PRODUCTION applique par le System a la fin de chaque macro-pas entier,
-    branche par branche fidele a relaxation.relax15 (l'ORACLE). EXIGE exact_speeds=True (le test
-    des VP complexes lit les sous-blocs d'ordre 3 du jacobien de flux). Le temoin de VP complexes
-    passe par dsl.eig_max_im (ADC-289). False (defaut) = aucun hook emis, chemin bit-identique.
-    @p Ma : nombre de Mach du clamp |s30|, |s03| <= 4 + Ma/2 (cuit dans le projecteur).
-    @p lamin : seuil de la porte de collision lambda_min(p2p2) <= lamin (cuit dans le projecteur).
-    @return adc.dsl.Model pret a compiler."""
+    Raises:
+        ValueError: si projection=True sans exact_speeds=True.
+    """
     src = None
     if with_sources:
 
@@ -285,10 +316,20 @@ def build_moment_model(
 
 
 def _proj_subst(e, repl):
-    """Copie structurelle de l'Expr DSL @p e en remplacant chaque Var de nom dans @p repl par la
-    valeur associee (float -> Const, ou Expr substituee telle quelle). Deux usages : (a) figer les
-    primitives standardisantes (u=v=0, sx=sy=1, M00=1) pour evaluer les blocs de coin du jacobien a
-    l'etat STANDARDISE ; (b) reinjecter les S_pq COURANTS (post-clamps, des Expr) dans ces blocs.
+    """Copie structurelle d'une Expr DSL en substituant des Var par valeur.
+
+    Chaque Var dont le nom figure dans `repl` est remplacee par la valeur associee
+    (float -> Const, ou Expr substituee telle quelle). Deux usages : (a) figer les
+    primitives standardisantes (u=v=0, sx=sy=1, M00=1) pour evaluer les blocs de coin du
+    jacobien a l'etat STANDARDISE ; (b) reinjecter les S_pq COURANTS (post-clamps, des
+    Expr) dans ces blocs.
+
+    Args:
+        e: Expr DSL (ou int/float) a copier.
+        repl: dict nom de Var -> remplacement (float ou Expr).
+
+    Returns:
+        Une nouvelle Expr ou les Var citees sont substituees et les constantes pliees.
     """
     if isinstance(e, (int, float)):
         return dsl.Const(float(e))
@@ -390,8 +431,10 @@ def _mn(a, b):
 
 
 def _gt0(c):
-    """Masque 1 si c > 0, 0 si c < 0 (0.5 en c == 0) : 0.5*(sign(c) + 1). Les seuils sont choisis
-    hors du fil du rasoir (cf. golden_relax_gen.m) -- l'egalite exacte ne tombe pas sur les goldens.
+    """Masque 1 si c > 0, 0 si c < 0, 0.5 en c == 0 : 0.5*(sign(c) + 1).
+
+    Les seuils sont choisis hors du fil du rasoir (cf. golden_relax_gen.m) -- l'egalite
+    exacte ne tombe pas sur les goldens.
     """
     return 0.5 * (dsl.sign(c) + 1.0)
 
@@ -402,9 +445,14 @@ def _blend(mask, when_true, when_false):
 
 
 def _corner_blocks_std(m):
-    """Blocs 3x3 EX/EY du jacobien de flux aux chaines d'ordre 3 (CORNER_IX/IY), EVALUES a l'etat
-    standardise par substitution u=v=0, sx=sy=1, M00=1 (memes blocs que make_corner_eigs). @return
-    (EX, EY), listes de lignes d'Expr ne dependant que des primitives S_pq."""
+    """Blocs 3x3 EX/EY du jacobien de flux aux chaines d'ordre 3, etat standardise.
+
+    Les chaines sont CORNER_IX/IY ; l'evaluation a l'etat standardise se fait par
+    substitution u=v=0, sx=sy=1, M00=1 (memes blocs que make_corner_eigs).
+
+    Returns:
+        Couple (EX, EY) de listes de lignes d'Expr ne dependant que des primitives S_pq.
+    """
     jx = m.flux_jacobian(0)
     jy = m.flux_jacobian(1)
     std = {"u": 0.0, "v": 0.0, "sx": 1.0, "sy": 1.0, "M00": 1.0, "M00f": 1.0}
@@ -414,8 +462,13 @@ def _corner_blocks_std(m):
 
 
 def _p2p2_expr(a03, a04, a11, a12, a13, a21, a22, a30, a31, a40):
-    """p2p2_2D.m en Expr DSL (transcription LITTERALE, meme reshape column-major que
-    relaxation.p2p2_2d). @return liste de 3 lignes de 3 Expr."""
+    """p2p2_2D.m en Expr DSL (transcription LITTERALE).
+
+    Meme reshape column-major que relaxation.p2p2_2d.
+
+    Returns:
+        Liste de 3 lignes de 3 Expr (la matrice p2p2 3x3).
+    """
     t2 = a03 * a12
     t3 = a03 * a21
     t4 = a12 * a21
@@ -474,16 +527,24 @@ def _p2p2_expr(a03, a04, a11, a12, a13, a21, a22, a30, a31, a40):
 def _collision_expr(
     s03, s04, s11, s12, s13, s21, s22, s30, s31, s40, lamin, let, witnesses
 ):
-    """collision15_anisotropic.m en Expr DSL SANS branche (cible Z1=u+v / Z2=u-v). @return dict des
-    10 moments standardises projetes (S03, S04, S11, S12, S13, S21, S22, S30, S31, S40).
+    """collision15_anisotropic.m en Expr DSL SANS branche (cible Z1=u+v / Z2=u-v).
 
-    @p let : callable (name, expr) -> Var let-binding. Chaque etape intermediaire est liee a une
-    primitive du modele : sans cela l'arbre d'Expr explose (S22 se developpe en ~3e7 noeuds en
-    arbre, meme s'il n'a que ~750 noeuds en DAG -- tout parcours sans memo, deps()/eval()/codegen,
-    devient intractable). La liaison garde l'arbre PLAT (chaque reference = un Var, taille 1).
-    @p witnesses : liste a laquelle on AJOUTE le temoin eig_lmin BRUT (non let-binde), pour qu'il
-    soit surface dans _proj (le declarateur de foncteur _collect_eig_witnesses ne descend pas dans
-    prim_defs)."""
+    Args:
+        s03, s04, s11, s12, s13, s21, s22, s30, s31, s40: moments standardises d'entree.
+        lamin: seuil de la porte de collision (lam0 <= lamin declenche la projection).
+        let: callable (name, expr) -> Var let-binding. Chaque etape intermediaire est liee
+            a une primitive du modele : sans cela l'arbre d'Expr explose (S22 se developpe
+            en ~3e7 noeuds en arbre, meme s'il n'a que ~750 noeuds en DAG -- tout parcours
+            sans memo, deps()/eval()/codegen, devient intractable). La liaison garde
+            l'arbre PLAT (chaque reference = un Var, taille 1).
+        witnesses: liste a laquelle on AJOUTE le temoin eig_lmin BRUT (non let-binde), pour
+            qu'il soit surface dans _proj (le declarateur de foncteur
+            _collect_eig_witnesses ne descend pas dans prim_defs).
+
+    Returns:
+        dict des 10 moments standardises projetes (S03, S04, S11, S12, S13, S21, S22, S30,
+        S31, S40).
+    """
     s_in = {
         "S03": s03,
         "S04": s04,
@@ -499,7 +560,7 @@ def _collision_expr(
     small = _PROJ_SMALL
 
     # porte : lam0 = max(0, lambda_min(p2p2)) ; collision si lam0 <= lamin. Le temoin eig_lmin est
-    # mis de cote dans @p witnesses pour etre surface dans _proj ; mcoll est let-binde (consommateurs
+    # mis de cote dans witnesses pour etre surface dans _proj ; mcoll est let-binde (consommateurs
     # plats).
     p2 = _p2p2_expr(s03, s04, s11, s12, s13, s21, s22, s30, s31, s40)
     lmin_wit = dsl.eig_lmin(p2)
@@ -676,14 +737,23 @@ def _collision_expr(
 
 
 def build_projection(m, Ma=4.0, lamin=1e-12) -> list:
-    """relaxation15.m -> liste de 15 Expr (une par composante conservative, ordre MOMENT_NAMES) pour
-    m.projection (ADC-275). Transcription BRANCHE PAR BRANCHE de relaxation.relax15 (l'oracle) en
-    algebre DSL sans branche : clamps s30/s03 (preservant H2), bord univarie H20/H02, clamp s11,
-    suppression des VP complexes (temoin dsl.eig_max_im sur les blocs d'ordre 3 du jacobien a l'etat
-    standardise), puis collision15_anisotropic (porte dsl.eig_lmin sur p2p2). @p m : le modele
-    construit par build_moment_model(exact_speeds=True). @p Ma : Mach du clamp |s30| <= 4 + Ma/2.
-    @p lamin : seuil de la porte de collision. M00, M10, M01 sont inchanges (relaxation15 ne touche
-    que les moments d'ordre >= 2 ; u, v, M00 conserves)."""
+    """relaxation15.m -> liste de 15 Expr pour m.projection (ADC-275).
+
+    Une Expr par composante conservative, ordre MOMENT_NAMES. Transcription BRANCHE PAR
+    BRANCHE de relaxation.relax15 (l'oracle) en algebre DSL sans branche : clamps s30/s03
+    (preservant H2), bord univarie H20/H02, clamp s11, suppression des VP complexes (temoin
+    dsl.eig_max_im sur les blocs d'ordre 3 du jacobien a l'etat standardise), puis
+    collision15_anisotropic (porte dsl.eig_lmin sur p2p2). M00, M10, M01 sont inchanges
+    (relaxation15 ne touche que les moments d'ordre >= 2 ; u, v, M00 conserves).
+
+    Args:
+        m: le modele construit par build_moment_model(exact_speeds=True).
+        Ma: Mach du clamp |s30| <= 4 + Ma/2.
+        lamin: seuil de la porte de collision.
+
+    Returns:
+        Liste de 15 Expr, une par composante conservative dans l'ordre MOMENT_NAMES.
+    """
     small = _PROJ_SMALL
     s3m = 4.0 + Ma / 2.0
 
@@ -865,8 +935,10 @@ def _binom(n, k):
 
 
 def _gaussian_central(c20, c11, c02, p, q):
-    """Moment centre C_pq (p+q <= 5) d'une gaussienne 2D de covariance [[c20,c11],[c11,c02]]
-    (Isserlis) : 0 si p+q impair ; ordres 0/2/4 en forme fermee ; ordre 5 = 0.
+    """Moment centre C_pq (p+q <= 5) d'une gaussienne 2D (Isserlis).
+
+    Covariance [[c20, c11], [c11, c02]] : 0 si p+q impair ; ordres 0/2/4 en forme fermee ;
+    ordre 5 = 0.
     """
     table = {
         (0, 0): 1.0,
@@ -893,7 +965,9 @@ def _gaussian_central(c20, c11, c02, p, q):
 
 
 def gaussian_raw_moment(rho, ux, uy, c20, c11, c02, p, q) -> float:
-    """Moment brut EXACT M_pq d'une gaussienne 2D (binome sur les moments centres d'Isserlis) :
+    """Moment brut EXACT M_pq d'une gaussienne 2D (oracle d'Isserlis).
+
+    Binome sur les moments centres d'Isserlis :
     M_pq = rho * sum_ij binom(p,i) binom(q,j) ux^(p-i) uy^(q-j) C_ij. Oracle independant du
     pipeline de fermeture (la fermeture HyQMOM est exacte sur les gaussiennes : S30=S21=...=0,
     S40=S04=3 => les 6 moments standardises d'ordre 5 retournes sont exactement nuls).
@@ -924,21 +998,36 @@ def gaussian_state(rho, ux, uy, c20, c11, c02) -> np.ndarray:
 def crossing_state(
     n: int, ma: float, rho_in=1.0, rho_out=1e-3, T=1.0, r=0.0
 ) -> np.ndarray:
-    """Condition initiale du croisement de jets (main_pb_2Dcrossing_2DHyQMOM15.m) : fond au
-    repos a basse densite @p rho_out sur [-0.5, 0.5]^2, carre central [3n/8, 5n/8) coupe par
-    l'anti-diagonale -- jets gaussiens (+Uc, +Uc) sous la diagonale, (-Uc, -Uc) au-dessus,
-    repos sur la diagonale exacte, Uc = ma / sqrt(2).
+    """Condition initiale du croisement de jets (main_pb_2Dcrossing_2DHyQMOM15.m).
 
-    @p r : coefficient de correlation initial de la gaussienne jointe (-1 < r < 1 ; |r| = 1
-    rend la covariance singuliere). La covariance vaut [[C20, C11], [C11, C02]] avec
-    C20 = C02 = T et C11 = r*sqrt(C20*C02) = r*T (meme convention que le driver MATLAB, qui
-    pose C11 = r*sqrt(C20*C02) avant InitializeM4_15). Les 15 moments produits par
+    Fond au repos a basse densite rho_out sur [-0.5, 0.5]^2, carre central [3n/8, 5n/8)
+    coupe par l'anti-diagonale -- jets gaussiens (+Uc, +Uc) sous la diagonale,
+    (-Uc, -Uc) au-dessus, repos sur la diagonale exacte, Uc = ma / sqrt(2).
+
+    Pour r, la covariance vaut [[C20, C11], [C11, C02]] avec C20 = C02 = T et
+    C11 = r*sqrt(C20*C02) = r*T (meme convention que le driver MATLAB, qui pose
+    C11 = r*sqrt(C20*C02) avant InitializeM4_15). Les 15 moments produits par
     gaussian_state (formule d'Isserlis) sont IDENTIQUES a InitializeM4_15 a l'arrondi pres
     (~1e-12) pour tout r dans le domaine : InitializeM4_15 part des moments standardises
     S22 = 1, S31 = S13 = 0 dans la base PRINCIPALE (decorrelee) puis S4toC4 reintroduit la
     correlation par une rotation dependant de C11 -- la gaussienne correlee exacte, pas une
     approximation (parite verifiee par golden_crossing_gen.m / golden/golden_crossing.csv).
-    @return tableau (15, n, n), axe x en dernier (convention des cas adc)."""
+
+    Args:
+        n: nombre de cellules par axe (grille n x n).
+        ma: nombre de Mach des jets ; Uc = ma / sqrt(2).
+        rho_in: densite des jets et de l'anti-diagonale.
+        rho_out: densite du fond au repos.
+        T: temperature (C20 = C02 = T).
+        r: coefficient de correlation initial de la gaussienne jointe (-1 < r < 1 ;
+            |r| = 1 rend la covariance singuliere).
+
+    Returns:
+        Tableau (15, n, n), axe x en dernier (convention des cas adc).
+
+    Raises:
+        ValueError: si r n'est pas dans l'intervalle ouvert (-1, 1).
+    """
     if not -1.0 < r < 1.0:
         raise ValueError(
             "crossing_state : r doit verifier -1 < r < 1 (covariance definie "
@@ -971,7 +1060,9 @@ def crossing_state(
 
 
 def mixture_state(weights, vxs, vys) -> np.ndarray:
-    """Vecteur d'etat (15,) d'un melange discret f = sum_k w_k delta(v - v_k) : moments exacts
+    """Vecteur d'etat (15,) d'un melange discret de Dirac.
+
+    Pour f = sum_k w_k delta(v - v_k), les moments exacts sont
     M_pq = sum_k w_k vx_k^p vy_k^q. Toujours realisable (c'est une distribution), permet des
     etats fortement asymetriques / quasi-degeneres hors de portee des gaussiennes.
     """

@@ -69,7 +69,14 @@ DT_D, NSTEPS_D = 0.001, 20  # run.py partie_D : 20 x ssprk2_step(sim, 0.001)
 # Partie A : champs composes du systeme heterogene
 # --------------------------------------------------------------------------- #
 def partie_A_fields() -> dict:
-    """Reconstruit run.py:partie_A et renvoie les cartes (CI, finales, potentiel)."""
+    """Rejoue run.py:partie_A et renvoie ses champs pour les cartes.
+
+    Returns:
+        Dictionnaire des cartes 2D (densite electron CI puis finale, densite
+        ion finale, potentiel couple final) et des scalaires diagnostics
+        (amplitude initiale de |phi|, derives de masse, amplitude d'evolution
+        des electrons).
+    """
     sim = adc.System(n=N_A, L=L, periodic=True)
     sim.add_block(
         "electrons",
@@ -111,6 +118,14 @@ def partie_A_fields() -> dict:
 
 
 def fig_density_maps(fa: dict) -> str:
+    """Trace les quatre cartes de la Partie A et renvoie le chemin du PNG.
+
+    Args:
+        fa: Dictionnaire renvoye par partie_A_fields().
+
+    Returns:
+        Chemin du fichier density_maps.png ecrit dans figures/.
+    """
     fig, axes = plt.subplots(1, 4, figsize=(15.5, 3.9))
 
     def panel(ax, field, title, cmap="viridis"):
@@ -161,6 +176,12 @@ def fig_density_maps(fa: dict) -> str:
 # Partie B : deux compositions independantes du meme diocotron (briques C++)
 # --------------------------------------------------------------------------- #
 def partie_B_compose() -> tuple[np.ndarray, np.ndarray]:
+    """Compose deux fois le meme diocotron (briques C++) et renvoie les densites.
+
+    Returns:
+        Les deux densites finales independantes (da, db) ; elles doivent etre
+        identiques au bit pres.
+    """
     X, _ = meshgrid_xy(N_BD, L)
     rho0 = (1.0 + 0.1 * np.cos(2.0 * np.pi * X / L)).copy()
     n_i0 = float(rho0.mean())
@@ -187,6 +208,12 @@ def partie_B_compose() -> tuple[np.ndarray, np.ndarray]:
 # Partie D : deux executions de l'integrateur SSPRK2 ecrit en python
 # --------------------------------------------------------------------------- #
 def partie_D_pystep() -> tuple[np.ndarray, np.ndarray, float]:
+    """Avance deux fois un diocotron avec le SSPRK2 Python et renvoie les densites.
+
+    Returns:
+        Les deux densites finales (da, db) et la derive de masse du premier run ;
+        da et db doivent etre identiques au bit pres.
+    """
     X, Y = meshgrid_xy(N_BD, L)
     rho0 = (
         1.0 + 0.1 * np.cos(2.0 * np.pi * X / L) * np.sin(2.0 * np.pi * Y / L)
@@ -219,6 +246,16 @@ def fig_determinism(
     da_D: np.ndarray,
     db_D: np.ndarray,
 ) -> tuple:
+    """Trace les ecarts bit a bit des chemins B et D et renvoie le PNG + metriques.
+
+    Args:
+        da_B, db_B: Densites des deux compositions C++ (Partie B).
+        da_D, db_D: Densites des deux pas SSPRK2 Python (Partie D).
+
+    Returns:
+        Tuple (chemin du PNG, ecart max B, ecart max D, egalite stricte B,
+        egalite stricte D).
+    """
     diff_B = np.abs(da_B - db_B)
     diff_D = np.abs(da_D - db_D)
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0))
@@ -290,6 +327,7 @@ def fig_determinism(
 # Provenance
 # --------------------------------------------------------------------------- #
 def git_sha(path: str) -> str:
+    """Renvoie le SHA HEAD du depot contenant path, ou "unknown" en cas d'echec."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"], text=True
@@ -299,6 +337,7 @@ def git_sha(path: str) -> str:
 
 
 def main() -> None:
+    """Produit les deux figures, ecrit provenance.json et imprime les metriques."""
     fa = partie_A_fields()
     out_maps = fig_density_maps(fa)
 

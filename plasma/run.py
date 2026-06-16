@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cas "plasma" : electrons + ions + neutres couples (Poisson + ionisation + collision).
+"""Cas "plasma" : electrons + ions + neutres (Poisson + ionisation + collision).
 
 Compose le scenario plasma vise par le tuteur depuis Python via une recette systeme
 (`recipes.plasma`) : trois especes (electrons Euler, ions et neutres isothermes) partageant un
@@ -43,6 +43,7 @@ PI = np.pi
 
 
 def main() -> None:
+    """Pose les CI, joue 20 pas, verifie Poisson, ionisation et integrite."""
     n, L = 48, 1.0
     x = (np.arange(n) + 0.5) / n
     ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones(

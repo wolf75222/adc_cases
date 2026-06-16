@@ -66,7 +66,13 @@ def sha(path: str) -> str:
 
 
 def load_csv() -> tuple:
-    """Lit le premier dt_stable.csv trouve ; renvoie (chemin, lignes) ou (None, None)."""
+    """Lit le premier dt_stable.csv trouve dans CSV_CANDIDATES.
+
+    Returns:
+        Le couple (chemin, lignes) du premier CSV existant, chaque ligne
+        etant (method, dt_stable, dt_times_omega_c, gain_over_explicit) ;
+        (None, None) si aucun candidat n'existe.
+    """
     for p in CSV_CANDIDATES:
         if os.path.exists(p):
             rows = []
@@ -85,7 +91,11 @@ def load_csv() -> tuple:
 
 
 def fig_bars(csv_path: str, rows: list) -> str:
-    """Panneau (1) : barres log dt_stable par methode (point de reference CSV)."""
+    """Trace le panneau (1) : barres log dt_stable par methode (reference CSV).
+
+    Returns:
+        Le chemin du PNG ecrit (figures/timing_dt_stable.png).
+    """
     short = [
         "explicite\n(Lorentz explicite)",
         "Schur theta=0.5\n(Crank-Nicolson)",
@@ -137,7 +147,11 @@ def fig_bars(csv_path: str, rows: list) -> str:
 
 
 def fig_vs_omega(meas: dict) -> str:
-    """Panneau (2) : dt_stable et dt*omega_c vs omega_c (mesure fraiche)."""
+    """Trace le panneau (2) : dt_stable et dt*omega_c vs omega_c (mesure fraiche).
+
+    Returns:
+        Le chemin du PNG ecrit (figures/timing_vs_omega.png).
+    """
     res = meas["results"]
     wcs = sorted(float(k) for k in res)
     de = [res[str(w)]["explicit"] for w in wcs]
@@ -227,6 +241,7 @@ def fig_vs_omega(meas: dict) -> str:
 
 
 def main() -> None:
+    """Trace les panneaux disponibles et ecrit figures/provenance.json."""
     produced = []
     prov = {
         "script": "schur_magnetized_cartesian/make_figures.py",

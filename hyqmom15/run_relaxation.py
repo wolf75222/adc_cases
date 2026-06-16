@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Projection de realisabilite relaxation15 : port Python vs Octave + crossing Ma = 20.
 
-Verites de reference et perimetre :
+Verites de reference et perimetre.
+
  (1) golden : relaxation.relax15 == relaxation15.m EXECUTE (Octave sur RIEMOM2D,
      golden_relax_gen.m) sur 12 etats couvrant les 5 branches (0 identite, 1 clamp s30/s03,
      2 bord univarie, 3 clamp s11, 4 projection collision15), rtol 1e-12 + atol echelle ;

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Verification CI legere du cas tutorial : le diocotron construit de trois facons (helper specialise,
-briques natives, formules DSL) donne un etat bit-identique. Pas de figures (matplotlib non requis),
-moins de pas que run.py, juste le coeur du cas, assez rapide pour la CI (needs = ["cxx"] pour le DSL).
+"""Verification CI legere : diocotron construit 3 facons -> etat bit-identique.
 
-Reutilise les constructeurs de run.py (meme dossier) pour ne pas dupliquer la physique : la verite du
-tutoriel et celle testee en CI sont alors le meme code.
+Le diocotron construit de trois facons (helper specialise, briques natives,
+formules DSL) doit donner un etat bit-identique. Pas de figures (matplotlib non
+requis), moins de pas que run.py, juste le coeur du cas, assez rapide pour la CI
+(needs = ["cxx"] pour le DSL).
+
+Reutilise les constructeurs de run.py (meme dossier) pour ne pas dupliquer la
+physique : la verite du tutoriel et celle testee en CI sont alors le meme code.
 
 Lancement : PYTHONPATH=<build>/python:. python3 tutorial/equivalence.py
 """
@@ -42,6 +45,7 @@ B0, ALPHA = 1.0, 1.0
 
 
 def _final_density(sim: adc.System, n_steps: int) -> np.ndarray:
+    """Avance le systeme de n_steps pas CFL et renvoie la densite "ne" finale."""
     for _ in range(n_steps):
         sim.step_cfl(0.4)
     return np.asarray(sim.density("ne"))
@@ -50,6 +54,17 @@ def _final_density(sim: adc.System, n_steps: int) -> np.ndarray:
 def _build_and_run(
     add_block_fn, model_or_compiled, ne0: np.ndarray, n_steps: int
 ) -> np.ndarray:
+    """Construit un System, branche le modele, integre et renvoie l'etat final.
+
+    Args:
+        add_block_fn: ajout du bloc d'equation (add_bricks_block ou add_dsl_block).
+        model_or_compiled: le adc.Model (briques) ou CompiledModel (DSL) a brancher.
+        ne0: densite electronique initiale (et fond, via sa moyenne).
+        n_steps: nombre de pas CFL a integrer.
+
+    Returns:
+        La densite "ne" finale apres n_steps pas.
+    """
     sim = make_system(ne0)
     add_block_fn(sim, model_or_compiled)
     sim.set_poisson(rhs="charge_density", solver="geometric_mg")

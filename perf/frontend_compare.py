@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Campagne de perf -- AXE FRONTENDS : C++ direct vs Python briques vs Python DSL sur le CAS SUR.
+"""Campagne de perf : C++ direct vs Python briques vs Python DSL (cas sur).
 
-Le cas sur = Euler compressible PUR, periodique, bulle de pression lisse de faible amplitude
+AXE FRONTENDS sur le CAS SUR. Le cas sur = Euler compressible PUR, periodique,
+bulle de pression lisse de faible amplitude
 (rho>0, p>0 garantis). Les TROIS fronts jouent la MEME physique avec les MEMES reglages
 numeriques (minmod / rusanov / reconstruction conservative / SSPRK2 / dt FIXE), de sorte que
 le seul ecart mesure est le COUT du front, a calcul identique.
@@ -51,6 +52,7 @@ def _bootstrap() -> None:
 
 
 def _pct(samples_ms) -> tuple[float, float, float, float]:
+    """Resume des echantillons en (mediane, p10, p90, coefficient de variation)."""
     a = np.sort(np.asarray(samples_ms, dtype=float))
     med, p10, p90 = (float(np.percentile(a, q)) for q in (50, 10, 90))
     mean = float(a.mean())
@@ -59,7 +61,11 @@ def _pct(samples_ms) -> tuple[float, float, float, float]:
 
 
 def _build_sim(adc, sc, front: str, n: int, poisson: str, model, compiled):
-    """Construit un System, branche le bloc (briques add_block / DSL add_equation), Poisson optionnel."""
+    """Construit un System et y branche le bloc (briques ou DSL), Poisson optionnel.
+
+    Branche `model` via add_block (front "bricks") ou `compiled` via
+    add_equation (front "dsl"), puis active Poisson si poisson == "on".
+    """
     sim = adc.System(n=n, L=sc.L, periodic=True)
     if front == "bricks":
         sim.add_block(
@@ -86,6 +92,29 @@ def run_front(
     dsl_cache: str,
     state_out: str | None,
 ) -> dict:
+    """Mesure un seul front dans le processus courant et renvoie son record perf.
+
+    A appeler dans un sous-processus FRAIS pour que `import adc` soit froid et
+    que le cache DSL soit maitrise. Chronometre chaque etage (import, model_build,
+    dsl_compile, addblock, state_init, first_step, warmup, run_loop, diag), la
+    boucle chaude, `advance` et, si Poisson actif, `solve_fields` ; verifie les
+    invariants finals.
+
+    Args:
+        front: Front mesure, "bricks" ou "dsl".
+        n: Taille de grille (n x n).
+        steps: Nombre de pas chronometres dans la boucle chaude.
+        warmup: Nombre de pas de chauffe, hors mesure.
+        poisson: "on" pour activer le solveur de Poisson, "off" sinon.
+        dsl_cache: Etiquette du cache DSL ("cold" / "warm" / "n/a"), reportee.
+        state_out: Chemin .npy ou sauver l'etat final, ou None.
+
+    Returns:
+        Record JSON-serialisable (schema adc_perf_v1), enrichi de provenance.
+
+    Raises:
+        RuntimeError: Si aucun backend DSL ne compile le modele (front "dsl").
+    """
     t = time.perf_counter()
     import adc  # IMPORT FROID (premier import du processus) -> mesure reelle du chargement de _adc
     from adc_cases.common import provenance as prov_mod
@@ -252,8 +281,14 @@ def _spawn_worker(
     state_out: str | None,
     cache_dir: str | None = None,
 ) -> dict:
-    """Lance ce script en mode worker (--front) dans un sous-processus frais. `cache_dir` -> $ADC_CACHE_DIR
-    (cache DSL : frais = compile froid, reutilise = chaud). Renvoie le record JSON.
+    """Relance ce script en mode worker (--front) dans un sous-processus frais.
+
+    `cache_dir` est exporte en $ADC_CACHE_DIR (cache DSL : repertoire frais =
+    compile froid, repertoire reutilise = chaud). Le worker ecrit son record
+    dans `json_out`, qu'on relit et renvoie.
+
+    Returns:
+        Le record JSON ecrit par le worker.
     """
     cmd = [
         sys.executable,
@@ -286,6 +321,14 @@ def _spawn_worker(
 
 
 def orchestrate(args: argparse.Namespace) -> None:
+    """Lance les quatre fronts, verifie les invariants et ecrit le JSONL.
+
+    Fronts : C++ direct (binaire), briques, DSL froid puis DSL chaud (chacun
+    Python dans un sous-processus frais). Verifie l'identite numerique
+    briques <-> DSL, les invariants par front et la coherence de masse C++ vs
+    Python, puis ecrit out/safe_euler_periodic/frontend_compare.jsonl et un
+    resume.
+    """
     _bootstrap()
     from adc_cases.common.io import case_output_dir
     from adc_cases.common import provenance as prov_mod

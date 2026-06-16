@@ -60,7 +60,7 @@ ION_VARS = ["rho", "rho_u", "rho_v"]
 
 
 def _git_sha(path: str) -> str:
-    """SHA HEAD du depot git contenant @p path, ou "unknown" si indisponible."""
+    """SHA du HEAD git du depot contenant path, ou "unknown" si indisponible."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"],
@@ -86,9 +86,19 @@ def density_triptych(
     Panneau 1 : rho DSL  (viridis, meme echelle -> identique a l'oeil).
     Panneau 2 : |rho_DSL - rho_natif| (inferno, echelle fixe 0..diff_vmax -> noir si bit-identique).
 
-    @p state_max_abs : max|DSL - natif| sur l'etat complet de l'espece (toutes composantes), annote
-    sur le panneau d'ecart pour exposer l'epsilon machine meme s'il vit hors de rho.
-    Renvoie max|rho_DSL - rho_natif|.
+    Args:
+        rho_native: densite rho issue de la composition native.
+        rho_dsl: densite rho issue du chemin DSL.
+        species_label: libelle de l'espece pour le titre de la figure.
+        state_max_abs: max|DSL - natif| sur l'etat complet de l'espece (toutes
+            composantes), annote sur le panneau d'ecart pour exposer l'epsilon
+            machine meme s'il vit hors de rho.
+        png_path: chemin de sortie de la figure PNG.
+        diff_vmax: borne haute de l'echelle du panneau d'ecart.
+        backend: backend DSL retenu, reporte dans le titre.
+
+    Returns:
+        max|rho_DSL - rho_natif|.
     """
     diff = np.abs(rho_dsl - rho_native)
     rho_max_abs = float(diff.max())

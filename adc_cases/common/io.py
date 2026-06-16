@@ -1,4 +1,4 @@
-"""Repertoire de sortie des cas : `out/` a la racine du depot, hors des dossiers source.
+"""Repertoire de sortie des cas : `out/` a la racine, hors des dossiers source.
 
 Les cas qui produisent des fichiers (figures, gif) ecrivent sous `out/<cas>/` plutot que dans
 leur dossier source. `out/` est ignore par git (cf. .gitignore), ce qui evite de polluer le

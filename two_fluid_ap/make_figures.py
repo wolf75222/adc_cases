@@ -113,6 +113,7 @@ def final_state(lib: ctypes.CDLL) -> tuple[np.ndarray, np.ndarray]:
 
 
 def plot_ap_vs_explicit(rows: list[dict], path: str) -> None:
+    """Trace la deviation AP (bornee) vs explicite (NaN) en fonction de la raideur."""
     s = np.array([r["s"] for r in rows])
     ap_dev = np.array([r["ap_dev"] for r in rows])
     exp_dev = np.array(
@@ -177,6 +178,7 @@ def plot_ap_vs_explicit(rows: list[dict], path: str) -> None:
 
 
 def plot_final_state(ne: np.ndarray, ni: np.ndarray, path: str) -> None:
+    """Trace les cartes 2D de n_e, n_i et de la charge nette n_i - n_e."""
     fig, axes = plt.subplots(1, 3, figsize=(12.5, 3.8))
     ext = [0, 2 * np.pi, 0, 2 * np.pi]
     for ax, field, title, cmap in (
@@ -201,6 +203,7 @@ def plot_final_state(ne: np.ndarray, ni: np.ndarray, path: str) -> None:
 
 
 def _sha(path: str) -> str:
+    """Renvoie le SHA du HEAD git du depot en `path`, ou "unknown" si indisponible."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"], text=True
@@ -210,6 +213,7 @@ def _sha(path: str) -> str:
 
 
 def main() -> None:
+    """Re-joue le balayage et le run de reference, ecrit les figures et la provenance."""
     lib = R._bind(R._build_lib())
 
     rows = sweep_stiffness(lib)

@@ -69,11 +69,17 @@ from adc_cases.common.initial_conditions import band_density  # noqa: E402
 
 
 def perturbation_amplitude(density: np.ndarray) -> float:
-    """Amplitude L2 de la perturbation = deviation par rapport a la moyenne en x.
+    """Norme L2 de la deviation de la densite par rapport a sa moyenne en x.
 
     La bande non perturbee est uniforme le long de x (axis=1) et structuree le
     long de y (axis=0). La moyenne par ligne (sur x) reconstruit donc le profil
     de base ; ce qui reste est la perturbation portant l'instabilite.
+
+    Args:
+        density: champ de densite ne, tableau 2D (n_y, n_x).
+
+    Returns:
+        L'amplitude L2 de la partie non axisymetrique du mode.
     """
     base = density.mean(axis=1, keepdims=True)  # profil moyen en x, par ligne
     delta = density - base

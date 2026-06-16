@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnostic de normalisation du taux de croissance diocotron (chemin polaire ExB).
+"""Normalisation du taux de croissance diocotron sur le chemin polaire ExB.
 
 But
 ---
@@ -185,6 +185,7 @@ def measure(l: int, n: int) -> dict | None:
 
 
 def main() -> None:
+    """Affiche la table des deux normalisations vs cible papier pour l=3,4,5."""
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 128
     print(
         "DIAG rotation polaire n=%d (top-hat [%g,%g], R=%g, WENO5/SSPRK3)"

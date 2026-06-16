@@ -1,4 +1,4 @@
-"""Provenance d'une mesure : SHA + branche des DEUX depots, machine, python, threads.
+"""Provenance d'une mesure : SHA/branche des deux depots, machine, py, threads.
 
 Centralise la capture jusqu'ici eparpillee (cf. `tutorial/run.py:git_sha`,
 `hoffart_euler_poisson_dsl/results.py`). Toute sortie de la campagne de perf (JSONL) DOIT
@@ -23,7 +23,7 @@ from .. import REPO_ROOT
 
 
 def _git(path: str, *args: str) -> str:
-    """`git -C path args` ; renvoie la sortie ou "unknown" (git absent, hors depot, etc.)."""
+    """`git -C path args` ; renvoie la sortie, ou "unknown" en cas d'echec."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, *args], text=True, stderr=subprocess.DEVNULL
@@ -46,10 +46,15 @@ def adc_cpp_root() -> str:
 
 
 def provenance(extra: dict | None = None) -> dict[str, object]:
-    """Dictionnaire de provenance (SHA/branche des deux depots, machine, python, threads).
+    """Dictionnaire de provenance (SHA/branche, machine, python, threads).
 
     Les variables d'environnement `ADC_*` surchargent les valeurs lues via git (chemin ROMEO).
-    `extra` fusionne des champs additionnels (backend, nx, ...) dans le resultat.
+
+    Args:
+        extra: Champs additionnels (backend, nx, ...) fusionnes dans le resultat.
+
+    Returns:
+        Provenance des deux depots et de l'environnement d'execution.
     """
     cpp_root = adc_cpp_root()
     prov = {

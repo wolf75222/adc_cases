@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15/run_amr" : le modele 15 moments (fermeture HyQMOM) porte sur adc.AmrSystem,
-premier run du bloc compile (build_moment_model, exact_speeds=True) sur une hierarchie AMR.
+"""Cas hyqmom15/run_amr : le modele 15 moments HyQMOM porte sur adc.AmrSystem.
+
+Premier run du bloc compile (build_moment_model, exact_speeds=True) sur une
+hierarchie AMR.
 
 Pourquoi ce cas
 ---------------
@@ -80,9 +82,20 @@ TOL_COHERENCE = 1.0e-2
 def compile_model(
     name: str, rho_bg: float, target: str, exact_speeds: bool = True
 ):
-    """Modele Vlasov-Poisson 15 moments de run_diocotron (sources electriques + Poisson),
-    compile en backend='production' (seul chemin .so branchable sur AmrSystem ; il marshale
-    aussi method='euler' cote System, requis pour la parite de schema en (2)).
+    """Compile le modele Vlasov-Poisson 15 moments de run_diocotron en production.
+
+    Modele a sources electriques + Poisson, compile en backend='production' (seul
+    chemin .so branchable sur AmrSystem ; il marshale aussi method='euler' cote
+    System, requis pour la parite de schema en (2)).
+
+    Args:
+        name: nom du modele et base du fichier .so genere.
+        rho_bg: fond neutralisant du Poisson (moyenne du scenario).
+        target: cible du loader ('amr_system' ou 'system').
+        exact_speeds: vitesses d'onde exactes (sinon borne bring-up robuste).
+
+    Returns:
+        Le CompiledModel charge depuis le .so.
     """
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
@@ -113,8 +126,10 @@ def build_amr(
     riemann: str = "hll",
     time=None,
 ) -> adc.AmrSystem:
-    """AmrSystem periodique mono-bloc : raffinement sur M00, Poisson composite geometric_mg,
-    etat conservatif complet (15 composantes) seede sur le grossier puis prolonge.
+    """Construit un AmrSystem periodique mono-bloc seede sur U0.
+
+    Raffinement sur M00, Poisson composite geometric_mg, etat conservatif complet
+    (15 composantes) seede sur le grossier puis prolonge.
     """
     sim = adc.AmrSystem(n=N, L=1.0, periodic=True, regrid_every=regrid_every)
     sim.add_equation(
@@ -145,9 +160,15 @@ def build_system(compiled, U0: np.ndarray, n: int) -> adc.System:
 
 
 def fine_masks(sim) -> tuple[np.ndarray, np.ndarray]:
-    """Masques de la hierarchie depuis patch_boxes() : cellules fines valides (2N x 2N) et
-    cellules grossieres recouvertes (N x N). Convention [j, i] (j = y, i = x), boites a
-    coins inclusifs dans l'espace d'indices du niveau."""
+    """Masques de la hierarchie depuis patch_boxes().
+
+    Convention [j, i] (j = y, i = x), boites a coins inclusifs dans l'espace
+    d'indices du niveau.
+
+    Returns:
+        (covered, valid) : cellules grossieres recouvertes (N x N) et cellules
+        fines valides (2N x 2N).
+    """
     covered = np.zeros((N, N), dtype=bool)
     valid = np.zeros((2 * N, 2 * N), dtype=bool)
     for lev, ilo, jlo, ihi, jhi in sim.patch_boxes():
@@ -159,9 +180,11 @@ def fine_masks(sim) -> tuple[np.ndarray, np.ndarray]:
 
 
 def composite_mass(sim) -> float:
-    """Masse par somme PONDEREE PAR NIVEAU : dx0^2 sur les cellules grossieres NON recouvertes
-    + dx1^2 sur les cellules fines valides. Doit coincider avec sim.mass() (masse du grossier
-    apres sync_down : les cellules recouvertes y valent la moyenne de leurs 4 filles).
+    """Masse par somme ponderee par niveau (dx0^2 grossier + dx1^2 fin).
+
+    dx0^2 sur les cellules grossieres NON recouvertes + dx1^2 sur les cellules
+    fines valides. Doit coincider avec sim.mass() (masse du grossier apres
+    sync_down : les cellules recouvertes y valent la moyenne de leurs 4 filles).
     """
     covered, valid = fine_masks(sim)
     dx0 = 1.0 / N
@@ -174,7 +197,7 @@ def composite_mass(sim) -> float:
 
 
 def check_smoke(compiled_amr, U0: np.ndarray) -> None:
-    """(1) construction + pas finis, positivite, couverture du tagging, masse conservee."""
+    """(1) construction + pas finis, positivite, couverture tagging, masse conservee."""
     sim = build_amr(compiled_amr, U0, regrid_every=4)
     mass0 = sim.mass()
     assert np.isfinite(mass0) and mass0 > 0.0, "masse initiale invalide"
@@ -219,7 +242,7 @@ def check_smoke(compiled_amr, U0: np.ndarray) -> None:
 
 
 def check_coherence(compiled_amr, compiled_sys, U0: np.ndarray) -> None:
-    """(2) AMR (hierarchie figee) vs System uniforme fin, meme IC prolongee, meme dt/schema."""
+    """(2) AMR (hierarchie figee) vs System fin, meme IC prolongee, meme dt/schema."""
     U0f = np.repeat(
         np.repeat(U0, 2, axis=1), 2, axis=2
     )  # prolongation constante = seed AMR
@@ -273,7 +296,7 @@ def check_coherence(compiled_amr, compiled_sys, U0: np.ndarray) -> None:
 
 
 def check_rejections(compiled_sys, rho_bg: float):
-    """(3) rejets propres : aot+amr, .so target system sur AMR, hll sans vitesses signees."""
+    """(3) rejets propres : aot+amr, target system sur AMR, hll sans vitesses signees."""
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
 
@@ -343,9 +366,11 @@ def check_rejections(compiled_sys, rho_bg: float):
 
 
 def check_ssprk3_rejected(compiled_amr, cm_noex, U0: np.ndarray) -> None:
-    """(4) ssprk3 + loader .so : rejet explicite (l'ABI plate ne transporte pas la methode
-    temporelle ; jamais un repli Euler silencieux). En contrepoint, le meme .so bring-up
-    tourne en rusanov + Explicit() (euler avant) : le rejet vise la METHODE, pas le bloc.
+    """(4) ssprk3 + loader .so : rejet explicite, jamais un repli Euler silencieux.
+
+    L'ABI plate ne transporte pas la methode temporelle. En contrepoint, le meme
+    .so bring-up tourne en rusanov + Explicit() (euler avant) : le rejet vise la
+    METHODE, pas le bloc.
     """
     try:
         build_amr(

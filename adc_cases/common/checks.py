@@ -11,7 +11,7 @@ import numpy as np
 
 
 def relative_drift(value: float, reference: float) -> float:
-    """Ecart relatif |value - reference| / |reference| (denominateur protege contre zero)."""
+    """Ecart relatif |value - reference| / |reference|, denominateur protege."""
     return abs(value - reference) / max(abs(reference), 1e-30)
 
 
@@ -22,10 +22,22 @@ def assert_mass_conserved(
     label: str = "",
     relative: bool = True,
 ) -> float:
-    """Verifie la conservation de la masse : derive (relative par defaut) sous `tol`.
+    """Verifie la conservation de la masse : derive sous `tol`.
 
-    `relative=False` compare l'ecart absolu |mass - mass0| (utilise par les cas qui historiquement
-    asseraient en absolu). Renvoie la derive mesuree.
+    Args:
+        mass: Masse mesuree a l'instant courant.
+        mass0: Masse de reference (initiale).
+        tol: Seuil de derive admissible.
+        label: Prefixe ajoute au message d'erreur (cas concerne).
+        relative: Si vrai (defaut), derive RELATIVE ; sinon ecart absolu
+            |mass - mass0|, utilise par les cas qui asseraient historiquement
+            en absolu.
+
+    Returns:
+        La derive mesuree (relative ou absolue selon `relative`).
+
+    Raises:
+        AssertionError: Si la derive atteint ou depasse `tol`.
     """
     drift = relative_drift(mass, mass0) if relative else abs(mass - mass0)
     kind = "relative" if relative else "absolue"
@@ -43,7 +55,7 @@ def assert_finite(array, label: str = "champ") -> None:
 
 
 def assert_positive(array, label: str = "densite") -> float:
-    """Verifie la positivite stricte (un fluide physique reste > 0). Renvoie le minimum."""
+    """Verifie la positivite stricte (fluide physique > 0). Min renvoye."""
     arr = np.asarray(array)
     mn = float(arr.min())
     assert mn > 0.0, f"{label} negative ou nulle (min = {mn:.3e})"

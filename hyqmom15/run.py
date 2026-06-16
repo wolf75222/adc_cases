@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15" : modele 2D a 15 moments (fermeture HyQMOM) ecrit en formules, flux valide
-contre le code MATLAB de reference (RIEMOM2D).
+"""Cas hyqmom15 : modele 2D a 15 moments (HyQMOM), flux valide vs RIEMOM2D.
+
+Modele ecrit en formules (fermeture HyQMOM) dont le flux est valide contre le
+code MATLAB de reference (RIEMOM2D).
 
 Pourquoi ce cas
 ---------------
@@ -119,11 +121,17 @@ RTOL_GOLDEN_LOOSE = {8: 1e-12}
 
 
 def load_goldens() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Charge les etats figes et les goldens MATLAB commites (provenance : golden_gen.m, Octave
-    sur RIEMOM2D ; voir README). Verifie au passage l'ANTI-DERIVE : les 4 premiers etats du CSV
-    sont exactement gaussian_state(GAUSSIAN_PARAMS[i]) -- si gen_states.py et les goldens sont
-    regeneres sans mettre a jour model.GAUSSIAN_PARAMS (ou inversement), on echoue ICI au lieu
-    de laisser l'oracle d'Isserlis valider silencieusement d'autres etats que ceux du golden.
+    """Charge les etats figes et les goldens MATLAB commites.
+
+    Provenance : golden_gen.m, Octave sur RIEMOM2D ; voir README. Verifie au
+    passage l'ANTI-DERIVE : les 4 premiers etats du CSV sont exactement
+    gaussian_state(GAUSSIAN_PARAMS[i]) -- si gen_states.py et les goldens sont
+    regeneres sans mettre a jour model.GAUSSIAN_PARAMS (ou inversement), on
+    echoue ICI au lieu de laisser l'oracle d'Isserlis valider silencieusement
+    d'autres etats que ceux du golden.
+
+    Returns:
+        (states, fx, fy, vp), tableaux numpy charges depuis golden/*.csv.
     """
     g = os.path.join(HERE, "golden")
     states = np.loadtxt(os.path.join(g, "golden_states.csv"), delimiter=",")
@@ -145,12 +153,15 @@ def load_goldens() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 def check_matlab_golden(
     m, states: np.ndarray, gold_fx: np.ndarray, gold_fy: np.ndarray
 ) -> None:
-    """(1) eval_flux == Flux_closure15_2D.m sur chaque etat. Tolerance mixte PAR-ETAT : rtol
-    serre (RTOL_GOLDEN_DEFAULT = 1e-14, lache et documente sur l'etat 8 quasi-degenere via
-    RTOL_GOLDEN_LOOSE) + atol proportionnel a l'echelle des moments de l'etat (les formes
-    algebriques different legerement du MATLAB -- regroupements ux/uy -- donc egalite a
-    l'arrondi pres, pas au bit). Le rtol par-etat remplace l'ancien 1e-12 global, calibre sur
-    le seul etat 8 : sur les 9 autres il laissait une regression x80 invisible.
+    """(1) eval_flux == Flux_closure15_2D.m sur chaque etat golden.
+
+    Tolerance mixte PAR-ETAT : rtol serre (RTOL_GOLDEN_DEFAULT = 1e-14, lache et
+    documente sur l'etat 8 quasi-degenere via RTOL_GOLDEN_LOOSE) + atol
+    proportionnel a l'echelle des moments de l'etat (les formes algebriques
+    different legerement du MATLAB -- regroupements ux/uy -- donc egalite a
+    l'arrondi pres, pas au bit). Le rtol par-etat remplace l'ancien 1e-12 global,
+    calibre sur le seul etat 8 : sur les 9 autres il laissait une regression x80
+    invisible.
     """
     U = states.T  # (15, N)
     for d, gold in ((0, gold_fx), (1, gold_fy)):
@@ -174,8 +185,11 @@ def check_matlab_golden(
 
 
 def check_gaussian_oracle(m) -> None:
-    """(2) sur des gaussiennes, les 6 entrees de fermeture egalent les moments bruts exacts
-    d'Isserlis (calcul par binome, jamais par le pipeline)."""
+    """(2) sur des gaussiennes, les 6 entrees de fermeture == moments d'Isserlis.
+
+    Les moments bruts exacts d'Isserlis sont calcules par binome, jamais par le
+    pipeline DSL.
+    """
     for rho, ux, uy, c20, c11, c02 in GAUSSIAN_PARAMS:
         Uvec = gaussian_state(rho, ux, uy, c20, c11, c02)
         U = Uvec[:, None]
@@ -234,9 +248,11 @@ ISSERLIS_LITERALS = {
 
 
 def check_isserlis_literals(m) -> None:
-    """(2b) spot-check de l'oracle d'Isserlis sur des LITTERAUX (ISSERLIS_LITERALS), sans passer
-    par _gaussian_central : casse l'angle mort correle (model.py fabrique l'etat ET fournit
-    l'oracle d'ordre 5). Les 6 moments d'ordre 5 sont couverts sur 2 etats (un correle).
+    """(2b) spot-check de l'oracle d'Isserlis sur des LITTERAUX (ISSERLIS_LITERALS).
+
+    Verifie sans passer par _gaussian_central : casse l'angle mort correle
+    (model.py fabrique l'etat ET fournit l'oracle d'ordre 5). Les 6 moments
+    d'ordre 5 sont couverts sur 2 etats (un correle).
     """
     seen = set()
     n_lit = 0
@@ -278,8 +294,11 @@ def check_passthrough(m, states: np.ndarray) -> None:
 
 
 def check_compile_and_model(m, states: np.ndarray) -> list[str]:
-    """(4) check_model sur etats realisables + compilation AOT (et production si liable),
-    codegen + compilation chronometres."""
+    """(4) check_model sur etats realisables + compilation AOT (production si liable).
+
+    Codegen + compilation chronometres ; renvoie la liste des backends qui ont
+    effectivement compile le modele.
+    """
     report = m.check_model(samples=states.T, raise_on_error=True)
     print(
         "(4a) check_model : %d etats realisables, ok = %s"
@@ -318,9 +337,12 @@ def check_compile_and_model(m, states: np.ndarray) -> list[str]:
 
 
 def check_robust_smoke() -> None:
-    """Smoke du mode robust : sur un etat DEGENERE (tous les points du melange a la meme vitesse
-    vx => C20 = 0 exactement), le flux bit_match DIVERGE (division par sqrt(0), fidele au MATLAB
-    sans gardes -- CONTRASTE verifie, pas seulement affirme) tandis que le flux robust reste fini.
+    """(5) smoke du mode robust : bit_match diverge, robust fini sur etat degenere.
+
+    Sur un etat DEGENERE (tous les points du melange a la meme vitesse vx =>
+    C20 = 0 exactement), le flux bit_match DIVERGE (division par sqrt(0), fidele
+    au MATLAB sans gardes -- CONTRASTE verifie, pas seulement affirme) tandis que
+    le flux robust reste fini.
     """
     Udeg = mixture_state([0.5, 0.5], [1.0, 1.0], [-1.0, 1.0])[:, None]
     m_bit = build_moment_model(name="hyqmom15_bit")
@@ -341,12 +363,15 @@ def check_robust_smoke() -> None:
 
 
 def check_speed_bound(m, states: np.ndarray, vp: np.ndarray) -> None:
-    """(6) golden_vp.csv consomme : confronte la borne bring-up k*sqrt(C) aux VRAIES vitesses
-    d'onde (eigenvalues15_2D flagsym=1, jacobien symbolique + eig par blocs).
-    (a) Etats gaussiens : l'etendue vraie vaut EXACTEMENT u +- sqrt(6)*sqrt(C) (verifie a 1e-9)
-        et k = 3 la couvre.
-    (b) Le danger documente est DEMONTRE : au moins un melange asymetrique du jeu DEPASSE la
-        borne k*sqrt(C) -- la borne n'est pas production, le chemin exact l'est.
+    """(6) borne bring-up k*sqrt(C) confrontee aux vraies vitesses (golden_vp.csv).
+
+    Confronte la borne bring-up k*sqrt(C) aux VRAIES vitesses d'onde
+    (eigenvalues15_2D flagsym=1, jacobien symbolique + eig par blocs).
+    (a) Etats gaussiens : l'etendue vraie vaut EXACTEMENT u +- sqrt(6)*sqrt(C)
+        (verifie a 1e-9) et k = 3 la couvre.
+    (b) Le danger documente est DEMONTRE : au moins un melange asymetrique du jeu
+        DEPASSE la borne k*sqrt(C) -- la borne n'est pas production, le chemin
+        exact l'est.
     """
     U = states.T
     over = []
@@ -390,14 +415,18 @@ def check_speed_bound(m, states: np.ndarray, vp: np.ndarray) -> None:
 
 
 def check_crossing_ic_parity() -> None:
-    """(7a) parite des conditions initiales correlees : pour chaque ligne du golden
-    golden_crossing.csv (parametres M00, u, v, C20, C11, C02 + 15 moments produits par
-    InitializeM4_15.m, Octave sur RIEMOM2D), gaussian_state(formule d'Isserlis) reproduit les
-    15 moments. Le golden couvre r = 0, r = 0.5, r = -0.5 (isotrope C20 = C02 = 1, au repos
-    puis jets du croisement Ma = 20) et un etat anisotrope C20 != C02 ; voir golden_crossing_gen.m.
-    Tolerance d'echelle (rtol 1e-12 + atol proportionnel a l'amplitude des moments) : pour les
-    jets a Ma = 20 les moments d'ordre 4 valent ~ 4e4, donc l'ecart absolu ~ 7e-12 est a 1e-16
-    pres en relatif -- l'arrondi, pas une divergence de modele."""
+    """(7a) parite des conditions initiales correlees vs InitializeM4_15.m.
+
+    Pour chaque ligne du golden golden_crossing.csv (parametres M00, u, v, C20,
+    C11, C02 + 15 moments produits par InitializeM4_15.m, Octave sur RIEMOM2D),
+    gaussian_state(formule d'Isserlis) reproduit les 15 moments. Le golden couvre
+    r = 0, r = 0.5, r = -0.5 (isotrope C20 = C02 = 1, au repos puis jets du
+    croisement Ma = 20) et un etat anisotrope C20 != C02 ; voir
+    golden_crossing_gen.m. Tolerance d'echelle (rtol 1e-12 + atol proportionnel a
+    l'amplitude des moments) : pour les jets a Ma = 20 les moments d'ordre 4
+    valent ~ 4e4, donc l'ecart absolu ~ 7e-12 est a 1e-16 pres en relatif --
+    l'arrondi, pas une divergence de modele.
+    """
     g = os.path.join(HERE, "golden", "golden_crossing.csv")
     data = np.loadtxt(g, delimiter=",")
     n_states = 0
@@ -423,13 +452,16 @@ def check_crossing_ic_parity() -> None:
 
 
 def check_crossing_zones() -> None:
-    """(7b) zones de crossing_state : pour r = 0 et r = 0.5 (ne leve plus d'exception), la
-    grille (15, n, n) doit valoir exactement gaussian_state dans chaque zone :
+    """(7b) zones de crossing_state : grille exacte par zone, |r| >= 1 rejete.
+
+    Pour r = 0 et r = 0.5 (ne leve plus d'exception), la grille (15, n, n) doit
+    valoir exactement gaussian_state dans chaque zone :
     - fond hors du carre central [3n/8, 5n/8) : densite rho_out, repos ;
     - anti-diagonale i + j == n - 1 dans le carre : densite rho_in, repos ;
     - au-dessus de l'anti-diagonale (i + j > n - 1) : jet (-Uc, -Uc) ;
     - en dessous (i + j < n - 1) : jet (+Uc, +Uc), Uc = ma / sqrt(2).
-    Hors domaine (|r| >= 1, covariance non definie positive) doit lever ValueError.
+    Hors domaine (|r| >= 1, covariance non definie positive) doit lever
+    ValueError.
     """
     n, ma = 32, 20.0
     rho_in, rho_out, T = 1.0, 1e-3, 1.0

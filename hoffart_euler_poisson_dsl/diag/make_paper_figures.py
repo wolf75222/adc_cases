@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Figures style Hoffart et al. (arXiv:2510.11808, Fig 5.1-5.4) pour le diocotron ADC.
+"""Figures diocotron style Hoffart et al. (arXiv:2510.11808, Fig 5.1-5.4).
 
 Produit, dans la palette du papier (disque blanc, exterieur ardoise #3C4358, schlieren en
 colormap Blues blanc->bleu marine) :
@@ -76,6 +76,11 @@ FIG_NUM = {3: 1, 4: 2, 5: 3}
 
 
 def ring_ic(n: int, l: int) -> tuple[np.ndarray, np.ndarray]:
+    """Densite initiale (anneau [R0, R1] perturbe au mode l) et rayon r.
+
+    Returns:
+        tuple (rho0, r) : densite cartesienne et carte des rayons, en (n, n).
+    """
     h = 2 * RW / n
     x = (np.arange(n) + 0.5) * h - RW
     X, Y = np.meshgrid(x, x, indexing="xy")
@@ -86,8 +91,9 @@ def ring_ic(n: int, l: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def schlieren_rgba(rho: np.ndarray, rmask: np.ndarray, n: int) -> np.ndarray:
-    """Schlieren |grad rho| -> Blues ; exterieur du disque -> ardoise. Style papier (ADC-80).
+    """Rendu schlieren |grad rho| en Blues, exterieur du disque en ardoise.
 
+    Style papier (ADC-80).
     Normalisation par PERCENTILE (p99.5 sur le disque) au lieu du max global : le max est domine
     par la cellule de bord la plus raide, qui comprimait tout le reste vers le bas (bords en bandes
     saturees au lieu des lignes fines du papier). Gamma 1.5 (sweep 0.6/1.0/1.5/2.2 sur l=4 n=256 :
@@ -111,6 +117,11 @@ def schlieren_rgba(rho: np.ndarray, rmask: np.ndarray, n: int) -> np.ndarray:
 
 
 def sample_cl(phi2d: np.ndarray, n: int, l: int) -> float:
+    """Amplitude du mode azimutal l de phi echantillonne sur le cercle r=R0.
+
+    Interpole phi bilineairement sur 1024 points du cercle interne, puis renvoie
+    le module du coefficient de Fourier d'indice l.
+    """
     h = 2 * RW / n
     th = np.linspace(0.0, TWO_PI, 1024, endpoint=False)
     xs = RW + R0 * np.cos(th)
@@ -132,6 +143,14 @@ def sample_cl(phi2d: np.ndarray, n: int, l: int) -> float:
 def run_mode(
     l: int, n: int = 128, cfl: float = 0.4, nframes: int = 120
 ) -> dict:
+    """Run ExB reduit servant la courbe des taux (panneau d de Fig 5.4).
+
+    Avance la derive ExB normalisee jusqu'a 10 periodes diocotron, en collectant
+    frames de densite, temps et amplitudes |c_l(t)| du potentiel.
+
+    Returns:
+        dict avec l, n, t_end, rmask, frames, ftimes, ts, cs.
+    """
     t_end = (
         TWO_PI * 10.0
     )  # t_f = 10 periodes diocotron (papier), en temps sim (rhobar=1)
@@ -196,8 +215,9 @@ def run_mode(
 def build_real(
     compiled, rho0: np.ndarray, params, limiter: str = "minmod"
 ) -> adc.System:
-    """Assemble le System system-schur (modele complet) pour les figures, reconstruction `limiter`.
+    """Assemble le System system-schur (modele complet) pour les figures.
 
+    Reconstruction `limiter` (minmod par defaut).
     Identique a run.build_uniform mais limiteur **minmod** par defaut (TVD, preserve la positivite) :
     WENO5 overshoote au saut top-hat de l'anneau -> densite negative -> step_cfl s'effondre a dt=0
     ou la sim diverge (NaN), cf. ADC-62/ADC-74. Avec minmod la densite reste > 0 et step_cfl avance
@@ -242,8 +262,9 @@ def run_mode_real(
     t_end: float | None = None,
     limiter: str = "minmod",
 ) -> dict:
-    """Snapshots/GIF du VRAI modele complet ``system-schur`` (ADC-74 / fix positivite ADC-62).
+    """Snapshots/GIF du VRAI modele complet ``system-schur``.
 
+    ADC-74 / fix positivite ADC-62.
     Avance le modele Euler-Poisson magnetise COMPLET (``model.py``) en reconstruction **minmod**
     (TVD -> densite > 0) avec ``step_cfl`` adaptatif : le rollup complet est atteint sans diverger
     (WENO5 overshootait au bord d'anneau -> densite negative -> stall/NaN a ~38-68 %). Dump de
@@ -311,6 +332,7 @@ def run_mode_real(
 
 
 def make_snapshots(res: dict, out: str) -> str:
+    """Ecrit la grille 3x3 de snapshots schlieren ; renvoie le chemin du PNG."""
     l, n, t_end, rmask, ft = (
         res["l"],
         res["n"],
@@ -356,6 +378,7 @@ def make_snapshots(res: dict, out: str) -> str:
 
 
 def make_gif(res: dict, out: str, fps: int = 15) -> str:
+    """Ecrit l'animation GIF du rollup diocotron ; renvoie le chemin du GIF."""
     l, n, rmask, tf = res["l"], res["n"], res["rmask"], res["t_end"]
     fig, ax = plt.subplots(figsize=(5.0, 5.4))
     fig.patch.set_facecolor("white")
@@ -387,6 +410,7 @@ def make_gif(res: dict, out: str, fps: int = 15) -> str:
 
 
 def gfit(ts: np.ndarray, cs: np.ndarray, lo: float, hi: float) -> float:
+    """Pente de log|c_l| dans [lo, hi] (NaN si moins de 5 points dans la fenetre)."""
     a = np.abs(cs)
     m = (ts >= lo) & (ts <= hi) & (a > 0)
     return (
@@ -397,6 +421,11 @@ def gfit(ts: np.ndarray, cs: np.ndarray, lo: float, hi: float) -> float:
 
 
 def make_growth(results: list, out: str) -> str:
+    """Ecrit la figure des taux de croissance (Fig 5.4) ; renvoie le chemin du PNG.
+
+    Trois panneaux d'amplitudes |c_l|/|c_l(0)| semilog (modes 3/4/5) avec fenetre
+    de fit et pente papier, plus un panneau (d) gamma vs cible.
+    """
     fig = plt.figure(figsize=(12, 3.4))
     gs = fig.add_gridspec(1, 4, wspace=0.32)
     exb = {}
@@ -477,6 +506,7 @@ def make_growth(results: list, out: str) -> str:
 
 
 def main() -> None:
+    """Point d'entree CLI : genere snapshots, GIF et figure des taux par mode."""
     argv = [a for a in sys.argv[1:]]
     out = "hoffart_figures"
     if "--out" in argv:

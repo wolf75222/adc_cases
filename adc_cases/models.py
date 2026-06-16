@@ -55,7 +55,7 @@ def euler_poisson(
     four_pi_G: float = 1.0,
     rho0: float = 1.0,
 ) -> adc.Model:
-    """Euler compressible + champ self-consistant. sign = +1 auto-gravite, -1 plasma."""
+    """Euler compressible + champ self-consistant (sign +1 auto-gravite, -1 plasma)."""
     return adc.Model(
         state=adc.FluidState(kind="compressible", gamma=gamma),
         transport=adc.CompressibleFlux(),

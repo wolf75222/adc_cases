@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Smoke test for the --geometry {square,staircase,cutcell} plumbing of the hoffart case.
+"""Smoke test for the --geometry flag plumbing of the hoffart case.
 
-This test does not need the heavy Kokkos/AMReX `adc` extension: it installs a tiny
-fake `adc` module that records every method call on the fake `System`, then drives
+Covers the three geometries {square, staircase, cutcell}. This test does not
+need the heavy Kokkos/AMReX `adc` extension: it installs a tiny fake `adc`
+module that records every method call on the fake `System`, then drives
 `build_uniform` for all three geometries. The assertions are real:
 
   - 'square' (default) never calls set_disc_domain    -> bit-identical historical path
@@ -26,7 +27,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _install_fake_adc() -> types.ModuleType:
-    """Register a fake `adc` module that records System calls. Returns the module."""
+    """Register a fake `adc` module that records every System call.
+
+    Returns:
+        The fake `adc` module (also registered in `sys.modules`).
+    """
     adc = types.ModuleType("adc")
 
     class FakeSystem:
@@ -78,19 +83,21 @@ def _install_fake_adc() -> types.ModuleType:
 
 
 def _import_run():
+    """Import the case's `run` module after the fake `adc` is installed."""
     case_root = os.path.dirname(
         HERE
-    )  # tests/ -> la racine du cas (model.py, run*.py)
+    )  # tests/ -> the case root (model.py, run*.py)
     if case_root not in sys.path:
         sys.path.insert(0, case_root)
-    # Make `from adc_cases.common.io import case_output_dir` importable without
-    # the installed package (the case appends the repo root itself on ImportError).
+    # `from adc_cases.common.io import case_output_dir` must resolve without the
+    # installed package (the case appends the repo root itself on ImportError).
     import importlib
 
     return importlib.import_module("run")
 
 
 def _params():
+    """Return the paper's reference parameters."""
     from model import PaperParameters
 
     return PaperParameters()

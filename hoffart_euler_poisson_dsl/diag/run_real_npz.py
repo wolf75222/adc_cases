@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Run REEL system-schur -> dumps npz SEULS (sans matplotlib) -- runner de campagne ADC-79 (ROMEO).
+"""Run REEL system-schur dumpant des npz seuls (sans matplotlib).
 
+Runner de campagne ADC-79 (ROMEO).
 Avance le modele complet (build_real de make_paper_figures, minmod par defaut) jusqu'a t_f et dumpe
 l'etat brut (densite + phi) via sim.write(format="npz") aux 9 fractions de snapshot. Le RENDU
 (schlieren/GIF) se fait en local sur les npz rapatries : aucun import matplotlib ici.
@@ -40,7 +41,11 @@ SNAP_FRAC = (0.01, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0)
 
 
 def build_real(compiled, rho0: np.ndarray, params, limiter: str) -> adc.System:
-    """Copie de make_paper_figures.build_real (sans dependre du module qui importe matplotlib)."""
+    """Assemble le System system-schur complet (relaxation deux passes du papier).
+
+    Copie de make_paper_figures.build_real pour eviter de dependre de ce module,
+    qui importe matplotlib (inutile pour un job de dump npz pur).
+    """
     sim = adc.System(n=rho0.shape[0], L=params.length, periodic=False)
     sim.set_poisson(
         rhs="composite",
@@ -71,6 +76,12 @@ def build_real(compiled, rho0: np.ndarray, params, limiter: str) -> adc.System:
 
 
 def main() -> int:
+    """Parse les arguments, avance le run et dumpe les npz ; renvoie le code de sortie.
+
+    Returns:
+        0 si tous les snapshots sont ecrits, 1 sur densite non finie ou budget
+        de pas epuise.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", type=int, required=True)
     ap.add_argument("--n", type=int, default=512)

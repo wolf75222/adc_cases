@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15/run_diocotron" : couplage Vlasov-Poisson complet du modele HyQMOM 15 moments,
-instabilite diocotron (anneau + perturbation azimutale), I/O cadences.
+"""Cas hyqmom15/run_diocotron : Vlasov-Poisson 15 moments, anneau diocotron.
+
+Couplage Vlasov-Poisson complet du modele HyQMOM 15 moments : instabilite
+diocotron (anneau + perturbation azimutale), I/O cadences.
 
 Pourquoi ce cas
 ---------------
@@ -69,8 +71,10 @@ T = 1.0  # temperature de la maxwellienne de base
 def poisson_fft_ref(
     rho: np.ndarray, lam: float, dx: float, dy: float
 ) -> np.ndarray:
-    """Transcription numpy de poisson_fft.m (IC seulement) : Delta(phi) = (rho - moyenne)/lam^2,
-    resolu en Fourier periodique. Sert a construire la derive ExB initiale, comme le MATLAB.
+    """Transcription numpy de poisson_fft.m (IC seulement).
+
+    Delta(phi) = (rho - moyenne)/lam^2, resolu en Fourier periodique. Sert a
+    construire la derive ExB initiale, comme le MATLAB.
     """
     nx, ny = rho.shape
     rho = rho - rho.mean()
@@ -89,10 +93,17 @@ def poisson_fft_ref(
 
 def diocotron_state(n: int, ic_matlab_bug: bool = False) -> np.ndarray:
     """Anneau perturbe + derive ExB calculee sur le Poisson IC.
-    @param ic_matlab_bug si True, reproduit le piege meshgrid d'initialize_dicotron.m (vx et vy
-        echanges et signes, champ non azimutal et divergent ; cf. README "Initial ExB drift").
-        Defaut False : derive ExB standard (incompressible), physiquement correcte.
-    @return (15, n, n), axe x en dernier (x = colonnes, y = lignes)."""
+
+    Args:
+        n: cote de la grille carree (n x n).
+        ic_matlab_bug: si True, reproduit le piege meshgrid
+            d'initialize_dicotron.m (vx et vy echanges et signes, champ non
+            azimutal et divergent ; cf. README "Initial ExB drift"). Defaut
+            False : derive ExB standard (incompressible), physiquement correcte.
+
+    Returns:
+        Etat conservatif (15, n, n), axe x en dernier (x = colonnes, y = lignes).
+    """
     h = 1.0 / n
     xm = -0.5 + (np.arange(n) + 0.5) * h
     X, Y = np.meshgrid(
@@ -137,9 +148,11 @@ def build_sim(
     solver: str = "fft",
     backend: str = "aot",
 ) -> adc.System:
-    """System periodique + modele avec sources electriques et Poisson
-    (Delta phi = (M00 - rho_bg)/lam^2, fond neutralisant = moyenne du scenario : un rhs
-    periodique a moyenne non nulle rend le MG singulier), rusanov + borne bring-up.
+    """System periodique + modele a sources electriques et Poisson couple.
+
+    Delta phi = (M00 - rho_bg)/lam^2, fond neutralisant = moyenne du scenario :
+    un rhs periodique a moyenne non nulle rend le MG singulier ; rusanov + borne
+    bring-up.
     """
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
@@ -194,9 +207,19 @@ K_MIN = (
 def _linearized_jacobian_magnetostatic(
     kx: float, ky: float, lam: float, oc: float
 ) -> np.ndarray:
-    """Transcription de linearized_Jacobian_magnetostatic.m : Jacobien 15x15 du systeme
-    linearise (matrice creuse fixe, complexe a cause des termes oc). @p lam : longueur de
-    Debye adimensionnee. @return ndarray (15, 15) complexe."""
+    """Jacobien 15x15 du systeme linearise (linearized_Jacobian_magnetostatic.m).
+
+    Matrice creuse fixe, complexe a cause des termes oc.
+
+    Args:
+        kx: nombre d'onde selon x.
+        ky: nombre d'onde selon y.
+        lam: longueur de Debye adimensionnee.
+        oc: pulsation cyclotron omega_c.
+
+    Returns:
+        ndarray (15, 15) complexe.
+    """
     kl2 = (kx * kx + ky * ky) * lam * lam
     j = np.zeros((15, 15), dtype=complex)
     j[0, 1] = kx
@@ -273,12 +296,22 @@ def _linearized_jacobian_magnetostatic(
 
 
 def matlab_dt_source(n: int, cfl: float = 0.4) -> dict:
-    """Borne dt source de compute_dt.m sur l'IC diocotron, fidele au driver :
-    dt_source = CFL*dx*lambda_flux*k_min^2/max_speed^2. max_speed = plus grande partie reelle
-    des valeurs propres du Jacobien linearise magnetostatique (n-independant). lambda_flux =
-    vitesse de flux maximale sur l'IC, recuperee EXACTE par une etape sonde du chemin
-    exact_speeds (cfl*dx/dt == eigenvalues15_2D, deja epingle dans run_waves). @return dict des
-    intermediaires + dt_source/dt_flux."""
+    """Borne dt source de compute_dt.m sur l'IC diocotron, fidele au driver.
+
+    dt_source = CFL*dx*lambda_flux*k_min^2/max_speed^2. max_speed = plus grande
+    partie reelle des valeurs propres du Jacobien linearise magnetostatique
+    (n-independant). lambda_flux = vitesse de flux maximale sur l'IC, recuperee
+    EXACTE par une etape sonde du chemin exact_speeds (cfl*dx/dt ==
+    eigenvalues15_2D, deja epingle dans run_waves).
+
+    Args:
+        n: cote de la grille carree.
+        cfl: nombre de Courant.
+
+    Returns:
+        dict des intermediaires (dx, k_min, lambda_flux, max_speed) +
+        dt_source/dt_flux.
+    """
     dx = 1.0 / n
     lam = DEBYE / 1.0  # adim_debye = debye/(xmax-xmin), cote 1
     jac = _linearized_jacobian_magnetostatic(K_MIN, K_MIN, lam, OMEGA_C)
@@ -304,10 +337,13 @@ def matlab_dt_source(n: int, cfl: float = 0.4) -> dict:
 
 
 def check_diocotron_dt_source_matlab() -> None:
-    """OPT-IN (--dt-source-matlab) : rejoue le smoke en cappant chaque pas a
-    min(dt_cfl, dt_source MATLAB) via step() explicite (la voie compute_dt.m). Verifie que la
-    borne source MORD (dt_source << dt_cfl, regime source-limite), que le run reste fini / M00 > 0
-    / masse conservee. NE change PAS le defaut : ce controle est hors du main() sans argument.
+    """OPT-IN (--dt-source-matlab) : smoke cappe a min(dt_cfl, dt_source MATLAB).
+
+    Rejoue le smoke en cappant chaque pas a min(dt_cfl, dt_source MATLAB) via
+    step() explicite (la voie compute_dt.m). Verifie que la borne source MORD
+    (dt_source << dt_cfl, regime source-limite), que le run reste fini / M00 > 0
+    / masse conservee. NE change PAS le defaut : ce controle est hors du main()
+    sans argument.
     """
     n, nsteps, cfl = 64, 10, 0.4
     info = matlab_dt_source(n, cfl=cfl)
@@ -355,8 +391,10 @@ def check_diocotron_dt_source_matlab() -> None:
 
 
 def check_poisson_oracle() -> None:
-    """(1) + (2) : sinusoide analytique. Le signe et l'echelle sont LUS sur l'assert qui passe
-    (convention : ADC resout Delta(phi) = rhs, rhs = (M00 - rho_bg)/lam^2, fond explicite).
+    """(1) + (2) : oracle Poisson sur une sinusoide analytique.
+
+    Le signe et l'echelle sont LUS sur l'assert qui passe (convention : ADC
+    resout Delta(phi) = rhs, rhs = (M00 - rho_bg)/lam^2, fond explicite).
     """
     n, eps = 64, 1e-3
     k = 2.0 * np.pi  # premier mode du domaine de cote 1
@@ -423,7 +461,7 @@ def check_poisson_oracle() -> None:
 
 
 def check_diocotron() -> None:
-    """(3) + (4) + (5) : smoke anneau diocotron, checkpoint/restart bit-stable, snapshots."""
+    """(3) + (4) + (5) : smoke diocotron, checkpoint/restart bit-stable, snapshots."""
     from adc_cases.common.io import case_output_dir
 
     n, nsteps, every = 64, 10, 5
@@ -484,11 +522,14 @@ def check_diocotron() -> None:
 
 
 def check_diocotron_hll_exact() -> None:
-    """(6) bascule : le diocotron complet (Poisson + source electrique) tourne en
-    riemann='hll' avec les vitesses EXACTES (exact_speeds, ) -- la cible fidele au MATLAB.
-    Smoke : 10 pas stables, masse conservee, phi fini. Le taux de croissance quantitatif vs un
-    golden MATLAB-HLL long est un suivi (campagne dediee : le run de reference dure des heures
-    sous Octave)."""
+    """(6) diocotron complet en riemann='hll' avec les vitesses exactes.
+
+    Le diocotron complet (Poisson + source electrique) tourne en riemann='hll'
+    avec les vitesses EXACTES (exact_speeds) -- la cible fidele au MATLAB. Smoke :
+    10 pas stables, masse conservee, phi fini. Le taux de croissance quantitatif
+    vs un golden MATLAB-HLL long est un suivi (campagne dediee : le run de
+    reference dure des heures sous Octave).
+    """
     n, nsteps = 64, 10
     U0 = diocotron_state(n)
     sim = build_sim(
@@ -515,11 +556,13 @@ def check_diocotron_hll_exact() -> None:
 
 
 def check_poisson_solvers() -> None:
-    """(7) fidelite Poisson : le MEME oracle sinusoidal a travers les trois
-    solveurs. fft (stencil discret diagonalise) == geometric_mg au residu MG pres (meme
-    operateur) et tous deux a O(h^2) du continu ; fft_spectral (symbole continu, l'exact
-    poisson_fft.m de RIEMOM2D) atteint la solution continue a ~1e-12 : la MEME mesure
-    discrimine le symbole ET prouve le no-default-change des chemins existants.
+    """(7) fidelite Poisson : le meme oracle sinusoidal a travers les 3 solveurs.
+
+    fft (stencil discret diagonalise) == geometric_mg au residu MG pres (meme
+    operateur) et tous deux a O(h^2) du continu ; fft_spectral (symbole continu,
+    l'exact poisson_fft.m de RIEMOM2D) atteint la solution continue a ~1e-12 : la
+    MEME mesure discrimine le symbole ET prouve le no-default-change des chemins
+    existants.
     """
     n, eps = 64, 1e-3
     k = 2.0 * np.pi
@@ -564,9 +607,19 @@ def check_poisson_solvers() -> None:
 
 
 def _mode_amplitude(rho: np.ndarray, mode: int, r0: float, r1: float) -> float:
-    """Amplitude du m-ieme harmonique azimutal de la densite, sur l'anneau r0 <= r <= r1.
-    @return |sum_{anneau} rho exp(-i m theta)| / (nombre de cellules de l'anneau). Observable du
-    diocotron : l'amplitude du mode perturbe croit exponentiellement quand l'instabilite demarre.
+    """Amplitude de l'harmonique azimutal `mode` sur l'anneau r0 <= r <= r1.
+
+    Observable du diocotron : l'amplitude du mode perturbe croit
+    exponentiellement quand l'instabilite demarre.
+
+    Args:
+        rho: densite (M00) sur la grille carree.
+        mode: numero de l'harmonique azimutal a mesurer.
+        r0: rayon interieur de l'anneau.
+        r1: rayon exterieur de l'anneau.
+
+    Returns:
+        |sum_{anneau} rho exp(-i m theta)| / (nombre de cellules de l'anneau).
     """
     n = rho.shape[0]
     h = 1.0 / n
@@ -580,12 +633,15 @@ def _mode_amplitude(rho: np.ndarray, mode: int, r0: float, r1: float) -> float:
 
 
 def measure_ic_impact(n: int = 64, nsteps: int = 40) -> None:
-    """Chiffre l'impact de l'orientation ExB (issue ADC-198, point b) : meme anneau, meme Poisson IC,
-    seule l'orientation de la derive change. On rejoue nsteps pas avec la derive standard et avec le
-    bug meshgrid MATLAB, puis on compare l'amplitude du mode 4 et l'energie cinetique. Les deux champs
-    derivent du MEME phi, donc rho et A4(0) sont identiques, mais le champ de vitesse est entierement
-    reoriente (azimutal incompressible vs divergent) : l'effet n'est PAS faible (mesure : ecart A4
-    11-18 %, KE 5-20 %), les trajectoires se separent vite des le demarrage, c'est ce que chiffre ce run.
+    """Chiffre l'impact de l'orientation ExB (issue ADC-198, point b).
+
+    Meme anneau, meme Poisson IC, seule l'orientation de la derive change. On
+    rejoue nsteps pas avec la derive standard et avec le bug meshgrid MATLAB,
+    puis on compare l'amplitude du mode 4 et l'energie cinetique. Les deux champs
+    derivent du MEME phi, donc rho et A4(0) sont identiques, mais le champ de
+    vitesse est entierement reoriente (azimutal incompressible vs divergent) :
+    l'effet n'est PAS faible (mesure : ecart A4 11-18 %, KE 5-20 %), les
+    trajectoires se separent vite des le demarrage, c'est ce que chiffre ce run.
     """
 
     def run(ic_matlab_bug):

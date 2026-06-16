@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-r"""Reproduction du benchmark diocotron de Hoffart-Maier-Shadid-Tomas (arXiv:2510.11808),
-Section 5.3, avec notre solveur `adc` (bindings Python de la facade compilee), 100 % Python.
+r"""Reproduction du benchmark diocotron de Hoffart (arXiv:2510.11808) avec `adc`.
+
+Hoffart-Maier-Shadid-Tomas, Section 5.3, avec notre solveur `adc` (bindings
+Python de la facade compilee), 100 % Python.
 
 Le papier valide son schema "structure-preserving" pour les equations magnetic Euler-Poisson
 dans la limite de derive magnetique (omega_d << omega_p << omega_c) en reproduisant le taux de
@@ -120,8 +122,19 @@ def diocotron_eigenvalue(
 def bilinear_on_circle(
     field: np.ndarray, n: int, radius: float, l_samples: int = 256
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Echantillonne `field` (n x n, centres de cellules) sur un cercle de rayon `radius`
-    centre au milieu du domaine, par interpolation bilineaire. Retourne (theta, valeurs).
+    """Echantillonne `field` sur un cercle par interpolation bilineaire.
+
+    Le cercle de rayon `radius` est centre au milieu du domaine ; `field` est un
+    tableau n x n aux centres de cellules.
+
+    Args:
+        field: champ scalaire 2D, dispose en row-major (field[j, i]).
+        n: cote de la grille carree.
+        radius: rayon du cercle d'echantillonnage.
+        l_samples: nombre d'angles equirepartis sur le cercle.
+
+    Returns:
+        Le couple (theta, valeurs) : angles et valeurs interpolees du champ.
     """
     dx = L / n
     cx = cy = 0.5 * L
@@ -156,7 +169,19 @@ def mode_l_amplitude(field: np.ndarray, n: int, radius: float, l: int) -> float:
 
 
 def fit_linear_phase(t, a) -> tuple[float, tuple]:
-    """gamma = pente de log(a) sur la phase de croissance avant saturation (1.3 a0 -> 0.85 pic)."""
+    """Ajuste gamma = pente de log(a) sur la phase de croissance lineaire.
+
+    La fenetre lineaire est bornee avant saturation (de 1.3 a0 jusqu'a 0.85 du
+    pic).
+
+    Args:
+        t: temps echantillonnes.
+        a: amplitudes correspondantes (les valeurs <= 0 sont ignorees).
+
+    Returns:
+        Le couple (gamma, (t_lo, t_hi)) : pente ajustee et bornes de la fenetre.
+        gamma vaut NaN si moins de 8 echantillons positifs sont disponibles.
+    """
     t = np.asarray(t)
     a = np.asarray(a)
     good = a > 0
@@ -244,6 +269,14 @@ def run_evolution(
     nframes: int = 60,
     steps_per_frame: int = 12,
 ):
+    """Avance le diocotron mode l et collecte des instantanes de densite.
+
+    Sert a alimenter le gif et la planche de snapshots ; s'arrete tot si la
+    densite devient non finie.
+
+    Returns:
+        Le couple (frames, times) : densites copiees et temps associes.
+    """
     sim = make_ring_system(n, l, delta)
     frames, times = [], []
     for f in range(nframes):

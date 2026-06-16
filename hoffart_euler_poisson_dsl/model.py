@@ -46,17 +46,21 @@ class PaperParameters:
 
     @property
     def length(self) -> float:
+        """Side of the square domain (the device diameter ``2 * radius``)."""
         return 2.0 * self.radius
 
     @property
     def alpha(self) -> float:
+        """Poisson coupling ``beta^2 / rho_max`` (Gauss right-hand side)."""
         return self.beta * self.beta / self.rho_max
 
     @property
     def omega(self) -> float:
+        """Cyclotron frequency ``beta^2`` carried by the Lorentz source."""
         return self.beta * self.beta
 
     def to_dict(self) -> dict:
+        """Return the fields plus the derived ``length``, ``alpha``, ``omega``."""
         out = asdict(self)
         out.update(length=self.length, alpha=self.alpha, omega=self.omega)
         return out
@@ -178,7 +182,20 @@ def magnetic_euler_poisson_model(
 def paper_initial_density(
     n: int, mode: int, params: PaperParameters | None = None
 ) -> np.ndarray:
-    """Cell-centred annular density from equation (35) of the paper."""
+    """Cell-centred annular density from equation (35) of the paper.
+
+    Args:
+        n: Number of cells per side of the square ``n x n`` grid.
+        mode: Azimuthal perturbation number ``l``; must be 3, 4 or 5.
+        params: Paper parameters; defaults to ``PaperParameters()``.
+
+    Returns:
+        The ``(n, n)`` density field: ``rho_min`` everywhere except inside the
+        ring, where it carries a sinusoidal ``mode``-fold perturbation.
+
+    Raises:
+        ValueError: If ``mode`` is not one of the paper modes 3, 4 or 5.
+    """
     params = params or PaperParameters()
     if mode not in PAPER_GROWTH_RATES:
         raise ValueError("paper modes are 3, 4 and 5")
@@ -202,7 +219,15 @@ def paper_initial_density(
 def drift_velocity_from_potential(
     phi: np.ndarray, params: PaperParameters | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
-    r"""Initial drift velocity `-(grad(phi) x Omega)/|Omega|^2`."""
+    r"""Initial ExB drift velocity `-(grad(phi) x Omega)/|Omega|^2`.
+
+    Args:
+        phi: Square electrostatic potential field on the cell-centred grid.
+        params: Paper parameters; defaults to ``PaperParameters()``.
+
+    Returns:
+        The ``(u, v)`` velocity components, zeroed outside the device radius.
+    """
     params = params or PaperParameters()
     h = params.length / phi.shape[0]
     grad_y, grad_x = np.gradient(phi, h, h, edge_order=2)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test BUILD-FREE de l'assemblage du modele complet POLAIRE (run_polar.py).
+"""Smoke test BUILD-FREE de l'assemblage du modele POLAIRE (run_polar.py).
 
 Ce test n'a PAS besoin de l'extension lourde Kokkos/AMReX `adc` : il installe un faux module
 `adc` minimal qui ENREGISTRE chaque appel sur un faux `System` (et restitue un potentiel non
@@ -39,7 +39,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _install_fake_adc() -> types.ModuleType:
-    """Enregistre un faux module `adc` qui trace les appels System et rend un phi non trivial."""
+    """Installe un faux module `adc` tracant System et rendant un phi non trivial.
+
+    Le potentiel restitue par `potential()` est non trivial pour que la derive
+    ExB se calcule reellement sur le chemin polaire.
+
+    Returns:
+        Le faux module `adc` (egalement enregistre dans `sys.modules`).
+    """
     adc = types.ModuleType("adc")
 
     class FakeSystem:
@@ -164,6 +171,7 @@ def _install_fake_adc() -> types.ModuleType:
 
 
 def _import_run_polar():
+    """Importe (frais) le module `run_polar` du cas, le faux `adc` etant en place."""
     case_root = os.path.dirname(
         HERE
     )  # tests/ -> la racine du cas (model.py, run*.py)
@@ -177,12 +185,15 @@ def _import_run_polar():
 
 
 def _params():
+    """Retourne les parametres de reference du papier."""
     from model import PaperParameters
 
     return PaperParameters()
 
 
 class _Args:
+    """Faux espace de noms argparse : defauts CLI surchargeables par mot-cle."""
+
     def __init__(self, **kw) -> None:
         self.r_min = 2.0
         self.nr = 24
@@ -205,6 +216,7 @@ class _Args:
 
 
 def test_assembly_call_order_and_routing() -> None:
+    """(1)(2) Verrouille l'ordre des appels facade et le routage Poisson polaire."""
     _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
@@ -238,6 +250,7 @@ def test_assembly_call_order_and_routing() -> None:
 
 
 def test_add_equation_uses_weno5_ssprk3_schur() -> None:
+    """(3) add_equation cable WENO5 + Rusanov + SSPRK3 + CondensedSchur."""
     _install_fake_adc()
     rp = _import_run_polar()
     sim = rp.build_polar_system(24, 16, 4, _params(), _Args())
@@ -260,6 +273,7 @@ def test_add_equation_uses_weno5_ssprk3_schur() -> None:
 
 
 def test_strang_switches_split_factory() -> None:
+    """--strang bascule la fabrique de split sur adc.Strang (2e ordre)."""
     _install_fake_adc()
     rp = _import_run_polar()
     sim = rp.build_polar_system(24, 16, 4, _params(), _Args(strang=True))
@@ -271,6 +285,7 @@ def test_strang_switches_split_factory() -> None:
 
 
 def test_density_is_annular_tophat() -> None:
+    """(4) La densite posee est le top-hat annulaire, layout flat[j*nr+i]."""
     _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
@@ -289,7 +304,11 @@ def test_density_is_annular_tophat() -> None:
 
 
 def test_state_radial_velocity_is_exb_drift() -> None:
-    """(5a) v_r reste la derive ExB radiale -grad_theta/B (point fixe de l'etage source)."""
+    """(5a) v_r reste la derive ExB radiale -grad_theta/B.
+
+    C'est le point fixe de l'etage source : v_r ne doit pas devier de la derive
+    ExB radiale -grad_theta/B.
+    """
     _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
@@ -316,10 +335,12 @@ def test_state_radial_velocity_is_exb_drift() -> None:
 
 
 def test_state_azimuthal_velocity_solves_radial_balance() -> None:
-    """(5b) v_theta est la racine de la quadratique de BILAN RADIAL (equilibre rotatif).
+    """(5b) v_theta est la racine de la quadratique de bilan radial.
 
-    Verifie que le residu (rho/r) v_theta^2 + (rho B) v_theta - (d_r p + rho d_r phi) ~ 0 par cellule,
-    ET que la branche choisie se reduit a la derive ExB grad_r/B quand la courbure -> 0 (B grand).
+    Equilibre rotatif. Verifie que le residu
+    (rho/r) v_theta^2 + (rho B) v_theta - (d_r p + rho d_r phi) ~ 0 par cellule,
+    ET que la branche choisie se reduit a la derive ExB grad_r/B quand la
+    courbure -> 0 (B grand).
     """
     _install_fake_adc()
     rp = _import_run_polar()
@@ -373,10 +394,11 @@ def test_state_azimuthal_velocity_solves_radial_balance() -> None:
 
 
 def test_equilibrium_v_theta_reduces_to_exb_when_cold() -> None:
-    """(5d) cs2 = 0 : v_theta se reduit EXACTEMENT a la derive ExB grad_r/B (limite froide du papier).
+    """(5d) cs2 = 0 : v_theta se reduit EXACTEMENT a la derive ExB grad_r/B.
 
-    Sans terme de pression, forcing = d_r phi, et a B grand v_theta -> d_r phi/B = grad_r/B : la
-    continuation ExB est verifiee verbatim (la nouvelle IC degenere bien en l'ancienne quand cs2=0).
+    Limite froide du papier. Sans terme de pression, forcing = d_r phi, et a B
+    grand v_theta -> d_r phi/B = grad_r/B : la continuation ExB est verifiee
+    verbatim (la nouvelle IC degenere bien en l'ancienne quand cs2=0).
     """
     _install_fake_adc()
     rp = _import_run_polar()
@@ -399,8 +421,9 @@ def test_equilibrium_v_theta_reduces_to_exb_when_cold() -> None:
 
 
 def test_check_equilibrium_is_stationary() -> None:
-    """(5c) STATIONARITE : l'anneau d'equilibre SANS perturbation reste plat (chaque mode).
+    """(5c) STATIONARITE : l'anneau d'equilibre non perturbe reste plat.
 
+    Vaut pour chaque mode azimutal.
     Pilote check_equilibrium sur le faux adc : avec perturbation=0 et le phi axisymetrique du faux
     System, l'amplitude de chaque mode azimutal ne doit pas croitre au-dela de la tolerance et le
     potentiel reste fini. C'est l'auto-test --check-equilibrium en boite noire (build-free).
@@ -429,8 +452,9 @@ def test_check_equilibrium_is_stationary() -> None:
 
 
 def test_compute_frozen_residual_captures_scheme_drift() -> None:
-    """(c1) R_eq = step(U_eq) - U_eq = la derive parasite du (faux) schema sur l'anneau axisymetrique.
+    """(c1) R_eq = step(U_eq) - U_eq capture la derive parasite du schema.
 
+    Sur l'anneau axisymetrique, avec le faux schema.
     Avec le faux adc, step() ajoute la derive deterministe D = _spurious_drift() ; compute_frozen_residual
     doit donc renvoyer R_eq == D (a la precision machine) et un U_eq non trivial (3, ntheta, nr).
     Verifie aussi l'ORDRE des appels sur la sonde : set_state -> solve_fields -> step -> get_state.
@@ -460,8 +484,9 @@ def test_compute_frozen_residual_captures_scheme_drift() -> None:
 
 
 def test_step_frozen_subtracted_call_order_and_cancellation() -> None:
-    """(c2) step_frozen_subtracted : ORDRE step -> get_state -> set_state -> solve_fields, ET annulation.
+    """(c2) step_frozen_subtracted : ordre des appels facade ET annulation.
 
+    Ordre exige : step -> get_state -> set_state -> solve_fields.
     La carte corrigee step()-R_eq applique deux fois de suite a U_eq doit reproduire U_eq EXACTEMENT
     (R_eq = derive constante : U + D - D = U). On verifie l'ordre des appels facade et l'invariance.
     """
@@ -497,7 +522,7 @@ def test_step_frozen_subtracted_call_order_and_cancellation() -> None:
 
 
 def test_check_equilibrium_frozen_is_machine_precision_stationary() -> None:
-    """(c3) STATIONARITE A LA PRECISION MACHINE : la VRAIE validation de l'option c.
+    """(c3) STATIONARITE A LA PRECISION MACHINE : vraie validation de l'option c.
 
     Avec --frozen-equilibrium, U_eq est un point fixe discret EXACT de step()-R_eq ; check_equilibrium_frozen
     doit donc reporter max_dev <= floor = C eps_mach ||U_eq||_inf sur >= 200 pas. Le critere laxiste
@@ -535,9 +560,9 @@ def test_check_equilibrium_frozen_is_machine_precision_stationary() -> None:
 
 
 def test_run_mode_frozen_uses_subtracted_stepping() -> None:
-    """(c4) run_mode(R_eq=...) cable la carte step()-R_eq dans la boucle perturbee (option c).
+    """(c4) run_mode(R_eq=...) cable step()-R_eq dans la boucle perturbee.
 
-    Verifie que, R_eq fourni, run_mode appelle bien la sequence step -> get_state -> set_state ->
+    Option c. Verifie que, R_eq fourni, run_mode appelle bien la sequence step -> get_state -> set_state ->
     solve_fields a chaque iteration (et JAMAIS step_cfl, meme si --cfl etait demande).
     """
     _install_fake_adc()
@@ -574,8 +599,9 @@ def test_run_mode_frozen_uses_subtracted_stepping() -> None:
 
 
 def test_main_frozen_ignores_cfl_and_runs_quick() -> None:
-    """(c5) main --quick --cfl=0.5 : frozen ON par defaut -> --cfl ignore, run frozen jusqu'au bout.
+    """(c5) main --quick --cfl=0.5 : frozen ON par defaut, --cfl ignore.
 
+    Le run frozen va jusqu'au bout.
     main() doit forcer args.cfl=0 sous --frozen-equilibrium, precalculer R_eq, et terminer le smoke
     --quick sans NaN (la sortie est ecrite). On verifie que le run aboutit (pas de SystemExit).
     """
@@ -601,6 +627,7 @@ def test_main_frozen_ignores_cfl_and_runs_quick() -> None:
 
 
 def test_polar_gradient_matches_derive_aux_polar_stencil() -> None:
+    """(6) polar_gradient reproduit exactement le stencil de derive_aux_polar."""
     _install_fake_adc()
     rp = _import_run_polar()
     r_min, nr, nth = 2.0, 40, 24
@@ -628,10 +655,12 @@ def test_polar_gradient_matches_derive_aux_polar_stencil() -> None:
 
 
 def test_fit_growth_uses_mapped_paper_window_and_is_exact() -> None:
-    """T3 : fit_growth fitte la fenetre papier MAPPEE en temps sim (t_sim = 2pi/rhobar t_paper),
-    PAS la fenetre papier brute. Signal en deux pentes : pente parasite g_other AVANT la fenetre
-    mappee, pente vraie g_true DEDANS. fit_growth doit renvoyer g_true (preuve qu'il fitte bien
-    [2pi*0.60, 2pi*0.75] = [3.77, 4.71], pas [0.60, 0.75])."""
+    """(7)(T3) fit_growth fitte la fenetre papier MAPPEE en temps sim, pas brute.
+
+    Mapping : t_sim = 2pi/rhobar t_paper. Signal en deux pentes : pente parasite
+    g_other AVANT la fenetre mappee, pente vraie g_true DEDANS. fit_growth doit
+    renvoyer g_true (preuve qu'il fitte bien [2pi*0.60, 2pi*0.75] = [3.77, 4.71],
+    pas [0.60, 0.75])."""
     import math
 
     _install_fake_adc()
@@ -661,6 +690,7 @@ def test_fit_growth_uses_mapped_paper_window_and_is_exact() -> None:
 
 
 def test_multirank_is_rejected() -> None:
+    """(8) Un run multi-rang est refuse (etage Schur polaire = boite unique)."""
     _install_fake_adc()
     rp = _import_run_polar()
     saved = dict(os.environ)

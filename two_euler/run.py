@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cas "two_euler" : deux gaz d'Euler independants (electrons + ions), non couples.
+"""Cas "two_euler" : deux gaz d'Euler independants (electrons + ions).
 
 Etape "deux Euler, meme code" de l'echelle de tests du tuteur : le meme schema
 (CompressibleFlux + HLLC + reconstruction primitive) tourne pour deux especes Euler sans aucun

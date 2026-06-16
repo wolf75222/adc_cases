@@ -9,6 +9,13 @@ from model import PaperParameters, magnetic_euler_poisson_model
 
 
 def main() -> None:
+    """Compare the compiled DSL kernel to hand-written formulas on 2x2 cells.
+
+    Builds the local-source variant of the Hoffart model, then asserts that
+    its flux, electric/Lorentz source, Poisson right-hand side and wave speeds
+    match the closed-form expressions exactly. Raises ``AssertionError`` on any
+    mismatch; prints a one-line confirmation on success.
+    """
     p = PaperParameters(beta=3.0, temperature=0.25)
     model = magnetic_euler_poisson_model(p, source="local")._m
 

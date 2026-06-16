@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Figures de diagnostic du cas `plasma` (validation : Poisson + ionisation + collision).
+"""Figures de diagnostic du cas `plasma` (Poisson + ionisation + collision).
 
-Re-joue exactement la physique de `run.py` (memes CI, meme recette, meme nombre de pas et meme
-CFL) mais instrumente la boucle pas-a-pas pour enregistrer l'historique des diagnostics, puis
-trace trois figures sous `figures/` :
+Cas `validation` : re-joue exactement la physique de `run.py` (memes CI, meme
+recette, meme nombre de pas et meme CFL) mais instrumente la boucle pas-a-pas
+pour enregistrer l'historique des diagnostics, puis trace trois figures sous
+`figures/` :
   1. densities.png   : densites moyennes e / i / n vs t (la modulation e- a 5 % se moyenne).
   2. ionization.png  : bilan d'ionisation (n_i monte, n_g descend, n_i + n_g plat) + erreur de
                        conservation en echelle log + impulsion totale (collision).
@@ -105,6 +106,7 @@ def run_with_history() -> tuple[dict, dict]:
 
 
 def fig_densities(hist: dict) -> str:
+    """Trace densities.png : densites moyennes e/i/n vs t. Renvoie le chemin."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -145,6 +147,12 @@ def fig_densities(hist: dict) -> str:
 
 
 def fig_ionization(hist: dict) -> tuple[str, float, float]:
+    """Trace ionization.png : bilan d'ionisation, derive de masse, impulsion.
+
+    Returns:
+        Le chemin du PNG, la derive relative finale de n_i + n_g et la variation
+        finale d'impulsion x du couple ion+neutre.
+    """
     import matplotlib
 
     matplotlib.use("Agg")
@@ -204,6 +212,7 @@ def fig_ionization(hist: dict) -> tuple[str, float, float]:
 
 
 def fig_density_map(dens: dict) -> str:
+    """Trace density_map.png : cartes 2D de densite e/i/n. Renvoie le chemin."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -231,6 +240,7 @@ def fig_density_map(dens: dict) -> str:
 
 
 def git_sha(path: str) -> str:
+    """SHA HEAD du depot a `path`, ou "unknown" si indisponible (provenance)."""
     try:
         return (
             subprocess.check_output(
@@ -245,6 +255,7 @@ def git_sha(path: str) -> str:
 
 
 def main() -> None:
+    """Joue le run instrumente, ecrit les 3 PNG + provenance.json, resume."""
     os.makedirs(FIGDIR, exist_ok=True)
     hist, dens = run_with_history()
 

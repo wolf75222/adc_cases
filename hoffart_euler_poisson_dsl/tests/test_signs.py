@@ -260,7 +260,7 @@ def test_paper_initial_density_azimuthal_structure() -> None:
 # est donc verifie ci-dessus (test_drift_*) de facon indirecte : si le signe de rhs
 # etait inverse, la vitesse de derive serait opposee et les tests (a) echoueraient.
 #
-# Pour referene : la ligne pertinente est
+# Pour reference : la ligne pertinente est
 #   m.elliptic_rhs(-alpha * rho)        # model.py:129
 
 

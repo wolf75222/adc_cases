@@ -51,6 +51,15 @@ SNAP_STEPS = [0, 40, 100, 200]  # instants captures (en pas)
 
 
 def rhs(sim: adc.System, n: np.ndarray) -> tuple[np.ndarray, float, np.ndarray]:
+    """Comme run.rhs, mais renvoie aussi phi pour instrumenter les figures.
+
+    Args:
+        sim: Systeme adc servant d'oracle de Poisson.
+        n: Densite courante.
+
+    Returns:
+        Le triplet (residu -div(n v), vitesse de derive maximale, potentiel phi).
+    """
     phi = poisson_oracle(sim, n)
     vx, vy = drift(phi, DX, B0)
     speed = float(np.hypot(vx, vy).max())
@@ -58,6 +67,7 @@ def rhs(sim: adc.System, n: np.ndarray) -> tuple[np.ndarray, float, np.ndarray]:
 
 
 def main() -> None:
+    """Rejoue run.py en captant snapshots et series, puis ecrit les figures."""
     n = band_density(NX, L, amp=1.0, width=0.05, mode=4, disp=0.02)
     n_i0 = float(n.mean())
 
@@ -74,7 +84,7 @@ def main() -> None:
 
     for step in range(NSTEPS + 1):
         r1, speed, phi = rhs(sim, n)
-        # diagnostics avant le pas (etat courant)
+        # Diagnostics avant le pas, sur l'etat courant.
         times.append(t)
         mass_drift.append(relative_drift(float(n.sum()) * DX * DX, mass0))
         phimax.append(float(np.abs(phi).max()))
@@ -180,6 +190,7 @@ def main() -> None:
 
     # ---- provenance ----
     def sha(path: str) -> str:
+        """Renvoie le SHA HEAD du depot git en `path`, ou "unknown" si echec."""
         try:
             return subprocess.check_output(
                 ["git", "-C", path, "rev-parse", "HEAD"], text=True

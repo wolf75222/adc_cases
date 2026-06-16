@@ -105,7 +105,11 @@ TWO_PI = 2.0 * math.pi
 
 
 def exb_model() -> adc.Model:
-    """Derive ExB scalaire NORMALISEE -- MEME champ de vitesse que le run complet (alpha/omega=1)."""
+    """Modele de derive ExB scalaire NORMALISEE (B0=1, charge=1).
+
+    Champ de vitesse IDENTIQUE a celui du run complet, car alpha/omega = 1 :
+    le 1e12 de alpha et le 1e12 de omega se simplifient dans le transport.
+    """
     return adc.Model(
         state=adc.Scalar(),
         transport=adc.ExB(B0=1.0),
@@ -115,7 +119,10 @@ def exb_model() -> adc.Model:
 
 
 def ring_ic_cart(n: int, l: int) -> np.ndarray:
-    """Anneau cartesien [R0, R1] perturbe au mode l, centre au milieu du carre L = 2 RW."""
+    """Densite initiale : anneau cartesien [R0, R1] perturbe au mode l.
+
+    L'anneau est centre au milieu du carre de cote L = 2 RW.
+    """
     L = 2.0 * RW
     h = L / n
     x = (np.arange(n) + 0.5) * h - RW
@@ -187,6 +194,7 @@ def gfit(
 
 
 def main() -> None:
+    """Affiche les echelles dimensionnelles, le test de fenetre et les candidats."""
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 128
     dt, t_end = 2.0e-3, 15.0
 

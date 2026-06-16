@@ -1,5 +1,6 @@
-"""Projection de realisabilite relaxation15 (port de relaxation15.m,
-collision15_anisotropic.m et p2p2_2D.m).
+"""Projection de realisabilite relaxation15 (oracle de reference Octave).
+
+Port de relaxation15.m, collision15_anisotropic.m et p2p2_2D.m.
 
 Pipeline par cellule : clamps des moments standardises (|s30| <= 4 + Ma/2, hyperbolicite
 H2, |s11| < 1), suppression des valeurs propres de flux complexes (blocs d'ordre 3), puis
@@ -44,8 +45,16 @@ def _binom(n, k):
 
 
 def m2cs4(M4):
-    """M2CS4_15.m : moments bruts (ordre MOMENT_NAMES) -> centres C et standardises S (dicts
-    (p, q))."""
+    """Moments bruts -> centres C et standardises S (M2CS4_15.m).
+
+    Args:
+        M4: Moments bruts (15,) dans l'ordre MOMENT_NAMES.
+
+    Returns:
+        Le couple ``(C, S)`` ou C (centres) et S (standardises) sont des
+        dicts indexes par la paire d'exposants (p, q). S ne contient que
+        les ordres p + q >= 2.
+    """
     M4 = np.asarray(M4, dtype=float)
     m00 = M4[0]
     mn = {pq: M4[k] / m00 for k, pq in enumerate(MOMENT_PQ)}
@@ -73,8 +82,18 @@ def m2cs4(M4):
 
 
 def cs4_to_m4(m00, u, v, C) -> np.ndarray:
-    """C4toM4.m (binomiale inverse) : centres C (dict (p, q), C00=1, C10=C01=0) -> moments
-    bruts dans l'ordre MOMENT_NAMES."""
+    """Centres C -> moments bruts (binomiale inverse, C4toM4.m).
+
+    Args:
+        m00: Densite (moment d'ordre 0).
+        u: Vitesse moyenne selon x.
+        v: Vitesse moyenne selon y.
+        C: Moments centres, dict indexe par (p, q), avec C00 = 1 et
+            C10 = C01 = 0 implicites.
+
+    Returns:
+        Les moments bruts (15,) dans l'ordre MOMENT_NAMES.
+    """
     out = np.empty(15)
     for k, (p, q) in enumerate(MOMENT_PQ):
         acc = 0.0
@@ -105,6 +124,15 @@ def cs4_to_m4(m00, u, v, C) -> np.ndarray:
 
 
 def p2p2_2d(a03, a04, a11, a12, a13, a21, a22, a30, a31, a40) -> np.ndarray:
+    """Matrice de realisabilite 3x3 (transcription litterale de p2p2_2D.m).
+
+    Args:
+        a03, a04, a11, a12, a13, a21, a22, a30, a31, a40: Moments
+            standardises d'ordre 3 et 4.
+
+    Returns:
+        La matrice de realisabilite 3x3 (reshape column-major, ordre MATLAB).
+    """
     t2 = a03 * a12
     t3 = a03 * a21
     t4 = a12 * a21
@@ -165,6 +193,21 @@ def p2p2_2d(a03, a04, a11, a12, a13, a21, a22, a30, a31, a40) -> np.ndarray:
 def collision15_anisotropic(
     s03, s04, s11, s12, s13, s21, s22, s30, s31, s40, lamin
 ) -> np.ndarray:
+    """Relaxe les moments standardises vers une cible realisable.
+
+    Port de collision15_anisotropic.m. Cible Z1 = u+v et Z2 = u-v
+    independants, declenchee quand la plus petite valeur propre de p2p2
+    tombe sous lamin ; sinon les entrees sont renvoyees inchangees.
+
+    Args:
+        s03, s04, s11, s12, s13, s21, s22, s30, s31, s40: Moments
+            standardises d'ordre 3 et 4.
+        lamin: Seuil de valeur propre p2p2 sous lequel on relaxe.
+
+    Returns:
+        Les 10 moments standardises (s03, s04, s11, s12, s13, s21, s22,
+        s30, s31, s40), projetes ou identiques a l'entree.
+    """
     small = 1.0e-6
     S = np.array([s03, s04, s11, s12, s13, s21, s22, s30, s31, s40])
 
@@ -299,11 +342,20 @@ def collision15_anisotropic(
 
 
 def relax15(M4, lamin, Ma, corner_eigs=None) -> np.ndarray:
-    """relaxation15.m : M4 (15,) ordre MOMENT_NAMES -> moments realisables hyperboliques.
+    """Projection par cellule -> moments realisables hyperboliques (relaxation15.m).
 
-    @p corner_eigs : callable (s_dict) -> (lamx, lamy) valeurs propres (complexes) des blocs
-    d'ordre 3 du jacobien de flux a l'etat STANDARDISE (None = construit a la demande via le
-    modele DSL, lent ; les drivers passent une version vectorisee)."""
+    Args:
+        M4: Moments bruts (15,) dans l'ordre MOMENT_NAMES.
+        lamin: Seuil minimal de valeur propre p2p2 declenchant la relaxation.
+        Ma: Nombre de Mach (borne le clamp |s30| <= 4 + Ma/2).
+        corner_eigs: callable (s_dict) -> (lamx, lamy) renvoyant les valeurs
+            propres (complexes) des blocs d'ordre 3 du jacobien de flux a
+            l'etat STANDARDISE. None = construit a la demande via le modele
+            DSL (lent) ; les drivers passent une version vectorisee.
+
+    Returns:
+        Les moments bruts realisables (15,) dans l'ordre MOMENT_NAMES.
+    """
     M4 = np.asarray(M4, dtype=float)
     m00 = M4[0]
     u = M4[1] / m00
@@ -461,10 +513,18 @@ def _standardized_state(sd) -> np.ndarray:
 
 
 def make_corner_eigs():
-    """Callable (s_dict) -> (lamx, lamy) : valeurs propres des blocs d'ordre 3 du jacobien de
-    flux AUTODIFF (m.flux_jacobian : matrice d'Expr, primitives developpees -- la meme matrice
-    que jacobian15.m a l'arrondi pres). Les 2 x 9 expressions de coin sont extraites UNE fois,
-    evaluees par Expr.eval(env) (numpy/floats) par appel."""
+    """Construit le callable des valeurs propres de coin du jacobien.
+
+    Le callable renvoye, ``(s_dict) -> (lamx, lamy)``, donne les valeurs
+    propres des blocs d'ordre 3 du jacobien de flux AUTODIFF
+    (m.flux_jacobian : matrice d'Expr, primitives developpees -- la meme
+    matrice que jacobian15.m a l'arrondi pres). Les 2 x 9 expressions de
+    coin sont extraites UNE fois, puis evaluees par Expr.eval(env)
+    (numpy/floats) a chaque appel.
+
+    Returns:
+        Le callable (s_dict) -> (lamx, lamy) decrit ci-dessus.
+    """
     if "fn" in _CORNER_CACHE:
         return _CORNER_CACHE["fn"]
     from model import build_moment_model
@@ -500,8 +560,21 @@ def make_corner_eigs():
 
 
 def relax_field(U, lamin, Ma, corner_eigs=None) -> np.ndarray:
-    """Projette un champ (15, ny, nx) cellule par cellule (l'application par pas du MATLAB,
-    main_pb_2Dcrossing flagrelax = 1)."""
+    """Projette un champ (15, ny, nx) cellule par cellule.
+
+    Reproduit l'application par pas du MATLAB (main_pb_2Dcrossing,
+    flagrelax = 1).
+
+    Args:
+        U: Champ de moments (15, ny, nx).
+        lamin: Seuil minimal de valeur propre p2p2 declenchant la relaxation.
+        Ma: Nombre de Mach (borne le clamp des moments standardises).
+        corner_eigs: Callable des valeurs propres de coin (cf. relax15) ;
+            None = construit une fois ici via make_corner_eigs.
+
+    Returns:
+        Une copie du champ avec chaque cellule projetee, meme forme que U.
+    """
     fn = corner_eigs if corner_eigs is not None else make_corner_eigs()
     out = np.array(U, dtype=float, copy=True)
     ny, nx = out.shape[1], out.shape[2]

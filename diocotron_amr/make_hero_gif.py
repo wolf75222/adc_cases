@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""GIF hero de l'instabilite diocotron suivie par AMR : reproduit le type de la figure hero du
-README adc_cpp (`docs/anim_romeo_diocotron_amr3.gif`), avec les patchs fins du solveur.
+"""GIF hero de l'instabilite diocotron suivie par AMR.
+
+Reproduit le type de la figure hero du README adc_cpp
+(`docs/anim_romeo_diocotron_amr3.gif`), avec les patchs fins du solveur.
 
 ce que montre la figure : un seul panneau, bande de charge horizontale perturbee au mode l=2, qui
 s'enroule en oeil-de-chat (Kelvin-Helmholtz du diocotron), suivie par les cadres de raffinement AMR
@@ -78,8 +80,14 @@ def build_amr(ne: np.ndarray, n_i0: float) -> adc.AmrSystem:
 def patch_rects_by_level(
     sim: adc.AmrSystem,
 ) -> list[tuple[int, float, float, float, float]]:
-    """Renvoie une liste de (level, x0, y0, w, h) : les patchs fins, niveau + rectangle physique.
-    Lit patch_boxes() (level + coins index) et convertit en [0, L]^2 (dx = L / (n << level)).
+    """Convertit les patchs fins du solveur en rectangles physiques par niveau.
+
+    Lit patch_boxes() (niveau + coins en index) et convertit en [0, L]^2
+    avec dx = L / (n << level).
+
+    Returns:
+        Liste de (level, x0, y0, w, h) : un tuple par patch fin, ou (x0, y0)
+        est le coin bas-gauche et (w, h) la taille physique du rectangle.
     """
     n = sim.nx()
     out = []
@@ -121,6 +129,7 @@ def draw_panel(ax, ne: np.ndarray, vmax: float, rects, Rectangle):
 
 
 def git_sha(path: str) -> str:
+    """Renvoie le SHA HEAD du depot a `path`, ou "unknown" si git echoue."""
     try:
         return subprocess.check_output(
             ["git", "-C", path, "rev-parse", "HEAD"],
@@ -132,6 +141,7 @@ def git_sha(path: str) -> str:
 
 
 def main() -> None:
+    """Integre le run AMR, ecrit le GIF hero, le cover PNG et provenance.json."""
     os.makedirs(FIGDIR, exist_ok=True)
     import matplotlib
 

@@ -158,6 +158,22 @@ class TwoFluidAP:
         omega_ce: float = 0.0,
         omega_ci: float = 0.0,
     ):
+        """Cree le solveur C++ (grille n x n) et garde son handle opaque.
+
+        Args:
+            lib: bibliotheque ctypes deja liee (cf. _bind).
+            n: cote de la grille carree n x n.
+            L: longueur du domaine carre periodique.
+            cse2, csi2: vitesses du son au carre des electrons et des ions.
+            omega_pe, omega_pi: frequences plasma (echelle de temps raide).
+            stabilize: active le traitement AP-IMEX du terme raide.
+            eps: regularisation de l'elliptique.
+            upwind_continuity: decentre amont le transport de continuite.
+            omega_ce, omega_ci: frequences cyclotron (rotation magnetique).
+
+        Raises:
+            RuntimeError: si la creation du solveur C++ echoue.
+        """
         self._lib = lib
         self._h = lib.tfap_create(
             n,

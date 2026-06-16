@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Native relaxation15 projector validation (ADC-275): compiled m.projection vs the relax15 oracle.
+"""Native relaxation15 projector validation: compiled m.projection vs oracle.
 
-The native projector (model.py::build_projection, emitted via m.projection / ADC-177) is the
+ADC-275. The native projector (model.py::build_projection, emitted via
+m.projection / ADC-177) is the
 production path; relaxation.py stays the reference oracle. This script compiles the generated
 projection brick (project(U, aux), via emit_cpp_brick + a tiny C++ main) and checks the acceptance
 criteria of the issue against the relax goldens and the Python oracle. It needs only a C++ compiler
@@ -54,6 +55,7 @@ def chk(cond: bool, label: str, detail: str = "") -> None:
 
 
 def _p2p2_lammin(m4: np.ndarray) -> float:
+    """Smallest eigenvalue of p2p2 for a moment vector (realizability gauge)."""
     _, s = R.m2cs4(m4)
     p2 = R.p2p2_2d(
         s[(0, 3)],

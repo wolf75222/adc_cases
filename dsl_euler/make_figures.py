@@ -52,6 +52,13 @@ def make_euler() -> dsl.HyperbolicModel:
 
 
 def main() -> None:
+    """Re-joue le cas, trace deux figures et ecrit un provenance.json.
+
+    Avance les memes 120 pas que run.py en instrumentant a chaque pas la
+    pression au centre et l'amplitude max|p - p_init|. Produit sous figures/ :
+    la carte finale densite/pression, la courbe de relaxation de la bulle et un
+    provenance.json recapitulant le contexte et les diagnostics mesures.
+    """
     euler = make_euler()
     n, L = 64, 1.0
     h = L / n

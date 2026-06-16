@@ -29,8 +29,19 @@ def two_fluid(
 ) -> adc.System:
     """Electrons (Euler) + ions (isothermes) couples par un Poisson de systeme.
 
-    Le couplage est f = q_e n_e + q_i n_i. Configure `sim` (deux blocs + Poisson
-    + densites) et le renvoie.
+    Le couplage est f = q_e n_e + q_i n_i.
+
+    Args:
+        sim: Systeme `adc` a configurer (modifie en place).
+        ne: Densite initiale des electrons.
+        ni: Densite initiale des ions.
+        qe: Charge des electrons.
+        qi: Charge des ions.
+        gamma: Indice adiabatique des electrons (Euler compressible).
+        cs2: Vitesse du son au carre des ions (isothermes).
+
+    Returns:
+        Le `sim` configure (deux blocs + Poisson + densites).
     """
     sim.add_block(
         "electrons",
@@ -63,8 +74,23 @@ def plasma(
     """Plasma a trois especes : electrons (Euler, HLLC + recon primitive), ions, neutres.
 
     Ions et neutres sont isothermes. Couplage par Poisson (f = q_e n_e + q_i n_i)
-    + ionisation (n_g -> n_i + n_e) + collision ion-neutre. Configure `sim`
-    entierement (blocs + couplages + densites) et le renvoie.
+    + ionisation (n_g -> n_i + n_e) + collision ion-neutre. L'ionisation et la
+    collision ne sont cablees que si leur taux est non nul.
+
+    Args:
+        sim: Systeme `adc` a configurer (modifie en place).
+        ne: Densite initiale des electrons.
+        ni: Densite initiale des ions.
+        ng: Densite initiale des neutres.
+        qe: Charge des electrons.
+        qi: Charge des ions.
+        gamma: Indice adiabatique des electrons (Euler compressible).
+        cs2: Vitesse du son au carre des ions et neutres (isothermes).
+        ionization_rate: Taux d'ionisation n_g -> n_i + n_e (0 = desactive).
+        collision_rate: Taux de collision ion-neutre (0 = desactive).
+
+    Returns:
+        Le `sim` configure (blocs + couplages + densites).
     """
     sim.add_block(
         "electrons",

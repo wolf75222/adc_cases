@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Cas "hyqmom15/run_waves" : vitesses d'onde HLL EXACTES du modele 15 moments, validees contre
-le chemin de production du MATLAB de reference (eigenvalues15_2D.m, flagsym = 1).
+"""Vitesses d'onde HLL exactes du modele 15 moments vs eigenvalues15_2D.m.
+
+Validees contre le chemin de production du MATLAB de reference
+(eigenvalues15_2D.m, flagsym = 1).
 
 Pourquoi ce cas
 ---------------

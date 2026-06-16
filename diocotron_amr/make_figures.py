@@ -54,6 +54,7 @@ CFL = 0.4
 
 
 def build_amr(ne: np.ndarray, n_i0: float, threshold: float) -> adc.AmrSystem:
+    """Meme bloc diocotron, meme schema, meme Poisson, sur hierarchie AMR raffinee."""
     sim = adc.AmrSystem(n=N, L=L, regrid_every=10, periodic=True)
     sim.add_block(
         "ne",
@@ -80,6 +81,7 @@ def build_uniform(ne: np.ndarray, n_i0: float) -> adc.System:
 
 
 def main() -> None:
+    """Joue les runs AMR et uniforme, ecrit les 3 figures et provenance.json."""
     ne = band_density(N, L, amp=1.0, width=0.05, mode=MODE, disp=0.02)
     n_i0 = float(ne.mean())
     threshold = n_i0 + REFINE_FRAC
@@ -237,6 +239,7 @@ def main() -> None:
 
     # ============ provenance.json ============
     def sha(repo: str) -> str:
+        """Renvoie le SHA HEAD du depot, ou "unknown" si git echoue."""
         try:
             return (
                 subprocess.check_output(

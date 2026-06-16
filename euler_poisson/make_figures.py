@@ -53,7 +53,12 @@ os.makedirs(FIGDIR, exist_ok=True)
 
 
 def make_sim(sign: float) -> adc.System:
-    """Construit le meme systeme Euler-Poisson que run.py:93-99 (un bloc, Poisson de systeme)."""
+    """Construit le systeme Euler-Poisson de reference (cf. run.py:93-99).
+
+    Un seul bloc "gas" (modele euler_poisson) avec Poisson de systeme
+    (geometric_mg). Le parametre `sign` fixe le signe du couplage : +1
+    pour la gravite (attractif), -1 pour le plasma (repulsif).
+    """
     sim = adc.System(n=N, L=L, periodic=True)
     sim.add_block(
         "gas",
@@ -68,7 +73,10 @@ def make_sim(sign: float) -> adc.System:
 
 
 def initial_density(eps: float) -> np.ndarray:
-    """CI de run.py:75-79, parametree par eps : rho = rho0 (1 + eps cos(2 pi x / L))."""
+    """Condition initiale de densite parametree par eps (cf. run.py:75-79).
+
+    Renvoie rho = rho0 (1 + eps cos(2 pi x / L)), constante en y.
+    """
     x = (np.arange(N) + 0.5) * L / N
     xx, _ = np.meshgrid(x, x, indexing="ij")
     return RHO0 * (1.0 + eps * np.cos(2.0 * np.pi * xx / L))
@@ -77,7 +85,12 @@ def initial_density(eps: float) -> np.ndarray:
 def run_energy_trace(
     sign: float, eps: float = EPS_REF
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Avance NSTEPS pas et renvoie (t, E_tot) a chaque pas. E_tot = U[3].sum() (energie fluide)."""
+    """Avance NSTEPS pas et trace l'energie fluide a chaque pas.
+
+    Returns:
+        Couple (t, E_tot) ou chaque entree couvre l'etat initial puis les
+        NSTEPS pas. E_tot = U[3].sum() est l'energie fluide totale.
+    """
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
     ts = [0.0]
@@ -210,7 +223,14 @@ plt.close(fig)
 # Figure 3 : carte 2D de densite finale (gravite vs plasma)
 # --------------------------------------------------------------------------- #
 def run_conservation(sign: float, eps: float = EPS_REF) -> tuple[float, float]:
-    """max derive relative de masse et max |p| sur les NSTEPS pas (memes diagnostics que run.py)."""
+    """Mesure les invariants de conservation sur les NSTEPS pas.
+
+    Memes diagnostics que run.py.
+
+    Returns:
+        Couple (max_rel_mass, max_mom) : la plus grande derive relative de
+        masse et la plus grande impulsion |p| rencontrees sur le run.
+    """
     sim = make_sim(sign)
     sim.set_density("gas", initial_density(eps))
     mass0 = float(sim.mass("gas"))

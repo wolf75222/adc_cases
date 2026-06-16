@@ -1,4 +1,4 @@
-"""Le CAS SUR de la campagne de perf : Euler compressible PUR, periodique, bulle de pression lisse.
+"""Cas SUR de la perf : Euler compressible pur, periodique, bulle lisse.
 
 UNIQUE source de verite Python du cas sur (constantes, dt, CI, modeles briques & DSL). Importe par
 `perf/frontend_compare.py` (mesure 3 fronts) ET `safe_euler_periodic/run.py` (validation/CI). Le
@@ -34,7 +34,7 @@ WORKLOAD = "euler_safe"
 
 
 def dt(n: int) -> float:
-    """dt FIXE deterministe : cfl * (L/n) / wmax, wmax = vitesse du son au pic (v=0).
+    """dt FIXE deterministe : cfl * (L/n) / wmax, wmax = son au pic (v=0).
 
     Fixe (pas d'adaptatif CFL) pour que les trois fronts integrent EXACTEMENT le
     meme dt -> pas de boucle de retroaction dt qui briserait l'identite numerique.
@@ -44,7 +44,7 @@ def dt(n: int) -> float:
 
 
 def ic(n: int):
-    """Etat conservatif initial (4, n, n) : reutilise euler_pressure_blob (rho=RHO0, v=0, bulle p)."""
+    """Etat conservatif initial (4, n, n) via euler_pressure_blob (v=0)."""
     from .initial_conditions import euler_pressure_blob
 
     return euler_pressure_blob(
@@ -98,12 +98,12 @@ def spatial_bricks():
 
 
 def spatial_dsl():
-    """Schema spatial du DSL (FiniteVolume -> meme Spatial minmod / rusanov / conservative)."""
+    """Schema spatial du DSL : meme minmod / rusanov / conservative."""
     import adc
 
     return adc.FiniteVolume(limiter=LIMITER, riemann=FLUX, variables=RECON)
 
 
 def pressure(U):
-    """Pression d'un etat conservatif (4, n, n) : (gamma-1)(E - 1/2 (mx^2+my^2)/rho)."""
+    """Pression d'un etat conservatif : (gamma-1)(E - 1/2 (mx^2+my^2)/rho)."""
     return (GAMMA - 1.0) * (U[3] - 0.5 * (U[1] ** 2 + U[2] ** 2) / U[0])

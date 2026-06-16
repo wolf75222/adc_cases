@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Cas "magnetic_isothermal_dsl" : un fluide isotherme magnetise ecrit entierement en formules
-(adc.dsl.Model), avec force de Lorentz q rho E + (v x B) pilotee par un champ B_z constant.
+"""Fluide isotherme magnetise ecrit entierement en formules (adc.dsl.Model).
+
+Force de Lorentz q rho E + (v x B) pilotee par un champ B_z constant.
 
 Pourquoi ce cas
 ---------------
