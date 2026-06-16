@@ -220,17 +220,23 @@ def crossing_state(n, ma, rho_in=1.0, rho_out=1e-3, T=1.0, r=0.0):
     """Condition initiale du croisement de jets (main_pb_2Dcrossing_2DHyQMOM15.m) : fond au
     repos a basse densite @p rho_out sur [-0.5, 0.5]^2, carre central [3n/8, 5n/8) coupe par
     l'anti-diagonale -- jets gaussiens (+Uc, +Uc) sous la diagonale, (-Uc, -Uc) au-dessus,
-    repos sur la diagonale exacte, Uc = ma / sqrt(2). @p r : correlation initiale (0 dans le
-    driver de reference). Pour r != 0 : verifie sous Octave (audit ADC-274) que MATLAB encode
-    la correlation via C11 = r*sqrt(C20*C02) puis reconstruit par S4toC4, ce qui donne les 15
-    memes moments que gaussian_state a ~1e-15 ; le NotImplementedError ci-dessous reste tant
-    que le test de parite ADC-274 n'a pas leve la garde (ce module ne porte que r = 0 valide).
+    repos sur la diagonale exacte, Uc = ma / sqrt(2).
+
+    @p r : coefficient de correlation initial de la gaussienne jointe (-1 < r < 1 ; |r| = 1
+    rend la covariance singuliere). La covariance vaut [[C20, C11], [C11, C02]] avec
+    C20 = C02 = T et C11 = r*sqrt(C20*C02) = r*T (meme convention que le driver MATLAB, qui
+    pose C11 = r*sqrt(C20*C02) avant InitializeM4_15). Les 15 moments produits par
+    gaussian_state (formule d'Isserlis) sont IDENTIQUES a InitializeM4_15 a l'arrondi pres
+    (~1e-12) pour tout r dans le domaine : InitializeM4_15 part des moments standardises
+    S22 = 1, S31 = S13 = 0 dans la base PRINCIPALE (decorrelee) puis S4toC4 reintroduit la
+    correlation par une rotation dependant de C11 -- la gaussienne correlee exacte, pas une
+    approximation (parite verifiee par golden_crossing_gen.m / golden/golden_crossing.csv).
     @return tableau (15, n, n), axe x en dernier (convention des cas adc)."""
-    if r != 0.0:
-        raise NotImplementedError("crossing_state : r != 0 non porte (garde levee par ADC-274 "
-                                  "apres test de parite ; MATLAB == gaussian_state via C11)")
+    if not -1.0 < r < 1.0:
+        raise ValueError("crossing_state : r doit verifier -1 < r < 1 (covariance definie "
+                         "positive) ; recu r = %r" % (r,))
     uc = ma / np.sqrt(2.0)
-    c11 = r * T
+    c11 = r * T                                              # = r*sqrt(C20*C02) avec C20=C02=T
     m_out = gaussian_state(rho_out, 0.0, 0.0, T, c11, T)     # fond au repos
     m_mid = gaussian_state(rho_in, 0.0, 0.0, T, c11, T)      # anti-diagonale au repos
     m_top = gaussian_state(rho_in, -uc, -uc, T, c11, T)      # au-dessus : jet (-Uc, -Uc)

@@ -32,6 +32,10 @@ Validation (trois oracles independants du pipeline DSL)
       les gaussiennes s'etendent EXACTEMENT a u +- sqrt(6)*sqrt(C) (couvertes par k = 3) et au
       moins un melange asymetrique DEPASSE k*sqrt(C) -- le danger de la borne bring-up est
       DEMONTRE, pas seulement documente.
+  (7) parite des conditions initiales correlees : gaussian_state == InitializeM4_15.m (golden
+      golden_crossing.csv, Octave sur RIEMOM2D) pour r = 0, 0.5, -0.5 et un etat anisotrope
+      C20 != C02 -- rtol 1e-12 ; plus un controle des zones de crossing_state (fond, anti-
+      diagonale, jets haut/bas) qui valide aussi que r != 0 ne leve plus d'exception.
 
 Ne prouve pas : la stabilite d'une evolution temporelle (drivers = ), les vitesses
 d'onde exactes pour HLL,
@@ -48,7 +52,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from model import (GAUSSIAN_PARAMS, K_SPEED, MOMENT_NAMES, IDX,  # noqa: E402
-                   build_moment_model, gaussian_raw_moment, gaussian_state, mixture_state)
+                   build_moment_model, crossing_state, gaussian_raw_moment, gaussian_state,
+                   mixture_state)
 
 # Paquet partage adc_cases : installe (voie nominale, CI), sinon depot mis sur le chemin d'import.
 try:
@@ -279,6 +284,73 @@ def check_speed_bound(m, states, vp):
           "chemin production = jacobienne exacte -- OK" % (K_SPEED, len(over), worst))
 
 
+def check_crossing_ic_parity():
+    """(7a) parite des conditions initiales correlees : pour chaque ligne du golden
+    golden_crossing.csv (parametres M00, u, v, C20, C11, C02 + 15 moments produits par
+    InitializeM4_15.m, Octave sur RIEMOM2D), gaussian_state(formule d'Isserlis) reproduit les
+    15 moments. Le golden couvre r = 0, r = 0.5, r = -0.5 (isotrope C20 = C02 = 1, au repos
+    puis jets du croisement Ma = 20) et un etat anisotrope C20 != C02 ; voir golden_crossing_gen.m.
+    Tolerance d'echelle (rtol 1e-12 + atol proportionnel a l'amplitude des moments) : pour les
+    jets a Ma = 20 les moments d'ordre 4 valent ~ 4e4, donc l'ecart absolu ~ 7e-12 est a 1e-16
+    pres en relatif -- l'arrondi, pas une divergence de modele."""
+    g = os.path.join(HERE, "golden", "golden_crossing.csv")
+    data = np.loadtxt(g, delimiter=",")
+    n_states = 0
+    for row in data:
+        m00, u, v, c20, c11, c02 = row[:6]
+        gold = row[6:]
+        ours = gaussian_state(m00, u, v, c20, c11, c02)
+        scale = np.max(np.abs(gold))
+        r = c11 / np.sqrt(c20 * c02)
+        np.testing.assert_allclose(
+            ours, gold, rtol=1e-12, atol=1e-12 * scale,
+            err_msg="parite IC : gaussian_state != InitializeM4_15 (r = %.2f, C20 = %.2f, "
+                    "C02 = %.2f)" % (r, c20, c02))
+        n_states += 1
+    print("(7a) parite IC correlees : gaussian_state == InitializeM4_15 sur %d etats "
+          "(r = 0, +/-0.5, anisotrope) -- rtol 1e-12 -- OK" % n_states)
+
+
+def check_crossing_zones():
+    """(7b) zones de crossing_state : pour r = 0 et r = 0.5 (ne leve plus d'exception), la
+    grille (15, n, n) doit valoir exactement gaussian_state dans chaque zone :
+    - fond hors du carre central [3n/8, 5n/8) : densite rho_out, repos ;
+    - anti-diagonale i + j == n - 1 dans le carre : densite rho_in, repos ;
+    - au-dessus de l'anti-diagonale (i + j > n - 1) : jet (-Uc, -Uc) ;
+    - en dessous (i + j < n - 1) : jet (+Uc, +Uc), Uc = ma / sqrt(2).
+    Hors domaine (|r| >= 1, covariance non definie positive) doit lever ValueError."""
+    n, ma = 32, 20.0
+    rho_in, rho_out, T = 1.0, 1e-3, 1.0
+    uc = ma / np.sqrt(2.0)
+    for r in (0.0, 0.5):
+        c11 = r * T
+        U = crossing_state(n, ma, rho_in=rho_in, rho_out=rho_out, T=T, r=r)
+        assert U.shape == (15, n, n), "crossing_state : forme %r (attendu (15, %d, %d))" % (U.shape, n, n)
+        m_out = gaussian_state(rho_out, 0.0, 0.0, T, c11, T)
+        m_mid = gaussian_state(rho_in, 0.0, 0.0, T, c11, T)
+        m_top = gaussian_state(rho_in, -uc, -uc, T, c11, T)
+        m_bot = gaussian_state(rho_in, uc, uc, T, c11, T)
+        lo, hi = 3 * n // 8, 5 * n // 8
+        # un point representatif par zone (bornes 0-based [lo, hi))
+        assert np.array_equal(U[:, 0, 0], m_out), "zone fond (r = %.1f)" % r
+        # anti-diagonale : i + j == n - 1 dans le carre central
+        jmid = lo
+        imid = n - 1 - jmid
+        assert lo <= imid < hi, "point anti-diagonale hors carre (n = %d)" % n
+        assert np.array_equal(U[:, jmid, imid], m_mid), "zone anti-diagonale (r = %.1f)" % r
+        assert np.array_equal(U[:, hi - 1, hi - 1], m_top), "zone jet haut (r = %.1f)" % r
+        assert np.array_equal(U[:, lo, lo], m_bot), "zone jet bas (r = %.1f)" % r
+    bad = 0
+    for r in (1.0, -1.0, 1.5, -2.0):
+        try:
+            crossing_state(n, ma, r=r)
+        except ValueError:
+            bad += 1
+    assert bad == 4, "crossing_state : |r| >= 1 doit lever ValueError (%d/4 leves)" % bad
+    print("(7b) zones crossing_state (fond / anti-diagonale / jets) r = 0 et r = 0.5 exactes, "
+          "|r| >= 1 rejete -- OK")
+
+
 def main():
     print("=== hyqmom15 : modele 15 moments HyQMOM en formules, flux valide vs RIEMOM2D ===")
     t0 = time.time()
@@ -293,6 +365,8 @@ def main():
     backends = check_compile_and_model(m, states)
     check_robust_smoke()
     check_speed_bound(m, states, gold_vp)
+    check_crossing_ic_parity()
+    check_crossing_zones()
 
     print("hyqmom15 : OK (backends compiles : %s)" % ", ".join(backends))
 
