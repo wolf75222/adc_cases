@@ -19,6 +19,7 @@ l'explosion). C'est l'observable qui distingue "borne" de "explose".
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import platform
