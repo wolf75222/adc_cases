@@ -59,9 +59,9 @@ the quantified consequence of this shear, not the starting point.
 
 This is `adc_cases.models.diocotron(B0, alpha, n_i0)`. Who computes what:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
-| `add_block("ne", model=..., spatial=Spatial(minmod), time=Explicit)` (`run.py:161`) | Python composes | choice of the model, the scheme (MUSCL minmod + Rusanov), the integrator (SSPRK2) |
+| `add_block("ne", model=..., spatial=Spatial(minmod), time=Explicit)` (`make_ring_system` in run.py) | Python composes | choice of the model, the scheme (MUSCL minmod + Rusanov), the integrator (SSPRK2) |
 | `models.diocotron(...)` -> `ExBVelocity` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | the C++ brick fixes the physics | the exact convention of the flux $n v(dir)$, of the eigenvalue $v(dir)$, of the RHS $\alpha(n-n_{i0})$ |
 | `assemble_rhs<Limiter,Flux>` + system Poisson (`GeometricMG`) | per-cell kernel | the actual computation, with no Python callback in the hot path |
 
@@ -80,7 +80,7 @@ simulation underestimates).
 
 ---
 
-## 4. Math: the analytical dispersion relation (`diocotron_eigenvalue`, `run.py:72-95`)
+## 4. Math: the analytical dispersion relation (`diocotron_eigenvalue` in run.py)
 
 ### 4.0 Where the rotation $\Omega(r)$ comes from, and where the instability comes from
 
@@ -120,15 +120,15 @@ signals an instability, and $\gamma=\mathrm{Im}(\omega)>0$ is its rate. The code
 finite differences; each symbol points to the line that computes it:
 
 ```python
-rho = 0.5 * rhobar * (np.tanh((r - a) / w) - np.tanh((r - b) / w))   # n0(r) : anneau lisse (run.py:75)
-C[1:] = np.cumsum(0.5 * (integrand[1:] + integrand[:-1]) * h)        # C(r)=int_0^r n0 r' dr' (run.py:78)
-Om[1:] = -C[1:] / (r[1:] ** 2)                                       # Omega(r)=-C/r^2 (run.py:80)
-np.fill_diagonal(Lmat, -2.0/h**2 - (m*m)/(ri*ri))                    # diagonale de L_m (run.py:84)
+rho = 0.5 * rhobar * (np.tanh((r - a) / w) - np.tanh((r - b) / w))   # n0(r) : anneau lisse
+C[1:] = np.cumsum(0.5 * (integrand[1:] + integrand[:-1]) * h)        # C(r)=int_0^r n0 r' dr'
+Om[1:] = -C[1:] / (r[1:] ** 2)                                       # Omega(r)=-C/r^2
+np.fill_diagonal(Lmat, -2.0/h**2 - (m*m)/(ri*ri))                    # diagonale de L_m
 Lmat[k, k-1] = 1/h**2 - 1/(2*h*r[k+1]); Lmat[k, k+1] = 1/h**2 + 1/(2*h*r[k+1])  # +/- = (1/r)d/dr
-Q = (m / ri) * ((rho[2:N+1] - rho[0:N-1]) / (2*h))                   # Q=(m/r) dn0/dr (run.py:89)
-M = np.linalg.solve(Lmat, (m*Om[1:N])[:,None]*Lmat + diag(Q))       # M=L^{-1}(mOmega L + Q) (run.py:90-92)
-dom = np.linalg.eigvals(M)[argmax(.imag)]                           # mode le plus instable (run.py:93-94)
-return (2*pi/rhobar) * dom                                          # normalisation papier (run.py:95)
+Q = (m / ri) * ((rho[2:N+1] - rho[0:N-1]) / (2*h))                   # Q=(m/r) dn0/dr
+M = np.linalg.solve(Lmat, (m*Om[1:N])[:,None]*Lmat + diag(Q))       # M=L^{-1}(mOmega L + Q)
+dom = np.linalg.eigvals(M)[argmax(.imag)]                           # mode le plus instable
+return (2*pi/rhobar) * dom                                          # normalisation papier
 ```
 - `Om` ($\Omega(r)$) is the equilibrium rotation: its shear $d\Omega/dr$ is the driver.
 - `Lmat` is the tridiagonal matrix of $\mathcal{L}_m$: the diagonal $-2/h^2-m^2/r^2$ comes from
@@ -143,24 +143,24 @@ rotation frequency); it is taken as given, not re-derived.
 
 ---
 
-## 5. Measurement in the simulation (`measure_growth` + `mode_l_amplitude`, `run.py:101-187`)
+## 5. Measurement in the simulation (`measure_growth` + `mode_l_amplitude` in run.py)
 
 At each step, you read $\phi$ and extract the amplitude of mode $l$ on a circle in the middle of
 the ring ($r_m=(R_0+R_1)/2$):
 
 ```python
 _, val = bilinear_on_circle(field, n, radius, 256)   # phi(theta) : 256 points, interpolation bilineaire
-ck = np.fft.rfft(val) / len(val)                     # FFT azimutale (run.py:126)
-return 2.0 * abs(ck[l])                              # 2|c_l| = amplitude du mode l (run.py:127)
+ck = np.fft.rfft(val) / len(val)                     # FFT azimutale
+return 2.0 * abs(ck[l])                              # 2|c_l| = amplitude du mode l
 ```
 - `bilinear_on_circle` interpolates $\phi$ (defined at cell centers) onto 256 points of the circle.
   The FFT then $2|c_l|$ gives the Fourier coefficient of mode $l$: in the linear phase,
   $|c_l|(t)\propto e^{\gamma t}$.
-- `fit_linear_phase` (`run.py:130`) fits the slope of $\log|c_l|$ over the purely
+- `fit_linear_phase` (in run.py) fits the slope of $\log|c_l|$ over the purely
   exponential window: after the transient ($1.3\,a_0$), before saturation ($0.85$ of the peak). The slope
   is $\gamma_{\text{raw}}$, normalized $\times 2\pi/\bar\rho$.
 
-The system (`make_ring_system`, `run.py:157-166`) is non-periodic with a Dirichlet circle wall
+The system (`make_ring_system` in run.py) is non-periodic with a Dirichlet circle wall
 (`set_poisson(..., wall="circle", wall_radius=RWALL)`): the paper's wall, imposed on the Cartesian
 grid. `Spatial(minmod=True)` = MUSCL order 2 limited by minmod (diffusive at strong gradients,
 see section 7) + Rusanov flux.

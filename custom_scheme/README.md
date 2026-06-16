@@ -14,7 +14,7 @@ solver, without reimplementing it.
 | Category (manifest) | `tutoriel` (`cases_manifest.toml`, `custom_scheme/run.py`, `ci = true`, `needs = []`) |
 | Inputs | grid $96^2$, $L=1$, periodic; IC gaussian band mode 4 `band_density(96, L, amp=1, width=0.05, mode=4, disp=0.02)` ($n=1+e^{-(y-y_0)^2/w^2}$, $y_0=0.5L+0.02\cos(8\pi x/L)$); $B_0=1$, $\alpha=1$, neutralizing background $n_{i0}=\langle n\rangle$; CFL $=0.4$, 200 SSPRK2 steps |
 | Outputs | numpy density $n$ (read/written in numpy), potential $\phi$ returned by `sim.potential()`; figures `figures/density_evolution.png`, `figures/phi_evolution.png`, `figures/diagnostics.png` + `figures/provenance.json` |
-| Guaranteed invariants | the `assert` statements in `run.py`: `assert_finite(n, ...)` at every step (`run.py:94`); `assert drel < 1e-12` (mass, `run.py:101`); `assert moved > 1e-3` (the band evolved, `run.py:102`); `assert |phi|_max > 1e-8` (Poisson active, `run.py:83`) |
+| Guaranteed invariants | the `assert` statements in `main` (in run.py): `assert_finite(n, ...)` at every step; `assert drel < 1e-12` (mass); `assert moved > 1e-3` (the band evolved); `assert |phi|_max > 1e-8` (Poisson active) |
 | Proves | (1) the numpy scheme conserves mass to $2.040\times10^{-16}$ relative over 200 steps (flux-form upwind, periodic domain); (2) the Poisson coupling is active: `adc` returns $\|phi\|_\infty=6.12\times10^{-3}\neq0$; (3) the dynamics is nontrivial: $\max|n-n_0|=3.28\times10^{-1}$ |
 | Does not prove | demonstrates an API capability, validates no published physical result. The homemade scheme (first-order upwind + centered differences for $\nabla\phi$) is not the validated scheme of the [`diocotron`](../diocotron/) case (MUSCL minmod + Rusanov): it is more diffusive and no growth rate is measured or compared. No assert tests the physics (no $\gamma_l$, no analytic oracle). Conservation and finiteness are properties of the scheme, not a reproduction. The IC is a band (mode 4), not the benchmark's ring: it shears but does not develop the paper's annular instability |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, native serial backend (Poisson `geometric_mg`), $96^2$, ~1.2 s on 1 CPU core; `figures/provenance.json` |
@@ -48,15 +48,15 @@ In the other brick cases, the middle layer is a frozen C++ transport brick
 (`ExBVelocity`, `CompressibleFlux`). Here the transport layer moves up to the Python side: `adc`
 now occupies only the elliptic layer. The table reflects this shift.
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
-| `drift(...)` + `divergence_upwind(...)` + SSPRK2 loop (`run.py:34-50`, `run.py:88-93`) | Python computes the transport | $\nabla\phi$ reconstruction (centered differences), ExB velocity, conservative upwind flux, SSPRK2 integrator. The whole advection hot path is in numpy |
-| `poisson_oracle` -> `set_density` + `solve_fields` + `potential` (`run.py:53-57`) | adc = Poisson oracle (the only call to the library) | the library solves $\nabla^2\phi=\alpha(n-n_{i0})$ and returns $\phi$. A `models.diocotron` block is added solely to provide the elliptic right-hand side `BackgroundDensity` |
-| `assemble`... not used; only the system Poisson (`GeometricMG`) runs (`run.py:78` `solver="geometric_mg"`) | per-cell kernel (device) | the Poisson multigrid. The core ExB flux (`ExBVelocity::flux`) is never called: the transport does not go through the library |
+| `drift(...)` + `divergence_upwind(...)` + SSPRK2 loop (in `main`, in run.py) | Python computes the transport | $\nabla\phi$ reconstruction (centered differences), ExB velocity, conservative upwind flux, SSPRK2 integrator. The whole advection hot path is in numpy |
+| `poisson_oracle` -> `set_density` + `solve_fields` + `potential` (in run.py) | adc = Poisson oracle (the only call to the library) | the library solves $\nabla^2\phi=\alpha(n-n_{i0})$ and returns $\phi$. A `models.diocotron` block is added solely to provide the elliptic right-hand side `BackgroundDensity` |
+| `assemble`... not used; only the system Poisson (`GeometricMG`) runs (`solver="geometric_mg"` in run.py) | per-cell kernel (device) | the Poisson multigrid. The core ExB flux (`ExBVelocity::flux`) is never called: the transport does not go through the library |
 
-The `models.diocotron` brick is added (`run.py:77`) so that `adc.System` has an elliptic
+The `models.diocotron` brick is added (in `main`, in run.py) so that `adc.System` has an elliptic
 right-hand side to assemble; its transport part (`adc.ExB`, i.e. `ExBVelocity` in
-`include/adc/physics/hyperbolic.hpp:27`) stays inert because `run.py` never calls
+hyperbolic.hpp) stays inert because `run.py` never calls
 `advance`/`step`: it asks only for `solve_fields`. The rest of the composition (`adc.Scalar`,
 `adc.NoSource`) is present but not exercised in the loop.
 
@@ -65,47 +65,47 @@ right-hand side to assemble; its transport part (`adc.ExB`, i.e. `ExBVelocity` i
 ## 3. The scheme, function by function (justifies: real anchoring)
 
 `run.py` reads top to bottom. We gloss the load-bearing functions; the plumbing (import,
-`sys.path` fallback, `run.py:23-31`) is linked, not paraphrased.
+`sys.path` fallback, in run.py) is linked, not paraphrased.
 
-### 3.1 The boundary: `poisson_oracle` (`run.py:53-57`), the only call to the library
+### 3.1 The boundary: `poisson_oracle` (in run.py), the only call to the library
 
 ```python
 def poisson_oracle(sim, n):
-    sim.set_density("ne", n)        # ecrit la densite numpy dans le bloc adc (run.py:55)
-    sim.solve_fields()              # adc resout lap phi = alpha (n - n_i0) (run.py:56)
-    return sim.potential()          # rend phi (n, n) au format numpy (run.py:57)
+    sim.set_density("ne", n)        # ecrit la densite numpy dans le bloc adc
+    sim.solve_fields()              # adc resout lap phi = alpha (n - n_i0)
+    return sim.potential()          # rend phi (n, n) au format numpy
 ```
 - `set_density("ne", n)` copies the numpy array $n$ into the single block of the `System`.
   `solve_fields` triggers the system Poisson multigrid (right-hand side = sum of the elliptic
-  bricks, here the single `BackgroundDensity(alpha=1, n0=n_i0)` frozen in `elliptic.hpp:31-37`:
+  bricks, here the single `BackgroundDensity(alpha=1, n0=n_i0)` frozen in `BackgroundDensity` (in elliptic.hpp):
   `alpha*(u[0]-n0)`). `potential()` reads $\phi$ and returns it in numpy. These three lines are
   the entire contact with `adc`: everything that follows is pure numpy. (`set_density`,
   `solve_fields`, `potential` are methods of the compiled facade, exposed via
-  `System.__getattr__`, `adc/__init__.py:1116-1117`.)
+  `System.__getattr__` in `adc/__init__.py`.)
 
-### 3.2 The ExB velocity: `drift` (`run.py:34-38`)
+### 3.2 The ExB velocity: `drift` (in run.py)
 
 ```python
 def drift(phi, dx, B0):
     dphidx = (np.roll(phi, -1, axis=1) - np.roll(phi, 1, axis=1)) / (2 * dx)   # d phi/dx centre
     dphidy = (np.roll(phi, -1, axis=0) - np.roll(phi, 1, axis=0)) / (2 * dx)   # d phi/dy centre
-    return -dphidy / B0, dphidx / B0   # (vx, vy) = (-d_y phi, d_x phi)/B0 (run.py:38)
+    return -dphidy / B0, dphidx / B0   # (vx, vy) = (-d_y phi, d_x phi)/B0
 ```
 - Reconstruction of $\nabla\phi$ by periodic centered differences (`np.roll` closes the domain).
   The grid convention is `phi[j, i]` (see `adc_cases/common/grid.py`): `axis=1` = column = $x$,
   `axis=0` = row = $y$. The ExB velocity $\mathbf{v}=(-\partial_y\phi,\partial_x\phi)/B_0$
   reproduces in numpy exactly the formula frozen by `ExBVelocity::velocity`
-  (`hyperbolic.hpp:31-33`: `(dir==0) ? -grad_y/B0 : grad_x/B0`). This velocity is
+  (in hyperbolic.hpp: `(dir==0) ? -grad_y/B0 : grad_x/B0`). This velocity is
   divergence-free (it is the curl of $\phi$), which makes the transport conservative.
 
-### 3.3 The conservative upwind flux: `divergence_upwind` (`run.py:41-50`)
+### 3.3 The conservative upwind flux: `divergence_upwind` (in run.py)
 
 ```python
 vxr = 0.5 * (vx + np.roll(vx, -1, axis=1))                    # vitesse a l'interface i+1/2
-fxr = np.where(vxr > 0, n, np.roll(n, -1, axis=1)) * vxr      # flux upwind en i+1/2 (run.py:45)
+fxr = np.where(vxr > 0, n, np.roll(n, -1, axis=1)) * vxr      # flux upwind en i+1/2
 fxl = np.roll(fxr, 1, axis=1)                                 # flux en i-1/2 = decalage de fxr
 ...
-return -((fxr - fxl) + (fyr - fyl)) / dx                      # -div(n v) (run.py:50)
+return -((fxr - fxl) + (fyr - fyl)) / dx                      # -div(n v)
 ```
 - Flux form: you compute the flux $f_{i+1/2}=n^{\text{upwind}}\,v_{i+1/2}$ at each interface, and
   the divergence is the difference of incoming/outgoing flux. `np.where(vxr>0, n, roll(n,-1))`
@@ -115,11 +115,11 @@ return -((fxr - fxl) + (fyr - fyl)) / dx                      # -div(n v) (run.p
   entering its neighbor: the sum of all divergences telescopes to zero on a periodic domain. This
   is what yields conservation to machine precision (section 4).
 
-### 3.4 The residual and the integrator: `rhs` + SSPRK2 loop (`run.py:60-65`, `run.py:88-93`)
+### 3.4 The residual and the integrator: `rhs` + SSPRK2 loop (`rhs` in run.py, loop in `main`)
 
 ```python
 def rhs(sim, n, dx, B0):
-    phi = poisson_oracle(sim, n)       # Poisson par adc (run.py:62)
+    phi = poisson_oracle(sim, n)       # Poisson par adc
     vx, vy = drift(phi, dx, B0)        # vitesse ExB en numpy
     speed = float(np.hypot(vx, vy).max())
     return divergence_upwind(n, vx, vy, dx), speed   # -div(n v) + speed pour le pas adaptatif
@@ -127,10 +127,10 @@ def rhs(sim, n, dx, B0):
 ```python
 for step in range(nsteps):
     r1, speed = rhs(sim, n, dx, B0)
-    dt = cfl * dx / max(speed, 1e-12)        # CFL : dt = 0.4 dx / max|v| (run.py:90)
-    n1 = n + dt * r1                          # etage 1 d'Euler explicite (run.py:91)
-    r2, _ = rhs(sim, n1, dx, B0)              # 2e evaluation : Poisson refait sur n1 (run.py:92)
-    n = 0.5 * n + 0.5 * (n1 + dt * r2)        # SSPRK2 (Heun fort-stable) (run.py:93)
+    dt = cfl * dx / max(speed, 1e-12)        # CFL : dt = 0.4 dx / max|v|
+    n1 = n + dt * r1                          # etage 1 d'Euler explicite
+    r2, _ = rhs(sim, n1, dx, B0)              # 2e evaluation : Poisson refait sur n1
+    n = 0.5 * n + 0.5 * (n1 + dt * r2)        # SSPRK2 (Heun fort-stable)
     assert_finite(n, "densite au pas %d" % step)
 ```
 - SSPRK2 (Heun) written by hand: predictor stage $n_1=n+\Delta t\,R(n)$, then corrector
@@ -141,7 +141,7 @@ for step in range(nsteps):
   the corrector stage uses the $\phi$ of the predicted state $n_1$, not that of $n$. The step
   $\Delta t$ is adaptive via the CFL on the current max ExB velocity.
 
-`assert_finite` (`adc_cases/common/checks.py:29-32`) raises `AssertionError` if a NaN/Inf appears:
+`assert_finite` (in checks.py) raises `AssertionError` if a NaN/Inf appears:
 a guard against a divergence of the homemade scheme.
 
 ---
@@ -166,9 +166,9 @@ Poisson multigrid, not from a defect of the scheme. Hence the tolerances:
 
 | Tolerance | Value | Why this value |
 |---|---|---|
-| `drel < 1e-12` (`run.py:101`) | $10^{-12}$ | Lower bound: the scheme is exactly conservative, only floating-point arithmetic drifts ($\sim10^{-16}$ relative from accumulation over $96^2$ cells and 200 steps). Upper bound: anything $>10^{-12}$ would betray a real leak (mismatched fluxes, non-periodic boundary condition). Measured: $2.040\times10^{-16}$, ~4 orders below the tolerance |
-| `moved > 1e-3` (`run.py:102`) | $10^{-3}$ | Nontriviality threshold: if the scheme were inert (zero velocity, or Poisson returning $\phi=0$), $\max|n-n_0|$ would stay at machine noise. $10^{-3}$ is well above the noise and well below the actual amplitude ($3.28\times10^{-1}$ measured): it guarantees that the transport really moves the band |
-| `|phi|_max > 1e-8` (`run.py:83`) | $10^{-8}$ | Poisson is active iff $\phi\neq0$. Measured: $6.12\times10^{-3}$, ~6 orders above: the elliptic coupling is not a no-op |
+| `drel < 1e-12` (in run.py) | $10^{-12}$ | Lower bound: the scheme is exactly conservative, only floating-point arithmetic drifts ($\sim10^{-16}$ relative from accumulation over $96^2$ cells and 200 steps). Upper bound: anything $>10^{-12}$ would betray a real leak (mismatched fluxes, non-periodic boundary condition). Measured: $2.040\times10^{-16}$, ~4 orders below the tolerance |
+| `moved > 1e-3` (in run.py) | $10^{-3}$ | Nontriviality threshold: if the scheme were inert (zero velocity, or Poisson returning $\phi=0$), $\max|n-n_0|$ would stay at machine noise. $10^{-3}$ is well above the noise and well below the actual amplitude ($3.28\times10^{-1}$ measured): it guarantees that the transport really moves the band |
+| `|phi|_max > 1e-8` (in run.py) | $10^{-8}$ | Poisson is active iff $\phi\neq0$. Measured: $6.12\times10^{-3}$, ~6 orders above: the elliptic coupling is not a no-op |
 
 ---
 
@@ -184,11 +184,11 @@ $t\in\{0,\ 4.39,\ 11.28,\ 23.03\}$ with the adaptive CFL step.
 
 ![Density n at 4 instants: mode 4 band that shears and flattens](figures/density_evolution.png)
 
-- Proved / measured (asserted `run.py:102`): the band evolves ($\max|n-n_0|=3.28\times10^{-1}$,
+- Proved / measured (asserted in run.py): the band evolves ($\max|n-n_0|=3.28\times10^{-1}$,
   $\gg 10^{-3}$). The initial undulation (mode 4 of `disp=0.02`) is carried by the differential
   ExB rotation: the 4 bumps of the $t=0$ panel shear and stretch into thin filaments, then the
   band flattens around $y=0.5$ ($t=23$).
-- Proved (asserted `run.py:101`): despite this deformation, the total mass is conserved to
+- Proved (asserted in run.py): despite this deformation, the total mass is conserved to
   $2.04\times10^{-16}$ relative: the numpy transport is strictly conservative (section 4).
 - Suggested (not asserted): the formation of thin filaments evokes a Kelvin-Helmholtz-type shear,
   but no rate is measured and the IC is a band, not the diocotron benchmark's ring.
@@ -199,7 +199,7 @@ $t\in\{0,\ 4.39,\ 11.28,\ 23.03\}$ with the adaptive CFL step.
 
 ![|phi| at 4 instants: self-consistent potential following the charge band](figures/phi_evolution.png)
 
-- Proved (asserted `run.py:83`): $\phi\neq0$, $\|phi\|_\infty=6.12\times10^{-3}$ at $t=0$,
+- Proved (asserted in run.py): $\phi\neq0$, $\|phi\|_\infty=6.12\times10^{-3}$ at $t=0$,
   $6.01\times10^{-3}$ at $t=23$: the `adc` Poisson is active at every substep. The potential is
   concentrated on the charge band (yellow) and changes structure on either side (dark bands at
   $y\approx0.27$ and $y\approx0.73$, the neutralizing background $n_{i0}$ making the right-hand
@@ -240,7 +240,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Prerequisites: `numpy` (and `matplotlib` for the figures), the `adc` module compiled and imported
 with the same interpreter that compiled it (ABI suffix `cpython-312`). The first `PYTHONPATH`
 entry provides the C++ module; the second makes `adc_cases` importable without installation (the
-case also has a `sys.path` fallback, `run.py:23-31`).
+case also has a `sys.path` fallback, in run.py).
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 

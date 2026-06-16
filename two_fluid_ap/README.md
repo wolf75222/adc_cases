@@ -16,7 +16,7 @@ reproduction of a published result.
 | Category (manifest) | `validation` (`cases_manifest.toml`, `two_fluid_ap/run.py`, `ci = true`, `needs = ["cxx"]`) |
 | Inputs | $64^2$ grid, $L=2\pi$, periodic; IC $n_e=1+\epsilon\cos(kx+ky)$, $k=2\pi/L$, $\epsilon=10^{-3}$, $n_i=1$, $m_s=0$; isothermal $c_e^2=1$, $c_i^2=0.04$; $z_e=-1$, $z_i=+1$, $n_0=1$. Run 1 stiff: $\omega_{pe}=10^3$, $\omega_{pi}=20$, $\Delta t=5\times10^{-3}$, 200 steps, $s=\Delta t\,\omega_{pe}=5$. Run 2 magnetized: $\omega_{ce}=4$, $\omega_{ci}=0.2$, $\Delta t=10^{-2}$, 100 steps |
 | Outputs | printed diagnostics (`max_dev`, `max_charge`, `mass_e`), final line `OK two_fluid_ap`; 2 figures + `figures/provenance.json` (via `make_figures.py`); JIT lib in `out/two_fluid_ap/build/` |
-| Guaranteed invariants | the `assert`s in `run.py`: finiteness (`np.isfinite`, run 1+2); `max_dev < 0.1` and `max_charge < 0.1` (run 1, `run.py:199-200`); `mass_rel < 1e-7` (run 1+2, `run.py:202`, `run.py:235`) |
+| Guaranteed invariants | the `assert`s in `run.py`: finiteness (`np.isfinite`, run 1+2); `max_dev < 0.1` and `max_charge < 0.1` (run 1, `run_stiff` in run.py); `mass_rel < 1e-7` (run 1+2, `run_stiff`/`run_magnetized` in run.py) |
 | Proves | at $s=5$ (run 1), the AP scheme is finite and bounded: $\max\lvert n_e-1\rvert=5.325\times10^{-7}$, $\max\lvert n_i-n_e\rvert=6.698\times10^{-11}$, electron mass conserved to $2.276\times10^{-14}$ relative; magnetized run 2 electron mass to $1.665\times10^{-14}$. Falsifiable AP prediction (figure 1): the AP deviation plateaus at $5.41\times10^{-7}$ for $s\in[1,50]$, while the explicit scheme is finite for $s\le1.0$ and NaN from $s\ge1.2$ |
 | Does not prove | not a published reproduction: no number is confronted with a paper. The `assert`s in `run.py` test bounds ($<0.1$, $<10^{-7}$), not the AP order: the AP/explicit contrast is measured by `make_figures.py`, not asserted. `mass_e=4096` is a sum without the $dx^2$ weight (a proxy for relative conservation, not a physical mass). The C++ diagnostic `tfap_max_dev` is unreliable on a blown-up field (`fmax` over NaN returns $0.0$, section 6): the explicit blow-up is detected on the Python side by `np.isfinite`. Quasi-linear regime ($\epsilon=10^{-3}$, low-order spatial scheme, constant $n_0=1$ background); validated backend = serial CPU only (GPU portability not exercised here) |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, JIT C++ scenario `TwoFluidAP2D<GeometricMG>` (Apple clang 21, C++20), serial CPU, $64^2$; run.py ~3.6 s (cache up to date) / ~5.5 s (first compilation); `figures/provenance.json` |
@@ -67,26 +67,26 @@ Conservative state per species, 3 components: $U_s=(n_s,m_{s,x},m_{s,y})$.
 
 | Block | Equation | C++ kernel (`two_fluid_ap.hpp`) |
 |---|---|---|
-| Transport (momentum) | $\partial_t m_s+\nabla\cdot(m_s\otimes m_s/n_s+c_s^2 n_s I)=0$ (predictor) | `tfap_mstar` (split Rusanov, `:44-74`) |
-| Transport (continuity) | $\partial_t n_s+\nabla\cdot m_s=0$ | `tfap_div_update` centered (`:77-86`) |
-| AP elliptic | $\nabla^2\phi=(n_e^*-n_i^*)/(1+\beta_0)$, $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$ | RHS `:258-266` + `ell.solve()` |
-| Force (stiff term) | $m_s^{n+1}=m_s^*+\Delta t\,z_s\,\omega_{ps}^2\,E$ (implicit) | `tfap_lorentz` (`:162-170`) |
-| Magnetized force | Boris push (half-E, $B$ rotation, half-E) | `tfap_boris` (`:179-193`) |
+| Transport (momentum) | $\partial_t m_s+\nabla\cdot(m_s\otimes m_s/n_s+c_s^2 n_s I)=0$ (predictor) | `tfap_mstar` (split Rusanov) |
+| Transport (continuity) | $\partial_t n_s+\nabla\cdot m_s=0$ | `tfap_div_update` centered |
+| AP elliptic | $\nabla^2\phi=(n_e^*-n_i^*)/(1+\beta_0)$, $\beta_0=\Delta t^2(\omega_{pe}^2+\omega_{pi}^2)$ | RHS in `step` + `ell.solve()` |
+| Force (stiff term) | $m_s^{n+1}=m_s^*+\Delta t\,z_s\,\omega_{ps}^2\,E$ (implicit) | `tfap_lorentz` |
+| Magnetized force | Boris push (half-E, $B$ rotation, half-E) | `tfap_boris` |
 
 This case calls no core scenario: the AP two-fluid physics is written here, and borrows from the
 core only generic bricks (mesh, elliptic, parallel). A 3-layer "who computes what" table, each row
-pinned to a real line:
+pinned to a real symbol:
 
-| Line | Layer | What happens |
+| Symbol | Layer | What happens |
 |---|---|---|
-| `TwoFluidAP(lib, n=.., omega_pe=.., stabilize=True)` (`run.py:173`, `:212`) | Python driver | choice of physical parameters + AP flag; reads the state via `ctypes` |
-| `TwoFluidAP2D<GeometricMG>` instantiated by `Solver` (`_two_fluid_ap.cpp:32-43`) | frozen C++ scenario | the full AP integrator: IMEX split, reformulated Poisson, Boris. This is the JIT-compiled `.cpp` |
+| `TwoFluidAP(lib, n=.., omega_pe=.., stabilize=True)` (`run_stiff`/`run_magnetized` in run.py) | Python driver | choice of physical parameters + AP flag; reads the state via `ctypes` |
+| `TwoFluidAP2D<GeometricMG>` instantiated by `Solver` (in _two_fluid_ap.cpp) | frozen C++ scenario | the full AP integrator: IMEX split, reformulated Poisson, Boris. This is the JIT-compiled `.cpp` |
 | `for_each_cell(dom, [=] ADC_HD(i,j){...})` (`two_fluid_ap.hpp`, each kernel) | per-cell kernel (device-clean) | the real computation: Rusanov flux, divergence, push, with no Python callback in the hot path |
 
 The middle layer is not a brick named `models.two_fluid_ap`: the solver left the core because its
 stabilization couples $\Delta t$ into the elliptic (section 4), which block-by-block
-`adc.System` composition cannot express. The justification is at the top of `two_fluid_ap.hpp:5-9`
-and `run.py:5-12` (`TwoFluidAP` "replaces the old internal escape hatch `adc._adc._TwoFluidAP`
+`adc.System` composition cannot express. The justification is at the top of two_fluid_ap.hpp
+and in the run.py module docstring (`TwoFluidAP` "replaces the old internal escape hatch `adc._adc._TwoFluidAP`
 removed from the core").
 
 ---
@@ -96,7 +96,7 @@ removed from the core").
 `run.py` loads no C++ binding for the case: it compiles `_two_fluid_ap.cpp` to a `.dylib`/`.so` and
 loads it via `ctypes`, exactly like the DSL JIT.
 
-Build and load, `_build_lib` (`run.py:69-78`):
+Build and load, `_build_lib` (in run.py):
 
 ```python
 sources = [os.path.join(HERE, "_two_fluid_ap.cpp"), os.path.join(HERE, "two_fluid_ap.hpp")]
@@ -104,19 +104,19 @@ lib_path = native.build_shared("two_fluid_ap", sources)        # cache hors sour
 return native.load_symbols(lib_path, TFAP_SYMBOLS)             # 12 symboles tfap_* verifies
 ```
 
-- `native.build_shared` (`common/native.py:104-144`) compiles with `-shared -fPIC -std=c++20 -O2 -I
+- `native.build_shared` (`build_shared` in common/native.py) compiles with `-shared -fPIC -std=c++20 -O2 -I
   <adc_cpp/include>` and places the lib in `out/two_fluid_ap/build/` (never next to the `.cpp`,
   matching the manifest note). The lib is indexed by an ABI key = hash of the compiler, the flags,
   the sources, and the signature of the core header tree: if a core `.hpp` changes, the key changes
   and the lib is recompiled. A stale lib is never reloaded.
-- `native.load_symbols` (`common/native.py:147-164`) checks that the 12 `tfap_*` symbols
-  (`run.py:61-65`) exist: a missing symbol raises an explicit `RuntimeError` at load time, not an
+- `native.load_symbols` (`load_symbols` in common/native.py) checks that the 12 `tfap_*` symbols
+  (`TFAP_SYMBOLS` in run.py) exist: a missing symbol raises an explicit `RuntimeError` at load time, not an
   opaque `AttributeError` on the first call.
 
 The C ABI is minimal: `tfap_create(n, L, cse2, csi2, omega_pe, omega_pi, stabilize, eps,
 upwind_continuity, omega_ce, omega_ci)` -> opaque handle, then `tfap_step`/`tfap_advance` and the
-diagnostics (`_two_fluid_ap.cpp:78-115`). The `stabilize` flag (4th argument of `Solver`,
-`_two_fluid_ap.cpp:36-38`) is the AP switch: `true`=$\beta_0$ active, `false`=explicit. It is the
+diagnostics (the `extern "C"` block in _two_fluid_ap.cpp). The `stabilize` flag (4th argument of the
+`Solver` constructor in _two_fluid_ap.cpp) is the AP switch: `true`=$\beta_0$ active, `false`=explicit. It is the
 one `make_figures.py` toggles for the contrast in section 7.
 
 ---
@@ -153,13 +153,13 @@ what `adc.System` composition cannot express (a block does not know $\Delta t$ w
 Poisson is assembled), hence the bespoke solver. Each symbol points to its line:
 
 ```cpp
-const Real beta0 = stabilize ? dt * dt * (ce + ci) : Real(0);   // ce=wpe^2, ci=wpi^2 (hpp:258)
-const Real inv = Real(1) / (Real(1) + beta0);                   // facteur AP (hpp:262)
-r(i, j, 0) = (ne(i, j, 0) - ni(i, j, 0)) * inv;                 // RHS Poisson reformule (hpp:264)
+const Real beta0 = stabilize ? dt * dt * (ce + ci) : Real(0);   // ce=wpe^2, ci=wpi^2
+const Real inv = Real(1) / (Real(1) + beta0);                   // facteur AP
+r(i, j, 0) = (ne(i, j, 0) - ni(i, j, 0)) * inv;                 // RHS Poisson reformule
 ```
 
-- `ce`, `ci` are $\omega_{pe}^2$, $\omega_{pi}^2$, cached in the solver (`two_fluid_ap.hpp:201`,
-  `:215-216`). At $s=5$: $\beta_0=\Delta t^2\omega_{pe}^2\approx(5\times10^{-3}\cdot10^3)^2=25$, so
+- `ce`, `ci` are $\omega_{pe}^2$, $\omega_{pi}^2$, cached in the solver (`TwoFluidAP2D` in
+  two_fluid_ap.hpp). At $s=5$: $\beta_0=\Delta t^2\omega_{pe}^2\approx(5\times10^{-3}\cdot10^3)^2=25$, so
   $1/(1+\beta_0)\approx 0.038$: the charge RHS is divided by 26, which bounds the response.
 - `stabilize` selects $\beta_0$ vs $0$. At $\beta_0=0$ you fall back on the bare Poisson + explicit
   force: this is the explicit scheme of figure 1.
@@ -180,44 +180,44 @@ $5.41\times10^{-7}$ and an explicit NaN from $s=1.2$: the AP property holds.
 
 ## 5. Scenario code, kernel by kernel (justifies: real anchoring)
 
-One `TwoFluidAP2D::step(dt, stabilize)` step (`two_fluid_ap.hpp:239-290`) is an IMEX split. Real order:
+One `TwoFluidAP2D::step(dt, stabilize)` step (in two_fluid_ap.hpp) is an IMEX split. Real order:
 
-1. **Periodic ghosts**: `fill_boundary(e/ion, dom, per)` (`:245-246`).
-2. **Momentum predictor** `m*` (`tfap_mstar`, `:247-248`): dimensionally split isothermal Euler flux
+1. **Periodic ghosts**: `fill_boundary(e/ion, dom, per)`.
+2. **Momentum predictor** `m*` (`tfap_mstar`): dimensionally split isothermal Euler flux
    by Rusanov (local Lax-Friedrichs), wave speed $a=\lvert u\rvert+c_s$,
    $F_{xx}=m_x^2/n+c^2 n$, $F_{yy}=m_y^2/n+c^2 n$. Reads $n,m_x,m_y$ with 1 ghost.
-3. **Density predictor** `n*` (`tfap_div_update`, `:254-257`): $n-\Delta t\,\nabla\cdot m^*$,
+3. **Density predictor** `n*` (`tfap_div_update`): $n-\Delta t\,\nabla\cdot m^*$,
    centered order-2 divergence (default `upwind_continuity=false`, the only one used by `run.py`).
-4. **AP Poisson**: RHS $(n_e^*-n_i^*)/(1+\beta_0)$ (`:258-266`) then `ell.solve()` (`:267`).
-5. **Field** $E=-\nabla\phi$ (`tfap_efield`, `:269`).
-6. **Implicit push (stiff term)**: non-magnetized `tfap_lorentz` $m^{n+1}=m^*+\Delta t\,z\,\omega_{ps}^2 E$
-   (`:274-275`); magnetized symmetric Boris push `tfap_boris` (`:271-272`).
-7. **Density corrector** $n^{n+1}=n-\Delta t\,\nabla\cdot m^{n+1}$ (`:285-286`) + copy of
-   $(m_x,m_y)$ into the state (`copy_mom`, `:288-289`).
+4. **AP Poisson**: RHS $(n_e^*-n_i^*)/(1+\beta_0)$ then `ell.solve()`.
+5. **Field** $E=-\nabla\phi$ (`tfap_efield`).
+6. **Implicit push (stiff term)**: non-magnetized `tfap_lorentz` $m^{n+1}=m^*+\Delta t\,z\,\omega_{ps}^2 E$;
+   magnetized symmetric Boris push `tfap_boris`.
+7. **Density corrector** $n^{n+1}=n-\Delta t\,\nabla\cdot m^{n+1}$ + copy of
+   $(m_x,m_y)$ into the state (`copy_mom`).
 
-The Boris push (`tfap_boris`, `:179-193`) is exact for rotation: half electric impulse, full $B$
+The Boris push (`tfap_boris`) is exact for rotation: half electric impulse, full $B$
 rotation of angle $\theta=z\,\omega_c\,\Delta t$, second half impulse. It reproduces the $E\times B$
 drift exactly and conserves $\lvert m\rvert$ under $B$ alone, with no secular growth; when
-$\omega_c=0$ it reduces to `tfap_lorentz` (comment `:174-178`). This is what makes run 2 stable
+$\omega_c=0$ it reduces to `tfap_lorentz`. This is what makes run 2 stable
 without an $\omega_c\,\Delta t$ limit.
 
 Device-clean: all kernels go through `for_each_cell` with `ADC_HD` lambdas, $\lvert
-x\rvert$/max/minmod via ternaries (`tfap::ab/mx2/mm2`, `:35-39`: `std::fabs`/`std::fmax` are not
+x\rvert$/max/minmod via ternaries (`tfap::ab/mx2/mm2`: `std::fabs`/`std::fmax` are not
 device-safe), $\cos$/$\sin$/$\sqrt$ computed on the host for the uniform fields. The compile facade
 therefore builds as-is for GPU if you pass the right flags; this case sets no backend flag (serial
 CPU here).
 
-**Initial conditions** `TwoFluidAP2D::init(eps)` (`two_fluid_ap.hpp:227-237`), host loop:
+**Initial conditions** `TwoFluidAP2D::init(eps)` (in two_fluid_ap.hpp), host loop:
 
 ```cpp
-const Real k = 2 * pi / L;                                          // mode 1 diagonal (hpp:231)
+const Real k = 2 * pi / L;                                          // mode 1 diagonal
 ae(i, j, 0) = Real(1) + eps * std::cos(k * x_cell(i) + k * y_cell(j));  // n_e = 1 + eps cos(kx+ky)
 ai(i, j, 0) = Real(1);                                              // n_i = 1 (fond uniforme)
 ```
 
 - The perturbation acts only on $n_e$; the initial net charge $n_i-n_e=-\epsilon\cos(\cdot)$
   is of order $\epsilon=10^{-3}$. It is this charge separation that the stiff dynamics relaxes.
-  $m_s=0$ (at rest). The `TwoFluidAP` driver passes the default `eps=1e-3` (`run.py:115`).
+  $m_s=0$ (at rest). The `TwoFluidAP` driver passes the default `eps=1e-3` (in run.py).
 
 ---
 
@@ -229,7 +229,7 @@ The C++ diagnostics (`_two_fluid_ap.cpp`):
   $4096=64\times64\times1$ (background 1, $\cos$ perturbation of zero mean). It is a proxy for
   relative conservation, not a calibrated physical mass.
 - `tfap_max_charge` = $\max\lvert n_i-n_e\rvert$, `tfap_max_dev` = $\max\lvert n_e-1\rvert$
-  (`:54-73`), preceded by `device_fence()` (host/device barrier, GPU unified memory).
+  (`Solver::max_charge`/`Solver::max_dev` in _two_fluid_ap.cpp), preceded by `device_fence()` (host/device barrier, GPU unified memory).
 
 Important pitfall (justifies the Does not prove clause): `tfap_max_dev` does `std::fmax` over the
 field and propagates NaN poorly. Verified: for the explicit scheme at $s=5$ (field entirely NaN,
@@ -240,8 +240,8 @@ it reads the field via `density_e()`/`density_i()` on the Python side and tests 
 "bounded" from "blown up".
 
 The `assert`s in `run.py` are not caught out because they test only the AP scheme
-(`stabilize=True`, never NaN): `np.isfinite(...)` (`run.py:195-197`), `max_dev<0.1` and
-`max_charge<0.1` (`run.py:199-200`), `mass_rel<1e-7` (`run.py:202`). These are loose bounds, not
+(`stabilize=True`, never NaN): `np.isfinite(...)`, `max_dev<0.1` and
+`max_charge<0.1`, `mass_rel<1e-7` (the asserts in `run_stiff`, run.py). These are loose bounds, not
 a test of the AP order.
 
 ---
@@ -297,9 +297,9 @@ Final state of the reference stiff run ($s=5$, AP, 200 steps).
 
 | Tolerance | Value | Why this value |
 |---|---|---|
-| `max_dev < 0.1`, `max_charge < 0.1` (`run.py:199-200`) | $0.1$ | Loose quasi-neutrality bound: the initial perturbation is $\epsilon=10^{-3}$ and the measured AP deviation is $5.3\times10^{-7}$, about 5 orders below $0.1$. The tolerance rejects a blow-up (deviation $O(1)$ or NaN) without rejecting the physical signal; it is not a test of the AP order |
-| `mass_rel < 1e-7` (`run.py:202`, `:235`) | $10^{-7}$ | The scheme is mass-conservative (continuity in divergence form): the only drift is floating-point arithmetic. Measured: $2.276\times10^{-14}$ (run 1) / $1.665\times10^{-14}$ (run 2), about 7 orders below the tolerance, at the IEEE754 noise level on a sum of 4096 terms |
-| `np.isfinite(...)` (`run.py:195-197`, `:232-233`) | (boolean) | Minimal guard: a large step that blows up gives NaN/Inf. It is the only `run.py`-side test that would directly detect a loss of AP stability (but only the AP scheme is exercised here, never the explicit one) |
+| `max_dev < 0.1`, `max_charge < 0.1` (`run_stiff` in run.py) | $0.1$ | Loose quasi-neutrality bound: the initial perturbation is $\epsilon=10^{-3}$ and the measured AP deviation is $5.3\times10^{-7}$, about 5 orders below $0.1$. The tolerance rejects a blow-up (deviation $O(1)$ or NaN) without rejecting the physical signal; it is not a test of the AP order |
+| `mass_rel < 1e-7` (`run_stiff`/`run_magnetized` in run.py) | $10^{-7}$ | The scheme is mass-conservative (continuity in divergence form): the only drift is floating-point arithmetic. Measured: $2.276\times10^{-14}$ (run 1) / $1.665\times10^{-14}$ (run 2), about 7 orders below the tolerance, at the IEEE754 noise level on a sum of 4096 terms |
+| `np.isfinite(...)` (`run_stiff`/`run_magnetized` in run.py) | (boolean) | Minimal guard: a large step that blows up gives NaN/Inf. It is the only `run.py`-side test that would directly detect a loss of AP stability (but only the AP scheme is exercised here, never the explicit one) |
 
 ---
 

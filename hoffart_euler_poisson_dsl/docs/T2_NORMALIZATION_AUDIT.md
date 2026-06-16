@@ -56,7 +56,7 @@ With `rho_max = 1`:
 
 `omega_d = rho_max (beta^2/rho_max) / beta^2 = 1`: the `beta^2` cancels, the slow dynamics live in
 O(1) units. `T_d = 2 pi` is the `2 pi` factor of the deposition (`NORMALIZATION.md`,
-`diag_polar_omega.py:35`): it is the diocotron period, not a fudge.
+`g_2pi` in diag_polar_omega.py): it is the diocotron period, not a fudge.
 
 ## 3. The scaling candidates all collapse onto `x 2 pi`
 

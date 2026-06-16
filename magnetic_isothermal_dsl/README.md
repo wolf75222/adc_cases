@@ -19,7 +19,7 @@ they point back to the core bricks and to the full magnetized case
 | Category (manifest) | `validation` (`cases_manifest.toml`, `magnetic_isothermal_dsl/run.py`, `ci = true`, `needs = ["cxx"]`) |
 | Inputs | grid $32^2$, $L=1$, **periodic**; IC $\rho=1+0.05\cos(2\pi x)$, $m_x=0.3\rho$ ($u=0.3$), $m_y=0$; $c_s^2=1$, $q=-1$, $B_z=2$ (constant); minmod + Rusanov scheme, SSPRK2, 40 steps at CFL$=0.4$ |
 | Outputs | state `(3,n,n)=[\rho,m_x,m_y]` via `get_state("plasma")`; `eval_rhs("plasma")` (local residual); 2 figures in `figures/` + `figures/provenance.json`; the DSL `.so` files under `out/magnetic_isothermal_dsl/` |
-| Guaranteed invariants | the `assert` statements in `run.py`: Lorentz oracle `err_x == 0 and err_y == 0` (`run.py:217`) and density channel `max\|dR[0]\| == 0` (`run.py:221`); `lor_contrib > 0` (`run.py:222`); inter-backend parity `np.array_equal` IF $\geq 2$ backends (`run.py:196`); mass `drift < 1e-9` (`run.py:240`); rotation `\|\langle m_y\rangle\| > 1e-6` (`run.py:242`) |
+| Guaranteed invariants | the `assert` statements in `main` (in run.py): Lorentz oracle `err_x == 0 and err_y == 0` and density channel `max\|dR[0]\| == 0`; `lor_contrib > 0`; inter-backend parity `np.array_equal` IF $\geq 2$ backends; mass `drift < 1e-9`; rotation `\|\langle m_y\rangle\| > 1e-6` |
 | Proves | the compiled magnetic term equals exactly $(B_z m_y,\,-B_z m_x)$: `err_x = err_y = 0.000e+00` (bit equality, numpy); $B_z$ never touches the density (`dR[0]==0`); it is nonzero ($\max\|dR\|=6.299\times10^{-1}$); the mass drifts by $2.887\times10^{-15}$; the mean momentum rotates from $\langle m\rangle=(0.3,0)\to(0.2162,-0.2080)$, angle $-43.88^\circ$, to be compared with $\omega_c t=-43.88^\circ$ |
 | Does not prove | not a published reproduction, and no DSL-vs-native parity here (no native "magnetic_isothermal" brick exists; the core `MagneticLorentzForce` is not wired into Python in this case). On macOS the `production` backend does not link (header ABI): inter-backend parity is skipped, a single path (`aot`) is verified. The oracle tests only the magnetic term (the $B_z\!=\!B_0$ minus $B_z\!=\!0$ difference), not the flux nor the electrostatics. Explicit regime (not the stiff condensed Schur); uniform $B_z$ |
 | Provenance | adc_cpp `01873299`, adc_cases `a9541ba4`, DSL backend `aot` (production not linked), $32^2$, ~19 s wall time (2 figures, recompiles the `.so` twice), macOS arm64; `figures/provenance.json` |
@@ -62,25 +62,25 @@ expressions that `adc.dsl` compiles:
 
 | `run.py` line (DSL expression) | Reproduced core convention | Formula |
 |---|---|---|
-| `m.flux(x=[mx, mx*u + cs2*rho, mx*v], y=[my, my*u, my*v + cs2*rho])` (`run.py:102-103`) | `IsothermalFlux::flux` (`hyperbolic.hpp:132-141`) | $F_x=(m_x,\,m_x u + c_s^2\rho,\,m_x v)$, $F_y=(m_y,\,m_y u,\,m_y v + c_s^2\rho)$ |
-| `m.eigenvalues(x=[u-cs,u,u+cs], y=[v-cs,v,v+cs])` (`run.py:105`) | `IsothermalFlux::eigenvalues` (`hyperbolic.hpp:165-174`) | $(v_n-c_s,\,v_n,\,v_n+c_s)$, $c_s=\sqrt{c_s^2}$ |
-| `q*rho*(-gx)` / `q*rho*(-gy)` (`run.py:110-111`) | `PotentialForce::apply` (`source.hpp:36-43`) | $s_1=q\rho E_x$, $E_x=-\,$`grad_x`; same for $s_2$ |
-| `+ bz*my` / `- bz*mx` (`run.py:110-111`) | `MagneticLorentzForce::apply` (`source.hpp:84-93`) | $s_1=q_{om}B_z m_y$, $s_2=-q_{om}B_z m_x$, $s_3=0$ (no work) |
-| `m.elliptic_rhs(q*rho)` (`run.py:118`) | `ChargeDensity::rhs` (`elliptic.hpp:19-25`) | $f=q\rho$ (right-hand side of the system Poisson) |
+| `m.flux(x=[mx, mx*u + cs2*rho, mx*v], y=[my, my*u, my*v + cs2*rho])` (in run.py) | `IsothermalFlux::flux` (in hyperbolic.hpp) | $F_x=(m_x,\,m_x u + c_s^2\rho,\,m_x v)$, $F_y=(m_y,\,m_y u,\,m_y v + c_s^2\rho)$ |
+| `m.eigenvalues(x=[u-cs,u,u+cs], y=[v-cs,v,v+cs])` (in run.py) | `IsothermalFlux::eigenvalues` (in hyperbolic.hpp) | $(v_n-c_s,\,v_n,\,v_n+c_s)$, $c_s=\sqrt{c_s^2}$ |
+| `q*rho*(-gx)` / `q*rho*(-gy)` (in run.py) | `PotentialForce::apply` (in source.hpp) | $s_1=q\rho E_x$, $E_x=-\,$`grad_x`; same for $s_2$ |
+| `+ bz*my` / `- bz*mx` (in run.py) | `MagneticLorentzForce::apply` (in source.hpp) | $s_1=q_{om}B_z m_y$, $s_2=-q_{om}B_z m_x$, $s_3=0$ (no work) |
+| `m.elliptic_rhs(q*rho)` (in run.py) | `ChargeDensity::rhs` (in elliptic.hpp) | $f=q\rho$ (right-hand side of the system Poisson) |
 
 Three convention subtleties, verified against the code, not assumed:
 
-- Sign of the electrostatic force. `PotentialForce` (`source.hpp:37`) sets `Ex = -a.grad_x` then
+- Sign of the electrostatic force. `PotentialForce` (in source.hpp) sets `Ex = -a.grad_x` then
   `s[1] = qom*u[0]*Ex`. The DSL formula writes `q*rho*(-gx)`: same sign, $q\rho(-\partial_x\phi)$. Here
   `q = -1` (electron charge, as in the brick).
 - The extended aux channel. `B_z` is canonical component 3 of `adc::Aux`; `MagneticLorentzForce`
-  declares `n_aux = 4` (`source.hpp:82`) so that `load_aux` fills it. On the DSL side, `m.aux("B_z")`
-  (`run.py:96`) declares the 4th component; `add_equation` widens the shared channel and
-  `sim.set_magnetic_field(B0*ones)` (`run.py:146`) populates it. This is what the two other
+  declares `n_aux = 4` (in source.hpp) so that `load_aux` fills it. On the DSL side, `m.aux("B_z")`
+  (in run.py) declares the 4th component; `add_equation` widens the shared channel and
+  `sim.set_magnetic_field(B0*ones)` (in run.py) populates it. This is what the two other
   DSL demonstrators (single-species, multi-species) did not cover: a source that reads beyond the
   base contract $\phi/\nabla\phi$ (indices 0/1/2).
 - No work from the magnetic term. `MagneticLorentzForce` leaves `s[3]` at $0$ even at 4 variables
-  (`source.hpp:91`) because $v\times B\perp v$. The isothermal model has only 3 variables (no energy):
+  (in source.hpp) because $v\times B\perp v$. The isothermal model has only 3 variables (no energy):
   the question does not arise here, but the magnitude-preserving rotation (figure 2) is the direct
   consequence.
 
@@ -93,14 +93,14 @@ frequency is $\omega_c=q_{om}B_z=q B_z=(-1)(2)=-2$, negative sign (clockwise gyr
 
 The case computes the prediction by two independent paths, because it has no native oracle:
 
-**(A) Inter-backend parity** (`run.py:188-200`). If `production` and `aot` link, their `eval_rhs`
-results are compared by `np.array_equal`: `assert np.array_equal(r_b, r_ref)` (`run.py:196`), without
+**(A) Inter-backend parity** (in `main`, run.py). If `production` and `aot` link, their `eval_rhs`
+results are compared by `np.array_equal`: `assert np.array_equal(r_b, r_ref)` (in run.py), without
 tolerance. Both backends inline the same production path on the same generated model; any
 divergence would reveal nondeterminism in the codegen or a difference in host marshaling. On macOS,
 `production` does not link (section 5): this path is skipped and `run.py` prints it explicitly
-(`run.py:199-200`).
+(in `main`).
 
-**(B) Analytical Lorentz oracle** (`run.py:202-222`). The model is linked twice: $B_z=B_0=2$ and
+**(B) Analytical Lorentz oracle** (in `main`, run.py). The model is linked twice: $B_z=B_0=2$ and
 $B_z=0$. Flux and electrostatics are identical between the two runs; the only difference is the
 magnetic term. So the residual
 
@@ -109,14 +109,14 @@ $$\Delta R=\texttt{eval\_rhs}(B_z{=}B_0)-\texttt{eval\_rhs}(B_z{=}0)$$
 must equal exactly, channel by channel, the analytical form computed in numpy:
 
 ```python
-lorentz_x = B0 * my0     # +B_z m_y on momentum x (run.py:206)
-lorentz_y = -B0 * mx0    # -B_z m_x on momentum y (run.py:207)
+lorentz_x = B0 * my0     # +B_z m_y on momentum x
+lorentz_y = -B0 * mx0    # -B_z m_x on momentum y
 dR = eval_rhs(B0) - eval_rhs(0)
-err_x = max|dR[1] - lorentz_x|   # expected 0 (run.py:211)
-err_y = max|dR[2] - lorentz_y|   # expected 0 (run.py:212)
-assert err_x == 0.0 and err_y == 0.0          # bit equality (run.py:217)
-assert max|dR[0]| == 0.0                        # density never touched (run.py:221)
-assert lor_contrib > 0.0                        # B_z read, nonzero term (run.py:222)
+err_x = max|dR[1] - lorentz_x|   # expected 0
+err_y = max|dR[2] - lorentz_y|   # expected 0
+assert err_x == 0.0 and err_y == 0.0          # bit equality
+assert max|dR[0]| == 0.0                        # density never touched
+assert lor_contrib > 0.0                        # B_z read, nonzero term
 ```
 
 Measurement (backend `aot`): `err_x = 0.000e+00`, `err_y = 0.000e+00`, `max|dR| = 6.299e-01`. Since
@@ -131,9 +131,9 @@ the two runs, cancel bit-for-bit, and the remaining magnetic term is the same ex
 `bz*my - ...` as the analytical form (same order of floating-point operations). No residual rounding.
 
 The two other tolerances are not bit equalities but bounds justified by an order of
-magnitude. `drift < 1e-9` (`run.py:240`): the finite-volume scheme is conservative, the mass is an
+magnitude. `drift < 1e-9` (in run.py): the finite-volume scheme is conservative, the mass is an
 exact invariant and the only drift is floating-point arithmetic; measured $2.887\times10^{-15}$, ~6
-orders below the bound. `|<m_y>| > 1e-6` (`run.py:242`): a lower bound separating machine noise from the
+orders below the bound. `|<m_y>| > 1e-6` (in run.py): a lower bound separating machine noise from the
 physical signal; $m_y(0)=0$ exactly, so any value above $10^{-6}$ can only come from
 the Lorentz term; measured $|\langle m_y\rangle|=0.208$, ~5 orders above the bound.
 
@@ -159,7 +159,7 @@ of each assert points to a precise fault:
 
 ## 5. Why `production` does not link on macOS
 
-`bind_backends` (`run.py:151-169`) tries `production` then `aot` and keeps only those actually
+`bind_backends` (in run.py) tries `production` then `aot` and keeps only those actually
 linked. The actual output:
 
 ```
@@ -199,7 +199,7 @@ versioned with `figures/provenance.json`. Exact command in section 8.
 
 ![Three maps of the residual err_rho, err_mx, err_my, all white at the machine-eps scale](figures/lorentz_oracle.png)
 
-- **Proves** (asserted `run.py:217,221`): the three residual maps ($\Delta R_\rho-0$,
+- **Proves** (asserted in `main`, run.py): the three residual maps ($\Delta R_\rho-0$,
   $\Delta R_{m_x}-B_0 m_y$, $\Delta R_{m_y}-(-B_0 m_x)$) are identically at the neutral center (white),
   `max|.| = 0.0e+00` everywhere. The color scale is anchored to $\pm\epsilon_{\text{mach}}=2.22\times
   10^{-16}$: any nonzero pixel (beyond the last bit) would saturate to blue or red. None
@@ -215,7 +215,7 @@ versioned with `figures/provenance.json`. Exact command in section 8.
 
 ![On the left the trajectory of (m_x, m_y) on the cyclotron circle; on the right the conserved magnitude](figures/cyclotron_trajectory.png)
 
-- **Proved / measured** (asserted `run.py:240,242`): starting from $\langle m\rangle=(0.3,0)$ (purely
+- **Proved / measured** (asserted in `main`, run.py): starting from $\langle m\rangle=(0.3,0)$ (purely
   longitudinal, $m_y=0$), the mean momentum rotates toward $(0.2162,-0.2080)$ after 40
   steps ($t=0.3829$). The measured final angle $-43.88^\circ$ matches the cyclotron prediction
   $\omega_c t=(-2)(0.3829)=-43.88^\circ$ (ratio $1.00006$). The magnitude $|\langle m\rangle|$ (right
@@ -265,7 +265,7 @@ Prerequisites: `numpy`, a C++20 compiler (`needs = ["cxx"]`: the DSL compiles a 
 the adc_cpp core headers reachable (`$ADC_INCLUDE` otherwise default), and `matplotlib` for the
 figures. The `adc` module must be imported with the same interpreter that compiled it (ABI
 suffix `cpython-312`). The first path of `PYTHONPATH` provides the C++ module, the second makes
-`adc_cases` importable (the case also has a `sys.path` fallback, `run.py:63-67`).
+`adc_cases` importable (the case also has a `sys.path` fallback, in run.py).
 
 Expected output of `run.py` (captured, macOS arm64):
 

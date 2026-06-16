@@ -15,7 +15,7 @@ conserves mass to machine roundoff.
 | Category (manifest) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). Not a published reproduction: you verify invariants of the AMR API, not a paper curve. |
 | Inputs | base grid $64\times 64$, $L=1$, periodic; AMR `regrid_every=10`, 1 fine level, tag threshold `threshold = n_{i0} + 0.15`; IC `band_density` (gaussian band, `mode=4`, `width=0.05`, `disp=0.02`, `amp=1`, `floor=1`); model `diocotron(B0=1, alpha=1, n_i0=<n_e>)`; neutralizing background $n_{i0}=\langle n_e\rangle$; 40 steps at `CFL=0.4`, NoSlope + Rusanov scheme |
 | Outputs | stdout trace (patches, mass, drel per step); 3 diagnostic figures in `figures/` + `figures/provenance.json` |
-| Guaranteed invariants | the `assert`s in `run.py`: `n_patches() >= 2` at every step (`run.py:88`); `drel < 1e-9` (`run.py:89`); finite density (`run.py:90`); `min(patches_seen) > npatch_ctrl` (`run.py:112`); `gap > 1e-3` (`run.py:115`) |
+| Guaranteed invariants | the `assert`s in `main` (in run.py): `n_patches() >= 2` at every step; `drel < 1e-9`; finite density; `min(patches_seen) > npatch_ctrl`; `gap > 1e-3` |
 | Proves | (1) the band is covered by 2 fine patches at every step, vs 1 for a control run with an unreachable threshold: refinement comes from tagging; (2) the refined solution differs from the unrefined one by `max|delta| = 6.40e-2` (`run.py`, sup difference > 1e-3); (3) the AMR mass is conserved to `drel <= 3.06e-15` (reflux); (4) finite density everywhere |
 | Does not prove | this is not a reproduction of a rate $\gamma_l$ or of a paper figure (the established reproduction lives in [`../diocotron/`](../diocotron/), uniform grid; the full magnetized Euler-Poisson candidate in [`../hoffart_euler_poisson_dsl/`](../hoffart_euler_poisson_dsl/), pending status). The CI caps at 2 patches and 1 fine level: no deep hierarchy nor a large patch count is tested. The threshold is tuned empirically, not derived from an error estimator. No assert tests convergence or the growth rate. |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native backend (`adc.AmrSystem` + `adc.System`), base $64^2$, Python 3.12.2, macOS arm64; `figures/provenance.json` |
@@ -66,15 +66,15 @@ $$\partial_t n_e + \nabla\cdot(n_e\,\mathbf{v}) = 0,\qquad
 | Source | none | `adc.NoSource()` |
 | Elliptic | $-\nabla^2\phi=\alpha(n_e-n_{i0})$, periodic | `adc.BackgroundDensity(alpha=1, n0=n_{i0})` |
 
-This is exactly `models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0)` (`adc_cases/models.py:18-25`), the
+This is exactly `models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0)` (in models.py), the
 same model as the parent: only the mesh (AMR), the IC (band) and the BC (periodic) change. Who
 computes what, the three layers pinned to lines of `run.py`:
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
-| `sim.add_block("ne", model=models.diocotron(...), spatial=adc.Spatial(none=True))` (`run.py:57-58`) | Python composes | choice of model, of spatial scheme (NoSlope + Rusanov), carried onto the hierarchy; the explicit integrator is the default of `step_cfl` |
+| `sim.add_block("ne", model=models.diocotron(...), spatial=adc.Spatial(none=True))` (`build_sim` in run.py) | Python composes | choice of model, of spatial scheme (NoSlope + Rusanov), carried onto the hierarchy; the explicit integrator is the default of `step_cfl` |
 | `models.diocotron(...)` -> `ExB` / `BackgroundDensity` (`include/adc/physics/{hyperbolic,elliptic}.hpp`) | C++ brick freezes the physics | the exact convention of the flux $n\,v(\mathrm{dir})$, of the eigenvalue $v(\mathrm{dir})$, of the RHS $\alpha(n-n_{i0})$ |
-| `assemble_rhs<NoSlope,Rusanov>` + Berger-Rigoutsos regrid + reflux + Poisson `geometric_mg` (`run.py:81` `step_cfl`) | per-cell / per-patch kernel | the actual computation: transport on each patch, hierarchy re-decomposition, flux correction at interfaces, with no Python callback in the hot path |
+| `assemble_rhs<NoSlope,Rusanov>` + Berger-Rigoutsos regrid + reflux + Poisson `geometric_mg` (`step_cfl` in run.py) | per-cell / per-patch kernel | the actual computation: transport on each patch, hierarchy re-decomposition, flux correction at interfaces, with no Python callback in the hot path |
 
 `models.diocotron` names no scenario on the core side: the word "diocotron" lives in `adc_cases`, the
 physics is a composition of generic bricks. `adc.AmrSystem` is the refined counterpart of
@@ -84,21 +84,21 @@ physics is a composition of generic bricks. `adc.AmrSystem` is the refined count
 
 ## 3. The falsifiable prediction: reflux => invariant mass, AMR => modified local solution
 
-The case contrasts two runs that differ only by the tag threshold (`build_sim`, `run.py:54-62`,
+The case contrasts two runs that differ only by the tag threshold (`build_sim` in run.py,
 reused for both):
 
-- **nominal**: `threshold = n_i0 + 0.15` (`run.py:70`), the band cells are tagged;
-- **control**: `threshold = 1e30` (`NO_REFINE`, `run.py:48`), no cell exceeds it, the criterion
+- **nominal**: `threshold = n_i0 + 0.15` (`REFINE_FRAC` in run.py), the band cells are tagged;
+- **control**: `threshold = 1e30` (`NO_REFINE` in run.py), no cell exceeds it, the criterion
   never tags.
 
 Three predictions fall out of this contrast, each justifying a Proves clause of the contract:
 
-1. **Refinement comes from tagging**: nominal `n_patches()` $\ge 2$ at every step (`run.py:88`),
-   but the control stays at $1$ (`run.py:112`). If the hierarchy produced patches without tagging,
+1. **Refinement comes from tagging**: nominal `n_patches()` $\ge 2$ at every step (in run.py),
+   but the control stays at $1$ (in run.py). If the hierarchy produced patches without tagging,
    the control would have as many: it does not.
 2. **AMR changes the solution**: the nominal density projected differs from the control density by
-   `gap > 1e-3` (`run.py:115`). An equality would signal an inert fine level.
-3. **Reflux conserves mass**: `drel < 1e-9` at every step (`run.py:89`). Without reflux, each
+   `gap > 1e-3` (in run.py). An equality would signal an inert fine level.
+3. **Reflux conserves mass**: `drel < 1e-9` at every step (in run.py). Without reflux, each
    regrid would leak mass at the coarse/fine interfaces.
 
 The figures of section 6 confront these three predictions to the eye and to the number.
@@ -130,7 +130,7 @@ multiple of `regrid_every=10`, not a roundoff floor.
 On a periodic domain, $-\nabla^2\phi=f$ has a solution only if $\langle f\rangle=0$ (the integral of
 the Laplacian over a torus is zero; this is the compatibility condition). Here
 $f=\alpha(n_e-n_{i0})$, so you need $\langle n_e\rangle=n_{i0}$. The case guarantees it by measuring
-the background: `n_i0 = float(ne.mean())` (`run.py:68`), value $n_{i0}=1.088623$. An arbitrary
+the background: `n_i0 = float(ne.mean())` (in run.py), value $n_{i0}=1.088623$. An arbitrary
 $n_{i0}$ (e.g. $0$) would violate compatibility and the multigrid would not converge to a field with
 a defined mean. This $n_{i0}$ also serves as the reference point for the tag threshold:
 `threshold = n_i0 + 0.15 = 1.238623`, i.e. "the density exceeds the background by $0.15$", which tags
@@ -138,12 +138,12 @@ only the band (not the floor at $1.0$).
 
 ### 4.3 The tolerance `TOL_MASS = 1e-9`, justified by an order of magnitude
 
-`TOL_MASS = 1e-9` (`run.py:45`) sits between the measured machine noise ($\mathrm{drel}\sim
+`TOL_MASS = 1e-9` (in run.py) sits between the measured machine noise ($\mathrm{drel}\sim
 3\times 10^{-15}$, i.e. the floating-point roundoff accumulated over $40$ steps + regrids) and the
 alarm threshold you would want: a reflux leak would be at least $O(h)\sim 10^{-2}$ per regrid. The
 margin between $10^{-15}$ measured and $10^{-9}$ asserted is six orders: wide enough not to trip on
 BLAS variability, tight enough to catch a reflux leak from the very first regrid. Likewise,
-`MIN_SOLUTION_GAP = 1e-3` (`run.py:51`) is tuned well below the measured difference $\sim 6\times
+`MIN_SOLUTION_GAP = 1e-3` (in run.py) is tuned well below the measured difference $\sim 6\times
 10^{-2}$ (section 6) and well above the noise: it attests a real effect, not a scheme wobble.
 
 ---
@@ -152,17 +152,17 @@ BLAS variability, tight enough to catch a reflux leak from the very first regrid
 
 The file reads in two parts: a `build_sim` factory and a `main`.
 
-**`build_sim(ne, n_i0, threshold)` (`run.py:54-62`)** builds an `AmrSystem` identical to the nominal
+**`build_sim(ne, n_i0, threshold)` (in run.py)** builds an `AmrSystem` identical to the nominal
 up to the threshold (it is also what serves the control, guaranteeing that only the threshold
 changes):
 
 ```python
-sim = adc.AmrSystem(n=N, L=L, regrid_every=10, periodic=True)          # run.py:56
+sim = adc.AmrSystem(n=N, L=L, regrid_every=10, periodic=True)
 sim.add_block("ne", model=models.diocotron(B0=1.0, alpha=1.0, n_i0=n_i0),
-              spatial=adc.Spatial(none=True))                           # run.py:57-58
-sim.set_refinement(threshold=threshold)                                # run.py:59
-sim.set_poisson(rhs="charge_density", solver="geometric_mg")           # run.py:60
-sim.set_density("ne", ne)                                              # run.py:61
+              spatial=adc.Spatial(none=True))
+sim.set_refinement(threshold=threshold)
+sim.set_poisson(rhs="charge_density", solver="geometric_mg")
+sim.set_density("ne", ne)
 ```
 - `adc.AmrSystem(n=64, regrid_every=10, periodic=True)`: hierarchy with a $64^2$ base level, regrid
   every 10 steps, periodic BCs (inherited by the Poisson).
@@ -175,33 +175,33 @@ sim.set_density("ne", ne)                                              # run.py:
 - `set_poisson(rhs="charge_density", solver="geometric_mg")`: geometric multigrid, RHS carried by
   the `BackgroundDensity` brick of the model.
 
-**`main()` (`run.py:65-119`)**:
+**`main()` (in run.py)**:
 
 ```python
-ne = band_density(N, L, amp=1.0, width=0.05, mode=MODE, disp=0.02)  # band IC (run.py:67)
-n_i0 = float(ne.mean())                                            # neutralizing background (run.py:68)
-sim = build_sim(ne, n_i0, threshold=n_i0 + REFINE_FRAC)            # nominal run (run.py:70)
+ne = band_density(N, L, amp=1.0, width=0.05, mode=MODE, disp=0.02)  # band IC
+n_i0 = float(ne.mean())                                            # neutralizing background
+sim = build_sim(ne, n_i0, threshold=n_i0 + REFINE_FRAC)            # nominal run
 for k in range(NSTEPS):
-    sim.step_cfl(0.4)                                              # 1 macro-step CFL=0.4 (run.py:81)
-    npatch = sim.n_patches()                                       # current fine patches (run.py:83)
-    drel = relative_drift(mass, mass0)                             # mass drift (run.py:84)
-    assert npatch >= 2                                             # >= 2 patches (run.py:88)
-    assert drel < TOL_MASS                                         # mass conserved (run.py:89)
-    assert_finite(sim.density(), ...)                             # no NaN/Inf (run.py:90)
+    sim.step_cfl(0.4)                                              # 1 macro-step CFL=0.4
+    npatch = sim.n_patches()                                       # current fine patches
+    drel = relative_drift(mass, mass0)                             # mass drift
+    assert npatch >= 2                                             # >= 2 patches
+    assert drel < TOL_MASS                                         # mass conserved
+    assert_finite(sim.density(), ...)                             # no NaN/Inf
 ```
-- `step_cfl(0.4)` (`run.py:81`): one explicit macro-step at CFL=0.4 ($dt=\text{CFL}\cdot h/w_{\max}$),
+- `step_cfl(0.4)` (in run.py): one explicit macro-step at CFL=0.4 ($dt=\text{CFL}\cdot h/w_{\max}$),
   which triggers the regrid every `regrid_every` steps and applies the reflux.
-- `n_patches()` (`run.py:83`) returns the number of current fine patches; the assert $\ge 2$
-  (`run.py:88`) requires a multi-patch coverage of the band, not just "a fine level exists".
-- `relative_drift(mass, mass0)` (`common/checks.py:11`) = $|m-m_0|/\max(|m_0|,10^{-30})$.
-- `assert_finite` (`common/checks.py:29`): no NaN, no Inf.
+- `n_patches()` (in run.py) returns the number of current fine patches; the assert $\ge 2$
+  requires a multi-patch coverage of the band, not just "a fine level exists".
+- `relative_drift(mass, mass0)` (in checks.py) = $|m-m_0|/\max(|m_0|,10^{-30})$.
+- `assert_finite` (in checks.py): no NaN, no Inf.
 
-The control run (`run.py:104-117`) rebuilds the same IC with `threshold = NO_REFINE = 1e30`, advances
+The control run (in run.py) rebuilds the same IC with `threshold = NO_REFINE = 1e30`, advances
 40 steps, then:
 ```python
-gap = float(np.abs(dens - dens_ctrl).max())            # sup difference nominal vs control (run.py:109)
-assert min(patches_seen) > npatch_ctrl                 # the threshold discriminates (run.py:112)
-assert gap > MIN_SOLUTION_GAP                          # refinement changes the solution (run.py:115)
+gap = float(np.abs(dens - dens_ctrl).max())            # sup difference nominal vs control
+assert min(patches_seen) > npatch_ctrl                 # the threshold discriminates
+assert gap > MIN_SOLUTION_GAP                          # refinement changes the solution
 ```
 These two asserts close the logical loop: the patches come from the tag (otherwise the control would
 have as many), and they act on the solution (otherwise `gap` would be zero).
@@ -225,7 +225,7 @@ mesh. All the numbers below are those of the run (cf. `figures/provenance.json`)
 - **Proves** (by the asserts of `run.py` and the measurement here): the two runs carry the same
   dynamics (band modulated 4 times, AMR $n_e^{\max}=1.967$ vs uniform $=1.920$); the difference panel
   is nonzero, `max|delta n_e| = 8.68e-2` (of the same order as the `gap=6.40e-2` asserted in
-  `run.py:115`, different measurement windows): AMR modifies the solution.
+  run.py, different measurement windows): AMR modifies the solution.
 - **Suggested (not asserted)**: the difference is structured at the band edges (alternating red/blue
   lobes along $y\approx 0.45$ and $0.57$), not a diffuse noise: this is exactly where the fine level
   resolves the transverse gradient better. Visible, not tested by a spatial assert.
@@ -237,7 +237,7 @@ mesh. All the numbers below are those of the run (cf. `figures/provenance.json`)
 ![Footprint of tagged cells at 3 instants + n_patches over time](figures/patch_map.png)
 
 - **Proves**: `n_patches()` is 2 at every step (right panel, flat line; `patches observed = [2]` in
-  the provenance), which satisfies the assert $\ge 2$ (`run.py:88`). The band is indeed covered by
+  the provenance), which satisfies the assert $\ge 2$ (in run.py). The band is indeed covered by
   several fine patches, not a single degenerate level.
 - **Suggested**: the footprint of tagged cells (proxy for the fine patch coverage, $\approx 500$
   cells, i.e. ~12 % of the domain) follows the band: the 4 lobes of the modulation are visible at
@@ -254,7 +254,7 @@ mesh. All the numbers below are those of the run (cf. `figures/provenance.json`)
 
 - **Proves**: both curves stay glued to the machine roundoff floor ($\sim 10^{-15}$), six orders of
   magnitude below the tolerance `TOL_MASS = 1e-9` (dashed line). Measured: AMR `drel_max = 3.06e-15`,
-  uniform `drel_max = 6.12e-15`. The assert `drel < 1e-9` (`run.py:89`) passes at every step.
+  uniform `drel_max = 6.12e-15`. The assert `drel < 1e-9` (in run.py) passes at every step.
 - **Suggested**: the AMR is not less conservative than the uniform despite its coarse/fine interfaces
   re-decomposed every 10 steps: its curve is even slightly lower in places. This is the expected
   signature of a correct reflux; no assert compares the two floors.
@@ -316,13 +316,13 @@ faithful. The following remain outside the validation:
 
 ## 8. Initial conditions
 
-IC = `band_density` (`common/initial_conditions.py:13-25`): horizontal gaussian charge band,
+IC = `band_density` (in initial_conditions.py): horizontal gaussian charge band,
 undulated `mode` times along $x$.
 
 $$n_e(x,y)=\text{floor}+\text{amp}\cdot e^{-(y-y_0)^2/\text{width}^2},\qquad
 y_0=0.5\,L+\text{disp}\cdot\cos(2\pi\,\text{mode}\,x/L).$$
 
-Case parameters (`run.py:42-43,66-67`): `N=64`, `L=1`, `amp=1`, `width=0.05`, `mode=4`,
+Case parameters (in run.py): `N=64`, `L=1`, `amp=1`, `width=0.05`, `mode=4`,
 `disp=0.02`, `floor=1` (default). Band centered at $y=0.5$, undulated 4 times. Convention `ne[j,i]`
 at cell centers (`common/grid.py:meshgrid_xy`). The neutralizing background `n_i0 = ne.mean() = 1.088623`
 (measured) ensures the zero mean of the periodic Poisson RHS (section 4.2).

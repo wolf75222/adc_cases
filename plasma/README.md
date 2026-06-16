@@ -14,9 +14,9 @@ falsifiable prediction is an exact invariant, not a target physical number.
 | Category (manifest) | `validation` (`cases_manifest.toml`, `ci = true`, `needs = []`). This is not a published reproduction: you verify invariants, not a curve from a paper. |
 | Inputs | grid $48^2$, $L=1$, periodic; IC: $n_e = 1 + 0.05\cos(2\pi x)$ (weak charge separation), $n_i = n_g = 1$, all at rest; $q_e=-1$, $q_i=+1$, $q_g=0$; $\gamma_e=5/3$, $c_s^2=1$; $k_{ion}=0.3$, $k_{col}=0.5$; 20 macro-steps at CFL $0.3$ |
 | Outputs | initial $\lvert\phi\rvert_{max}$; masses $M_i, M_g$ before/after; min of the three densities; 3 diagnostic figures in `figures/` + `figures/provenance.json` |
-| Guaranteed invariants | the 4 `assert`s in `run.py:66-69`: (1) $\lvert\phi\rvert_{max}>10^{-8}$; (2) $M_g$ drops and $M_i$ rises (each $>10^{-6}$); (3) relative drift of $M_i+M_g$ below $10^{-7}$; (4) finite densities $>0$ |
+| Guaranteed invariants | the 4 `assert`s in `main` (run.py): (1) $\lvert\phi\rvert_{max}>10^{-8}$; (2) $M_g$ drops and $M_i$ rises (each $>10^{-6}$); (3) relative drift of $M_i+M_g$ below $10^{-7}$; (4) finite densities $>0$ |
 | Proves | (1) the system Poisson solve is active: $\lvert\phi\rvert_{max}=1.266\times10^{-3}$; (2) ionization transfers mass from neutral to ion: $M_g\!:2304\to2237.32$, $M_i\!:2304\to2370.68$; (3) this transfer conserves $M_i+M_g$ to $2.37\times10^{-15}$ (machine precision); (4) the three densities stay finite and $>0$ (min $e=0.986$, $i=1.028$, $n=0.970$) |
-| Does not prove | ionization only acts on density (comp 0): the momentum and energy transfer of the created particles is a core simplification (`system.cpp:719-733`), no assert tests it. Friction neglects heating (`system.cpp:754-757`). No total energy, no growth rate, no physical cross-section: $k_{ion}, k_{col}$ are demonstration constants. No magnetization, no ExB drift (see [`../diocotron/`](../diocotron/)). $48^2$/20 steps: no convergence |
+| Does not prove | ionization only acts on density (comp 0): the momentum and energy transfer of the created particles is a core simplification (`add_ionization` in system.cpp), no assert tests it. Friction neglects heating (`add_collision` in system.cpp). No total energy, no growth rate, no physical cross-section: $k_{ion}, k_{col}$ are demonstration constants. No magnetization, no ExB drift (see [`../diocotron/`](../diocotron/)). $48^2$/20 steps: no convergence |
 | Provenance | adc_cpp `01873299`, adc_cases `7c7a3403`, native serial backend, $48^2$, ~0.2 s on 1 CPU core; `figures/provenance.json` |
 
 By the end you will know: why a system Poisson solve couples three charged fluids differently, why
@@ -70,19 +70,19 @@ bricks by `adc.Model(state, transport, source, elliptic)`:
 
 | Species | `models.*` (`models.py`) | State | Transport | Source | Elliptic |
 |---|---|---|---|---|---|
-| electrons | `electron_euler` (l.28-35) | `FluidState(compressible, gamma=5/3)` | `CompressibleFlux` | `PotentialForce(q=-1)` | `ChargeDensity(q=-1)` |
-| ions | `ion_isothermal` (l.38-45) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `PotentialForce(q=+1)` | `ChargeDensity(q=+1)` |
-| neutrals | `neutral_isothermal` (l.69-77) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `NoSource` | `ChargeDensity(q=0)` |
+| electrons | `electron_euler` (in models.py) | `FluidState(compressible, gamma=5/3)` | `CompressibleFlux` | `PotentialForce(q=-1)` | `ChargeDensity(q=-1)` |
+| ions | `ion_isothermal` (in models.py) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `PotentialForce(q=+1)` | `ChargeDensity(q=+1)` |
+| neutrals | `neutral_isothermal` (in models.py) | `FluidState(isothermal, cs2=1)` | `IsothermalFlux` | `NoSource` | `ChargeDensity(q=0)` |
 
 `ChargeDensity(q=0)` is present but null on the neutrals: they are declared to the Poisson solve
 with a zero weight, so they do not contribute to it. Who computes what (3-layer table, anchored on
-the actual lines of `recipes.plasma`, `recipes.py:32-51`, triggered by `run.py:43-44`):
+the actual lines of `recipes.plasma` (`plasma` in recipes.py), triggered by `main` in run.py):
 
-| Line | Layer | What happens |
+| Symbol | Layer | What happens |
 |---|---|---|
-| `recipes.plasma(sim, ne, ni, ng, ...)` (`run.py:43`) -> `add_block` x3 + `set_poisson` + `add_ionization` + `add_collision` (`recipes.py:37-47`) | Python composes | choice of the 3 models, of the schemes (electrons HLLC+vanleer+primitive; ions/neutrals minmod), of the system Poisson solve, of the 2 couplings |
+| `recipes.plasma(sim, ne, ni, ng, ...)` (`main` in run.py) -> `add_block` x3 + `set_poisson` + `add_ionization` + `add_collision` (`plasma` in recipes.py) | Python composes | choice of the 3 models, of the schemes (electrons HLLC+vanleer+primitive; ions/neutrals minmod), of the system Poisson solve, of the 2 couplings |
 | `models.electron_euler/ion_isothermal/neutral_isothermal` -> bricks `CompressibleFlux` / `IsothermalFlux` / `PotentialForce` / `ChargeDensity` (`include/adc/physics/*.hpp`) | C++ brick fixes | the exact convention of the flux, of the force $q\rho\mathbf{E}$, of the Poisson right-hand side $\sum_b q_b n_b$ |
-| `assemble_rhs<Limiter,Flux>` per block + `GeometricMG` (Poisson) + ionization/collision functors (`system.cpp:723-733`, `758-767`) | per-cell kernel (device) | the actual transport and the two couplings, with no Python callback in the hot path |
+| `assemble_rhs<Limiter,Flux>` per block + `GeometricMG` (Poisson) + ionization/collision functors (`add_ionization` / `add_collision` in system.cpp) | per-cell kernel (device) | the actual transport and the two couplings, with no Python callback in the hot path |
 
 The word "plasma" lives in `recipes.py`, never on the core side: it is a composition of generic
 bricks, not a hard-coded scenario.
@@ -109,18 +109,18 @@ ignored) is justified in section 4 (what the functor does not write) and in sect
 
 ### 4.1 The ionization source term is antisymmetric by construction
 
-Ionization is applied operator-split after transport. The C++ functor (`system.cpp:723-733`)
+Ionization is applied operator-split after transport. The C++ functor (`add_ionization` in system.cpp)
 computes, per cell, a single scalar $\delta n = \Delta t\,k_{ion}\,n_e\,n_g$ then distributes it:
 
 ```cpp
-const Real dn = dt * k * ue(i, j, de) * ug(i, j, dg);   // delta_n = dt k n_e n_g  (system.cpp:728)
-ug(i, j, dg) -= dn;                                      // neutre : -delta_n      (system.cpp:729)
-ui(i, j, di) += dn;                                      // ion    : +delta_n      (system.cpp:730)
-ue(i, j, de) += dn;                                      // electron: +delta_n     (system.cpp:731)
+const Real dn = dt * k * ue(i, j, de) * ug(i, j, dg);   // delta_n = dt k n_e n_g
+ug(i, j, dg) -= dn;                                      // neutre : -delta_n
+ui(i, j, di) += dn;                                      // ion    : +delta_n
+ue(i, j, de) += dn;                                      // electron: +delta_n
 ```
 
 - `de`, `di`, `dg` are the density component indices of each block, resolved by role
-  (`role_index(..., Density, 0)`, `system.cpp:716-718`): a block that stores its density somewhere
+  (`role_index(..., Density, 0)` in system.cpp): a block that stores its density somewhere
   other than index 0 stays correctly coupled.
 - $n_g$ loses exactly what $n_i$ gains: the same $\delta n$ is subtracted from one and added to the
   other. The cell-by-cell sum $n_i+n_g$ is therefore invariant up to floating-point arithmetic;
@@ -137,35 +137,35 @@ The three lines above touch only the density component (comp 0). They write neit
 (comp 1, 2) nor the energy (comp 3 of the electrons). Physically, a created ion should be born with
 the momentum of the neutral it came from, and the freed electron carries away an energy; here none
 of that is transferred. The core comment says so: "the momentum / energy transfer (fluid species) is
-a later refinement" (`system.cpp:721-722`). Concrete consequence: the total energy is neither
+a later refinement" (`add_ionization` in system.cpp). Concrete consequence: the total energy is neither
 defined nor controlled, and no assert bears on it. The conservation we assert (`drel < 1e-7`) is
 only a mass conservation of $n_i+n_g$, not of momentum or energy.
 
 ### 4.3 Friction conserves the pair's momentum, not the energy
 
-The collision functor (`system.cpp:758-767`) computes the friction force per cell and opposes it on
+The collision functor (`add_collision` in system.cpp) computes the friction force per cell and opposes it on
 each species:
 
 ```cpp
 const Real fx = dt * k * (ua(i,j,mxa)/ua(i,j,da) - ub(i,j,mxb)/ub(i,j,db));  // dt k (u_a - u_b)
-ua(i, j, mxa) -= fx;  ub(i, j, mxb) += fx;                                   // opposee (system.cpp:763)
+ua(i, j, mxa) -= fx;  ub(i, j, mxb) += fx;                                   // opposee
 ```
 
 - `mxa`, `mxb` (and `mya`, `myb`) are the momentum components $\rho u$ resolved by role
-  (`system.cpp:748-753`); `da`, `db` are the densities (to reconstruct $u=\rho u/\rho$).
+  (`add_collision` in system.cpp); `da`, `db` are the densities (to reconstruct $u=\rho u/\rho$).
 - The force is $\mathbf{F}=k_{col}(\mathbf{u}_a-\mathbf{u}_b)$, removed from $a$, added to $b$: the
   sum $\rho_a\mathbf{u}_a + \rho_b\mathbf{u}_b$ changes by $-fx + fx = 0$. The total momentum of the
   ion-neutral pair is conserved by friction. Measured: final
   $\Delta(P_x^{ion}+P_x^{neutre})=-1.7\times10^{-17}$, the machine zero (figure `ionization.png`,
   panel 3).
 - The friction heating (the dissipated heat, $\propto k_{col}|\mathbf{u}_a-\mathbf{u}_b|^2$) is not
-  returned to the energy: "friction heating (energy) is a later refinement" (`system.cpp:756-757`).
+  returned to the energy: "friction heating (energy) is a later refinement" (`add_collision` in system.cpp).
   This is consistent for isothermal species (without an energy equation), but it is a simplification
   to name.
 
 ### 4.4 Why the tolerance $10^{-7}$
 
-`assert drel < 1e-7` (`run.py:68`) sits between two scales: the noise of the floating-point
+`assert drel < 1e-7` (in run.py) sits between two scales: the noise of the floating-point
 antisymmetry (measured $2.37\times10^{-15}$, i.e. the sum of $48^2$ cancellations) and any
 structural violation that would betray a distribution bug (if the functor subtracted from $n_g$
 something other than what it adds to $n_i$, the drift would be of the order of the ionized fraction,
@@ -174,16 +174,16 @@ orders of magnitude of margin. The tolerance is not posited, it separates two me
 
 ---
 
-## 5. Initial conditions (`run.py:38-44`)
+## 5. Initial conditions (`main` in run.py)
 
 Set in numpy (the scenario physics lives on the application side, never in C++ per case):
 
 ```python
 n, L = 48, 1.0
 x  = (np.arange(n) + 0.5) / n                                     # centres de cellules le long de x
-ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones((n, n))   # electrons modules le long de x (run.py:40)
+ne = 1.0 + 0.05 * np.cos(2 * PI * x)[None, :] * np.ones((n, n))   # electrons modules le long de x
 recipes.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
-               ionization_rate=0.3, collision_rate=0.5)           # ions/neutres uniformes (run.py:43-44)
+               ionization_rate=0.3, collision_rate=0.5)           # ions/neutres uniformes
 ```
 
 - **Electrons**: $1+0.05\cos(2\pi x)$, 5% modulation along $x$, constant in $y$. This is the only
@@ -193,7 +193,7 @@ recipes.plasma(sim, ne=ne, ni=np.ones((n, n)), ng=np.ones((n, n)),
 - Grid convention (`adc_cases.common.grid`): `field[j, i]`, center $x=(i+0.5)/n\,L$. The modulation
   depends only on column $i$ (the $x$ axis), hence final maps **striped in $x$** (section 6).
 
-The time advance: `sim.step_cfl(0.3)` x20 (`run.py:53-54`), $dt$ chosen at CFL $0.3$ at each
+The time advance: `sim.step_cfl(0.3)` x20 (in run.py), $dt$ chosen at CFL $0.3$ at each
 macro-step. The measured final time is $t=0.0965$ (`provenance.json`). Schemes: electrons
 `Spatial(vanleer, hllc, primitive)` (primitive reconstruction = positivity of $\rho,p$ for Euler);
 ions/neutrals `Spatial(minmod)` (rusanov flux by default). SSPRK2 integrator by default.
@@ -212,7 +212,7 @@ instruments the loop to record the history. Command in section 8.
 - **Proves** (clause 2): the mean ion density rises ($\bar n_i\!:1\to1.0289$) and that of the
   neutrals falls ($\bar n_g\!:1\to0.9711$) in exactly opposite fashion: ionization empties the
   neutral reservoir into the ionized reservoir. Equal and opposite-sign initial slopes (asserted by
-  $M_g<M_{g,0}$ and $M_i>M_{i,0}$, `run.py:67`).
+  $M_g<M_{g,0}$ and $M_i>M_{i,0}$, in run.py).
 - **Suggested (not asserted)**: the electron curve (blue) is invisible, hidden under the ion curve
   (red): $\bar n_e=\bar n_i$ to $10^{-13}$ (section 4.1, $n_e$ and $n_i$ gain the same $\delta n$).
   Visible to the eye, but no assert compares $M_e$ with $M_i$.
@@ -242,7 +242,7 @@ instruments the loop to record the history. Command in section 8.
 ![2D maps n_e, n_i, n_g at final t: striped in x, ions/neutrals modulated by ionization](figures/density_map.png)
 
 - **Proves** (clause 4): the three maps are finite and everywhere positive (min $e=0.986$,
-  $i=1.028$, $n=0.970$; asserted `run.py:69`). No negative trough, the electron primitive and the
+  $i=1.028$, $n=0.970$; asserted in run.py). No negative trough, the electron primitive and the
   isothermal minmod hold positivity.
 - **Suggested (not asserted)**: ions and neutrals, started uniform, have developed an $x$ modulation
   that copies the electron pattern (ion: maximum where $n_e$ is dense; neutral: negative

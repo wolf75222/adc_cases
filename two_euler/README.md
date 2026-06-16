@@ -54,10 +54,10 @@ Each block solves compressible 2D Euler in conservative form:
 $$\partial_t U+\partial_x F(U)+\partial_y G(U)=0,\qquad U=(\rho,\ \rho u,\ \rho v,\ E),\qquad p=(\gamma-1)\Big(E-\tfrac12\rho|u|^2\Big).$$
 
 The flux $F$ transports $(\rho u,\ \rho u^2+p,\ \rho uv,\ (E+p)u)$ (and $G$ by symmetry $x\leftrightarrow y$).
-With $\gamma=1.4$ (`GAMMA`, `run.py:33`). The source term is identically zero; the system Poisson is
+With $\gamma=1.4$ (`GAMMA` in run.py). The source term is identically zero; the system Poisson is
 present but with a zero right-hand side. The two blocks share these equations identically.
 
-The species model is `adc_cases.models.euler(GAMMA)` (`adc_cases/models.py:58-66`), the composition
+The species model is `adc_cases.models.euler(GAMMA)` (`euler` in models.py), the composition
 of native bricks:
 
 | Model block | Equation | Brick (`models.euler`) |
@@ -70,14 +70,14 @@ of native bricks:
 `adc.ChargeDensity(charge=0.0)` declares a zero charge density: the block's contribution to the
 system Poisson ($f=sum_b q_b n_b$) is zero. `set_poisson()` is called all the same because
 `step_adaptive` opens each macro step with `solve_fields()` (section 4); with $f=0$ the potential
-stays zero. This is the exact justification of the comment at `run.py:56`: "Poisson f=0 (zero
+stays zero. This is the exact justification of the comment in `main`: "Poisson f=0 (zero
 charge): independent blocks, just for solve_fields".
 
 ### 3-layer table: who computes what
 
-| `run.py` line | Layer | What happens |
+| `run.py` symbol | Layer | What happens |
 |---|---|---|
-| `add_block("electrons", model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())` (`run.py:54-55`) | Python composes | choice of the Euler model, of the scheme (van Leer + HLLC + primitive recon), of the integrator (SSPRK2); two distinct calls, one per block |
+| `add_block("electrons", model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())` (`main` in run.py) | Python composes | choice of the Euler model, of the scheme (van Leer + HLLC + primitive recon), of the integrator (SSPRK2); two distinct calls, one per block |
 | `models.euler(GAMMA)` -> `CompressibleFlux` / `NoSource` / `ChargeDensity(0)` (`include/adc/physics/euler.hpp`, `.../source.hpp`) | the C++ brick fixes the physics | the exact convention of the flux $F(U)$, of the wave speed $|v_n|+c$, of the zero right-hand side |
 | `assemble_rhs<Limiter,Flux>` (HLLC) + system Poisson (`solve_fields`, $f=0$) | per-cell kernel | the per-cell computation, with no Python callback in the hot path |
 
@@ -100,10 +100,10 @@ updates each cell by the flux balance at its faces:
 $\rho_{ij}^{n+1}=\rho_{ij}^n-\frac{\Delta t}{h}\big(F^x_{i+1/2,j}-F^x_{i-1/2,j}+F^y_{i,j+1/2}-F^y_{i,j-1/2}\big)$.
 The total mass $M=\sum_{ij}\rho_{ij}\,h^2$ sums over all cells: each interior flux appears twice with
 opposite signs (face shared between neighboring cells) and cancels by telescoping. On a periodic
-domain (`periodic=True`, `run.py:52`), the boundary fluxes also close up (the right face of the
+domain (`periodic=True` in run.py), the boundary fluxes also close up (the right face of the
 domain = the left face). Nothing remains: $M^{n+1}=M^n$ exactly in real arithmetic. The only drift
 observed comes from floating-point arithmetic (summation order, rounding), so at machine-noise level
-$\sim 10^{-16}\,M$. This is why the tolerance `tol=1e-9` (`run.py:72-73`) is honest: it is set 7
+$\sim 10^{-16}\,M$. This is why the tolerance `tol=1e-9` (in run.py) is honest: it is set 7
 orders of magnitude above the expected machine noise ($\sim 10^{-16}$) and well below any physical
 violation ($M$ changes by $O(1)$ relative if a flux leaks), so it cleanly separates "conserved to the
 bit" from "conservation bug". The measured drift ($\le 1.6\times10^{-14}$, section 6) confirms it:
@@ -113,7 +113,7 @@ you are at machine noise, $10^5$ times below the tolerance.
 
 Euler only makes sense for $\rho>0$ and $p>0$ ($c=\sqrt{\gamma p/\rho}$ becomes imaginary otherwise,
 the scheme blows up). Nothing mathematically guarantees the positivity of a generic MUSCL+HLLC
-through a strong expansion; two choices favor it here, both in `run.py:53`:
+through a strong expansion; two choices favor it here, both in `main`:
 
 - Primitive reconstruction (`recon="primitive"`): you reconstruct $(\rho,u,v,p)$ at the faces rather
   than the conservative variables $(\rho,\rho u,\rho v,E)$. Reconstructing $\rho$ and $p$ directly
@@ -122,83 +122,83 @@ through a strong expansion; two choices favor it here, both in `run.py:53`:
 - HLLC flux: restores the contact wave, less dissipative than Rusanov but robust for Euler.
 
 So positivity is not a theorem but an empirical invariant that the case checks by `assert`
-(`run.py:81-82`). The electron expansion is the most severe (sound speed 10x, hence the strongest
+(`main` in run.py). The electron expansion is the most severe (sound speed 10x, hence the strongest
 expansion), and it is the one that goes lowest: `rho_min` electrons reaches $6.99\times10^{-3}$ at
 the trough (section 6), still $>0$.
 
 ### 3.3 Front ordering (justifies Proves 3)
 
 At equal pressure $p_0=1$, the Euler sound speed is $c=\sqrt{\gamma p_0/\rho_0}$. The ratio of the
-two blocks is $c_e/c_i=\sqrt{\rho_{0,i}/\rho_{0,e}}=\sqrt{1.0/0.01}=10$, the number printed by
-`run.py:65` (`np.sqrt(1.0/0.01)`). The expansion front advances at the sound speed: over the fixed
+two blocks is $c_e/c_i=\sqrt{\rho_{0,i}/\rho_{0,e}}=\sqrt{1.0/0.01}=10$, the number printed in
+`main` (`np.sqrt(1.0/0.01)`). The expansion front advances at the sound speed: over the fixed
 duration ($t_{\text{final}}=0.085$, 20 macro steps), the electron front travels 10x more distance, so
-it covers a larger fraction of cells. The `assert fe > fi` (`run.py:83`) tests exactly this ordering,
-where `fe`, `fi` are the fractions of cells where $|p-p_0|>0.02$ (function `disturbed`,
-`run.py:45-47`). Measured: `fe = 0.861`, `fi = 0.287`.
+it covers a larger fraction of cells. The `assert fe > fi` (in run.py) tests exactly this ordering,
+where `fe`, `fi` are the fractions of cells where $|p-p_0|>0.02$ (function `disturbed` in
+run.py). Measured: `fe = 0.861`, `fi = 0.287`.
 
 ---
 
 ## 4. The code, anchored
 
-Reading of `main` (`run.py:50-86`), the load-bearing lines only.
+Reading of `main` (in run.py), the load-bearing lines only.
 
-### 4.1 Composition (`run.py:52-56`)
+### 4.1 Composition (in run.py)
 
 ```python
-sim = adc.System(n=n, L=L, periodic=True)                                      # run.py:52
-spatial = adc.Spatial(vanleer=True, flux="hllc", recon="primitive")            # run.py:53
-sim.add_block("electrons", model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())  # run.py:54
-sim.add_block("ions",      model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())  # run.py:55
-sim.set_poisson()  # f = 0 (charge nulle) : blocs independants, juste pour solve_fields        # run.py:56
+sim = adc.System(n=n, L=L, periodic=True)
+spatial = adc.Spatial(vanleer=True, flux="hllc", recon="primitive")
+sim.add_block("electrons", model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())
+sim.add_block("ions",      model=models.euler(GAMMA), spatial=spatial, time=adc.Explicit())
+sim.set_poisson()  # f = 0 (charge nulle) : blocs independants, juste pour solve_fields
 ```
 
 - `adc.System(n=64, L=1, periodic=True)`: Cartesian grid $64\times64$, periodic domain $[0,1]^2$
   (periodicity closes the mass balance, section 3.1).
 - `adc.Spatial(vanleer=True, flux="hllc", recon="primitive")`: a single scheme object, shared by the
   two blocks. `vanleer=True` -> van Leer limiter (MUSCL order 2, 2 ghost cells,
-  `adc/__init__.py:442-443`); `flux="hllc"` -> HLLC Riemann solver (requires compressible transport,
+  `Spatial` in __init__.py); `flux="hllc"` -> HLLC Riemann solver (requires compressible transport,
   checked on the facade side); `recon="primitive"` -> reconstruction of the primitive variables
   (section 3.2).
 - both `add_block` calls: same `model=models.euler(GAMMA)` (two instances), same `spatial`, same
-  `time=adc.Explicit()` (SSPRK2, `substeps=1`, `stride=1` by default, `adc/__init__.py:490-503`).
+  `time=adc.Explicit()` (SSPRK2, `substeps=1`, `stride=1` by default, `Explicit` in __init__.py).
   This is the heart of the "2 Euler, same code" message.
 - `set_poisson()` configures the system Poisson (default `rhs="charge_density"`). With $q=0$
   everywhere the right-hand side is zero; the call only serves so that
   `step_adaptive -> solve_fields()` has a valid solver.
 
-### 4.2 Initial conditions (`run.py:58-61`)
+### 4.2 Initial conditions (in run.py)
 
 ```python
-Ue0 = blob(n, L, rho0=0.01, p0=1.0, dp=0.5)  # electrons : legers -> c ~ 10x, rapides   # run.py:58
-Ui0 = blob(n, L, rho0=1.0,  p0=1.0, dp=0.5)  # ions : lourds, lents                     # run.py:59
-sim.set_state("electrons", Ue0.reshape(-1).tolist())                                    # run.py:60
-sim.set_state("ions",      Ui0.reshape(-1).tolist())                                    # run.py:61
+Ue0 = blob(n, L, rho0=0.01, p0=1.0, dp=0.5)  # electrons : legers -> c ~ 10x, rapides
+Ui0 = blob(n, L, rho0=1.0,  p0=1.0, dp=0.5)  # ions : lourds, lents
+sim.set_state("electrons", Ue0.reshape(-1).tolist())
+sim.set_state("ions",      Ui0.reshape(-1).tolist())
 ```
 
-`blob` (`run.py:36-38`) delegates to `euler_pressure_blob` (`adc_cases/common/initial_conditions.py:44-57`):
+`blob` (in run.py) delegates to `euler_pressure_blob` (in initial_conditions.py):
 gas at rest $u=v=0$, uniform density $\rho_0$, Gaussian overpressure
 $p(x,y)=p_0+dp\,e^{-r^2/(\sigma^2 L^2)}$ with $\sigma^2=0.02$ (default, not passed by `run.py`),
 $r^2=(x-L/2)^2+(y-L/2)^2$, and $E=p/(\gamma-1)$ (pure internal energy, no kinetic). The two initial
 conditions are identical in shape: only $\rho_0$ changes ($0.01$ vs $1.0$), the source of all the
 speed contrast. `set_state` flattens the state $(4,64,64)$ into a flat list.
 
-### 4.3 Multirate loop (`run.py:67-68`)
+### 4.3 Multirate loop (in run.py)
 
 ```python
 for _ in range(20):
-    sim.step_adaptive(0.4)   # run.py:67-68
+    sim.step_adaptive(0.4)
 ```
 
-`step_adaptive(cfl)` is the multirate integrator. Its exact semantics, read in
-`adc_cpp/include/adc/runtime/system_stepper.hpp:311-349` (method `step_adaptive`):
+`step_adaptive(cfl)` is the multirate integrator. Its exact semantics, read in the method
+`step_adaptive` (in system_stepper.hpp):
 
 1. `solve_fields()` solves the system Poisson (here $f=0$, zero potential).
 2. For each evolving block, the max wave speed $w_b=\max_{\text{grid}}(|v_n|+c)$ is computed
-   (`s.max_speed(s.U)`, `system_stepper.hpp:322`); `wmin` = the smallest (slowest block).
-3. The macro step is $\text{macro\_dt}=\text{cfl}\cdot h/w_{\min}$ (`system_stepper.hpp:330`), pinned
+   (`s.max_speed(s.U)` in system_stepper.hpp); `wmin` = the smallest (slowest block).
+3. The macro step is $\text{macro\_dt}=\text{cfl}\cdot h/w_{\min}$ (`step_adaptive` in system_stepper.hpp), pinned
    to the slowest block (the ions).
 4. Each block is sub-cycled $n_b=\lceil\text{stride}_b\cdot w_b/w_{\min}\rceil$ times over the
-   effective step (`system_stepper.hpp:338-342`, `advance_transport_n(s, eff_dt, n)`). With
+   effective step (`advance_transport_n(s, eff_dt, n)` in system_stepper.hpp). With
    `stride=1` and $w_e/w_i=10$, the `electrons` block does $n_e=\lceil10\rceil=10$ sub-steps, the
    `ions` $n_i=1$.
 5. `apply_couplings(macro_dt)` (no coupling here), then `t += macro_dt`.
@@ -207,26 +207,26 @@ This is what "the multirate automatically sub-cycles the electrons" means: the f
 the ratio of wave speeds, with no explicit configuration. The figure `multirate.png` (section 6)
 plots it directly.
 
-### 4.4 Diagnostics and asserts (`run.py:70-86`)
+### 4.4 Diagnostics and asserts (in run.py)
 
 ```python
-Ue = np.array(sim.get_state("electrons")).reshape(4, n, n)                       # run.py:70
-dme = assert_mass_conserved(sim.mass("electrons"), me0, tol=1e-9, label="electrons")  # run.py:72
-pe, pi = pressure(Ue), pressure(Ui)                                             # run.py:74
-fe, fi = disturbed(Ue, Ue0, 0.02), disturbed(Ui, Ui0, 0.02)                     # run.py:75
-assert Ue[0].min() > 0 and Ui[0].min() > 0, "densite negative"                  # run.py:81
-assert pe.min() > 0 and pi.min() > 0, "pression negative"                       # run.py:82
-assert fe > fi, "les electrons ... devraient s'etendre plus vite que les ions"  # run.py:83
+Ue = np.array(sim.get_state("electrons")).reshape(4, n, n)
+dme = assert_mass_conserved(sim.mass("electrons"), me0, tol=1e-9, label="electrons")
+pe, pi = pressure(Ue), pressure(Ui)
+fe, fi = disturbed(Ue, Ue0, 0.02), disturbed(Ui, Ui0, 0.02)
+assert Ue[0].min() > 0 and Ui[0].min() > 0, "densite negative"
+assert pe.min() > 0 and pi.min() > 0, "pression negative"
+assert fe > fi, "les electrons ... devraient s'etendre plus vite que les ions"
 ```
 
 - `sim.mass(name)` integrates the block's $\rho$ (conservation diagnostic), compared to the initial
-  mass `me0`/`mi0` (`run.py:63`) by `assert_mass_conserved` (`adc_cases/common/checks.py:16-26`),
+  mass `me0`/`mi0` (in run.py) by `assert_mass_conserved` (in checks.py),
   which returns the relative drift and raises `AssertionError` if $\ge$ `tol`.
-- `pressure(U)` = `euler_pressure(U, gamma=GAMMA)` (`initial_conditions.py:60-62`):
+- `pressure(U)` = `euler_pressure(U, gamma=GAMMA)` (in initial_conditions.py):
   $p=(\gamma-1)(E-\frac12\rho|u|^2)$.
-- `disturbed(U, U0, thr)` (`run.py:45-47`) = `mean(|p(U)-p(U0)| > thr)`, the fraction of cells where
+- `disturbed(U, U0, thr)` (in run.py) = `mean(|p(U)-p(U0)| > thr)`, the fraction of cells where
   the pressure changed by more than `thr=0.02`: the extent of the front.
-- `assert_finite(Ue, ...)` (`run.py:84-85`, `checks.py:29-32`): no NaN, no Inf.
+- `assert_finite(Ue, ...)` (in run.py, `assert_finite` in checks.py): no NaN, no Inf.
 
 The multirate has no dedicated assert: it is exercised by the loop and indirectly validated by
 stability (positivity holds, electron front > ion front).
