@@ -24,6 +24,20 @@ python <case>/run.py        # most cases take a reduced/quick mode for a fast sm
   (case, observed quantity, expected value, tolerance, reason) so a reviewer can tell a normal
   difference from a real change.
 
+## Standards
+
+- **Python style**: the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html).
+  Each case is plain, readable numpy + `adc` Python; `check_cases.py` enforces the repo conventions.
+- **Documentation style**: follow the Google documentation guide vendored in adc_cpp under
+  [docs/docguide/](https://github.com/wolf75222/adc_cpp/tree/master/docs/docguide) -- in particular
+  *Update Docs with Code* (change the docs in the same commit as the code), *Minimum viable
+  documentation*, and *Duplication is evil* (link, do not re-document). Prose is English.
+- **Commit messages**: follow the [seven rules of a great commit message](https://cbea.ms/git-commit/)
+  -- separate subject from body with a blank line, a short (~50 characters) imperative subject with
+  no trailing period, and a body wrapped at 72 columns explaining what and why. One project
+  adaptation: a lowercase `scope:` prefix is allowed (e.g. `diocotron: tighten growth-rate
+  tolerance`), so we do not capitalize the subject. Avoid `fix`, `wip`, `update`.
+
 ## Guardrails
 
 - **No AI author, committer or co-author** (Claude, Copilot, Anthropic, ...) anywhere in the
