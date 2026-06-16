@@ -162,7 +162,7 @@ of each assert points to a precise fault:
 `bind_backends` (in run.py) tries `production` then `aot` and keeps only those actually
 linked. The actual output:
 
-```
+```text
 backend 'production' indisponible (RuntimeError), essai suivant
 backends DSL lies : 'aot'
 parite inter-backend SAUTEE (un seul backend lie ... 'aot') ; correction prouvee par l'oracle ...
@@ -172,7 +172,7 @@ The cause is not the two-level namespace of dlopen: it is a header ABI
 incompatibility. The native loader (`add_native_block`) checks that the signature of the headers
 the `.so` was compiled against matches that of the already loaded `_adc` module. Exact message captured:
 
-```
+```text
 add_native_block : ABI incompatible -- cle du loader 'compiler=Apple LLVM 21.0.0;std=202302L;
 headers=079c02c0...' != cle du module 'compiler=Apple LLVM 21.0.0;std=202302L;headers=f8273719...'.
 ```
@@ -269,7 +269,7 @@ suffix `cpython-312`). The first path of `PYTHONPATH` provides the C++ module, t
 
 Expected output of `run.py` (captured, macOS arm64):
 
-```
+```text
 backend 'production' indisponible (RuntimeError), essai suivant
 backends DSL lies : 'aot'
 parite inter-backend SAUTEE (un seul backend lie sur cette plateforme : 'aot') ; ...

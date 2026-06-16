@@ -225,7 +225,7 @@ entry of the `PYTHONPATH` provides the C++ module; the second makes `adc_cases` 
 
 Output of `run.py` (macOS arm64, Apple clang 21.0.0):
 
-```
+```text
 === two_species_dsl : electrons + ions ecrits en formules vs briques natives ===
 grille 48 x 48, 15 pas, CFL = 0.4 ; q_e = -1, q_i = 1
 backend 'production' indisponible (RuntimeError: add_native_block : ABI incompatible ...), essai suivant

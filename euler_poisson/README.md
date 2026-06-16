@@ -318,7 +318,7 @@ without installation (the case also has a `sys.path` fallback in run.py).
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
-```
+```text
 Contraste energetique (attractif vs repulsif) :
   dE GRAVITE = -5.857667e-04   dE PLASMA = +6.137105e-04
   -> signes opposes (gravite dE<0, plasma dE>0), magnitudes > 1e-05 : OK

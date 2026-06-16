@@ -4,7 +4,7 @@ A 2D kinetic model: you transport the velocity moments `M_pq = integral f v_x^p 
 of order p+q <= 4 (15 components) of the Vlasov equation, coupled to the system's Poisson
 equation. For each moment,
 
-```
+```text
 ∂t M_pq + ∂x M_{p+1,q} + ∂y M_{p,q+1} = q/m (p Ex M_{p-1,q} + q Ey M_{p,q-1})
                                         + Ωc (p M_{p-1,q+1} − q M_{p+1,q-1})
 ```
@@ -16,7 +16,7 @@ orders and makes the system hyperbolic.
 
 State (component order shared with the MATLAB reference RIEMOM2D):
 
-```
+```text
 U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
 ```
 

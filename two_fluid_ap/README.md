@@ -321,7 +321,7 @@ the headers; the AP computation does not go through the pybind11 bindings.
 
 Expected output of `run.py` (captured, macOS arm64, Apple clang 21):
 
-```
+```text
 [run 1 - raide, non magnetise]
   dt=5.000e-03  nsteps=200  dt*omega_pe=5.0  (explicite EXPLOSERAIT)
   max_dev()    = 5.325451e-07   (ecart a la quasi-neutralite)

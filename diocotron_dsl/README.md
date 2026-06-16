@@ -207,7 +207,7 @@ and the `adc` module imported with the same interpreter that compiled it (ABI su
 
 Expected output of `run.py` (captured, macOS arm64 dev machine):
 
-```
+```text
 backend 'production' indisponible (RuntimeError), essai suivant
 backend DSL retenu : 'aot'
 natif : t = 6.213869, masse = 1.0032746734e+04

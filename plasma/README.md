@@ -297,7 +297,7 @@ PYTHONPATH=/Users/romaindespoulain/Documents/Stage_Romain/adc_cpp/build-master/p
 Expected output (deterministic, re-runs identically; the last digits vary with the BLAS and the
 floating-point summation order, but signs and orders of magnitude are stable):
 
-```
+```text
 == plasma : electrons + ions + neutres (Poisson + ionisation + collision) ==
   |phi|_max = 1.266e-03  (Poisson de systeme actif)
   ionisation : n_i 2304.0000 -> 2370.6770,  n_g 2304.0000 -> 2237.3230,  (n_i+n_g) drel = 2.37e-15
