@@ -5,15 +5,23 @@ les cas. Ils levent `AssertionError` avec un message clair : un cas qui echoue s
 ce qui rend la CV/CI rouge. On garde le comportement historique (memes tolerances par defaut).
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 
-def relative_drift(value, reference):
+def relative_drift(value: float, reference: float) -> float:
     """Ecart relatif |value - reference| / |reference| (denominateur protege contre zero)."""
     return abs(value - reference) / max(abs(reference), 1e-30)
 
 
-def assert_mass_conserved(mass, mass0, tol=1e-9, label="", relative=True):
+def assert_mass_conserved(
+    mass: float,
+    mass0: float,
+    tol: float = 1e-9,
+    label: str = "",
+    relative: bool = True,
+) -> float:
     """Verifie la conservation de la masse : derive (relative par defaut) sous `tol`.
 
     `relative=False` compare l'ecart absolu |mass - mass0| (utilise par les cas qui historiquement
@@ -22,17 +30,19 @@ def assert_mass_conserved(mass, mass0, tol=1e-9, label="", relative=True):
     drift = relative_drift(mass, mass0) if relative else abs(mass - mass0)
     kind = "relative" if relative else "absolue"
     tag = f"{label} : " if label else ""
-    assert drift < tol, f"{tag}masse non conservee (derive {kind} {drift:.3e} >= {tol:.1e})"
+    assert (
+        drift < tol
+    ), f"{tag}masse non conservee (derive {kind} {drift:.3e} >= {tol:.1e})"
     return drift
 
 
-def assert_finite(array, label="champ"):
+def assert_finite(array, label: str = "champ") -> None:
     """Verifie qu'un tableau ne contient ni NaN ni Inf."""
     arr = np.asarray(array)
     assert np.isfinite(arr).all(), f"{label} non fini (NaN/Inf)"
 
 
-def assert_positive(array, label="densite"):
+def assert_positive(array, label: str = "densite") -> float:
     """Verifie la positivite stricte (un fluide physique reste > 0). Renvoie le minimum."""
     arr = np.asarray(array)
     mn = float(arr.min())
@@ -40,7 +50,9 @@ def assert_positive(array, label="densite"):
     return mn
 
 
-def assert_opposite_sign(a, b, min_mag=0.0, label=""):
+def assert_opposite_sign(
+    a: float, b: float, min_mag: float = 0.0, label: str = ""
+) -> None:
     """Verifie que `a` et `b` ont des signes strictement opposes (a*b < 0).
 
     `min_mag` exige en plus que chaque grandeur depasse ce seuil en valeur absolue : on evite
@@ -50,5 +62,6 @@ def assert_opposite_sign(a, b, min_mag=0.0, label=""):
     tag = f"{label} : " if label else ""
     assert abs(a) > min_mag and abs(b) > min_mag, (
         f"{tag}magnitude trop faible (|a|={abs(a):.3e}, |b|={abs(b):.3e} <= {min_mag:.1e}) : "
-        "signe non significatif")
+        "signe non significatif"
+    )
     assert a * b < 0.0, f"{tag}signes non opposes (a={a:+.3e}, b={b:+.3e})"

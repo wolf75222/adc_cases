@@ -15,6 +15,8 @@ importent `adc` PARESSEUSEMENT, pour que `frontend_compare.py` puisse chronometr
 reellement FROID dans son worker.
 """
 
+from __future__ import annotations
+
 L = 1.0
 GAMMA = 1.4
 RHO0 = 1.0
@@ -31,32 +33,43 @@ TIMEINT = "ssprk2"
 WORKLOAD = "euler_safe"
 
 
-def dt(n):
-    """dt FIXE deterministe : cfl * (L/n) / wmax, wmax = vitesse du son au pic de pression (v=0).
+def dt(n: int) -> float:
+    """dt FIXE deterministe : cfl * (L/n) / wmax, wmax = vitesse du son au pic (v=0).
 
-    Fixe (pas d'adaptatif CFL) pour que les trois fronts integrent EXACTEMENT le meme dt -> pas de
-    boucle de retroaction dt qui briserait l'identite numerique."""
+    Fixe (pas d'adaptatif CFL) pour que les trois fronts integrent EXACTEMENT le
+    meme dt -> pas de boucle de retroaction dt qui briserait l'identite numerique.
+    """
     wmax = (GAMMA * (P0 + DP) / RHO0) ** 0.5
     return CFL_FOR_DT * (L / n) / wmax
 
 
-def ic(n):
+def ic(n: int):
     """Etat conservatif initial (4, n, n) : reutilise euler_pressure_blob (rho=RHO0, v=0, bulle p)."""
     from .initial_conditions import euler_pressure_blob
-    return euler_pressure_blob(n, L=L, rho0=RHO0, p0=P0, dp=DP, sigma2=SIGMA2, gamma=GAMMA)
+
+    return euler_pressure_blob(
+        n, L=L, rho0=RHO0, p0=P0, dp=DP, sigma2=SIGMA2, gamma=GAMMA
+    )
 
 
 def bricks_model():
-    """Front BRIQUES : Euler compressible pur (models.euler) = Model(FluidState, CompressibleFlux,
-    NoSource, ChargeDensity(0))."""
+    """Front BRIQUES : Euler compressible pur (models.euler).
+
+    Soit Model(FluidState, CompressibleFlux, NoSource, ChargeDensity(0)).
+    """
     import adc_cases.models as models
+
     return models.euler(GAMMA)
 
 
 def dsl_model():
-    """Front DSL : Euler compressible pur ecrit en formules (adc.dsl.Model), SANS source ni
-    elliptic_rhs (transport pur). MEME convention que la brique Euler du coeur (euler.hpp)."""
+    """Front DSL : Euler compressible pur ecrit en formules (adc.dsl.Model).
+
+    SANS source ni elliptic_rhs (transport pur). MEME convention que la brique
+    Euler du coeur (euler.hpp).
+    """
     from adc import dsl
+
     m = dsl.Model("safe_euler")
     rho, rhou, rhov, E = m.conservative_vars("rho", "rho_u", "rho_v", "E")
     g = m.param("gamma", GAMMA)
@@ -64,11 +77,15 @@ def dsl_model():
     v = m.primitive("v", rhov / rho)
     p = m.primitive("p", (g - 1.0) * (E - 0.5 * rho * (u * u + v * v)))
     c = dsl.sqrt(g * p / rho)
-    m.flux(x=[rhou, rhou * u + p, rhou * v, (E + p) * u],
-           y=[rhov, rhov * u, rhov * v + p, (E + p) * v])
+    m.flux(
+        x=[rhou, rhou * u + p, rhou * v, (E + p) * u],
+        y=[rhov, rhov * u, rhov * v + p, (E + p) * v],
+    )
     m.eigenvalues(x=[u - c, u, u, u + c], y=[v - c, v, v, v + c])
     m.primitive_vars(rho, u, v, p)
-    m.conservative_from([rho, rho * u, rho * v, p / (g - 1.0) + 0.5 * rho * (u * u + v * v)])
+    m.conservative_from(
+        [rho, rho * u, rho * v, p / (g - 1.0) + 0.5 * rho * (u * u + v * v)]
+    )
     m.check()
     return m
 
@@ -76,12 +93,14 @@ def dsl_model():
 def spatial_bricks():
     """Schema spatial des briques (Spatial minmod / rusanov / conservative)."""
     import adc
+
     return adc.Spatial(limiter=LIMITER, flux=FLUX, recon=RECON)
 
 
 def spatial_dsl():
     """Schema spatial du DSL (FiniteVolume -> meme Spatial minmod / rusanov / conservative)."""
     import adc
+
     return adc.FiniteVolume(limiter=LIMITER, riemann=FLUX, variables=RECON)
 
 
