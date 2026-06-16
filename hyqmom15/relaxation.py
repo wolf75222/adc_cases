@@ -16,9 +16,10 @@ En simulation, la projection s'applique par champ entre les pas (relax_field), c
 flagrelax = 1 du MATLAB. Ce module est l'ORACLE de reference (== Octave a 4e-14) et la source
 de verite du port natif : boucle Python par cellule (copie host, eigvals par cellule), pour
 validation et runs moderes seulement, PAS dans un pas de temps device/MPI. Le chemin
-production est un projecteur natif compile branche sur le hook generique post-pas du coeur
-(ADC-275, hook ADC-177) ; tant qu'il n'est pas cable, les runs GPU n'appliquent pas de
-projection dans le pas.
+production est le projecteur natif compile model.build_projection, emis via m.projection (hook
+generique post-pas du coeur, ADC-275 / ADC-177) ; il reproduit relax15 branche par branche
+(~1e-15 sur les goldens, cf. validate_native_projector.py) et tourne dans le System sans
+callback Python par cellule. relax15 reste l'oracle de validation.
 """
 
 import numpy as np

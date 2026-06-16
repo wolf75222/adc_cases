@@ -78,7 +78,7 @@ reproduce a published physical curve. What that means component by component:
 | Proven | Euler trajectory replay | replaying the HLL golden steps with `time='euler'`, L2 gap to MATLAB ~4.5e-16 after 20 steps (`run.py`); the MATLAB additive split + Euler is algebraically the unsplit Euler |
 | Proven | Poisson | phi === analytic on a sinusoid to 1e-14 in `fft_spectral`, source E === -grad phi centered to 1e-16, checkpoint/restart bit-identical (`run_diocotron.py`) |
 | Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
-| Partial | realizability under transport | the per-cell Python `relax_field` is an oracle, not a scalable path (ADC-275); the native compiled projector is not yet wired (depends on ADC-177) |
+| Proven | realizability under transport | the native compiled projector (`build_projection`, emitted via `m.projection` / ADC-177) reproduces `relax15` branch by branch to ~1e-15 on the 12 goldens and `relax_field` on a field; it runs as the System post-step hook with no per-cell Python callback ([validate_native_projector.py](validate_native_projector.py), [notes/native_projector.md](notes/native_projector.md)). `relax_field` stays the oracle |
 | Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
 | Partial | golden coverage | no spatial golden with relaxation active (transport x relaxation); the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated (ADC-203) |
 | Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
@@ -86,8 +86,8 @@ reproduce a published physical curve. What that means component by component:
 | Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
 
 Use the drivers above for validation. Use the native compiled path (`backend="aot"`, exact
-speeds, Poisson `geometric_mg`) for production runs, with the caveat that the realizability
-projection is still a Python per-cell loop (section below).
+speeds, Poisson `geometric_mg`) for production runs, with the realizability projection emitted
+natively (`projection=True`, section below) so it runs in the step without a per-cell Python loop.
 
 ### Useful options
 
@@ -108,30 +108,54 @@ eigenvalues blow up. With the projection applied at every step, dt stays ~1.2e-3
 
 The projection is `relaxation15` ([relaxation.py](relaxation.py)): clamp the standardized
 moments, then relax toward a realizable target. The port follows the MATLAB branch by
-branch; the "complex eigenvalues" test evaluates the model's autodiff Jacobian. Per-field
-usage:
-
-```python
-from relaxation import make_corner_eigs, relax_field
-fn = make_corner_eigs()
-U = relax_field(U, lamin=1e-12, Ma=4.0, corner_eigs=fn)   # (15, ny, nx) -> projeté
-```
+branch; the "complex eigenvalues" test evaluates the order-3 Jacobian sub-blocks at the
+standardized state.
 
 Two paths, two purposes:
 
-- Oracle (current): `relax_field` is a per-cell Python loop with a host copy and a
-  `numpy.linalg.eigvals` per cell. It is the reference for validation (=== Octave to 4e-14,
-  `run_relaxation.py`) and the source of truth for the native port. It is not scalable: not
-  usable inside a GPU/MPI time step (ADC-275).
-- Native projector (expected, not yet wired): a compiled device-safe `U -> U_projected`
-  applied after each whole step (the MATLAB `flagrelax=1` semantics are per-step, not
-  per-RK-stage). It depends on the generic post-step projection hook ADC-177 (adc_cpp PR #318);
-  the HyQMOM15 formulas stay on the case side, only the hook is core (ADC-275). Until it
-  lands, production GPU runs apply no projection in the step and must keep Ma moderate or
-  accept the dt collapse above.
+- Oracle: `relax_field` ([relaxation.py](relaxation.py)) is a per-cell Python loop with a host
+  copy and a `numpy.linalg.eigvals` per cell. It is the reference for validation (=== Octave to
+  4e-14, `run_relaxation.py`) and the source of truth for the native projector. It is not
+  scalable: do not use it inside a GPU/MPI time step. Per-field usage:
 
-`relaxation15` is a relaxation toward a target, not an idempotent projector: re-relaxing
-relaxes again (verified under Octave); the drivers assert no idempotence, faithful to MATLAB.
+  ```python
+  from relaxation import make_corner_eigs, relax_field
+  fn = make_corner_eigs()
+  U = relax_field(U, lamin=1e-12, Ma=4.0, corner_eigs=fn)   # (15, ny, nx) -> projeté
+  ```
+
+- Native projector (production): `build_projection` ([model.py](model.py)) emits `relaxation15`
+  through the generic post-step hook `m.projection` (ADC-177). Enable it at build time:
+
+  ```python
+  m = build_moment_model("hq", exact_speeds=True, projection=True, Ma=20.0, lamin=1e-12)
+  ```
+
+  It is a branch-by-branch transcription of `relax15` into the DSL `Expr` algebra with no
+  dynamic branch (each MATLAB branch is a branchless mask blend in `max`/`min`/`abs_`/`sign`);
+  the "complex eigenvalues" witness uses `dsl.eig_max_im` and the `p2p2` realizability gate uses
+  `dsl.eig_lmin` (ADC-289, over `adc::real_eig_minmax`). The System applies the compiled
+  `project(U, aux)` at the end of each whole step (post-step, MATLAB `flagrelax=1`; an
+  `after_stage` variant would trade fidelity for robustness) on the valid cells, with no per-cell
+  Python callback. `M00`, `M10`, `M01` pass through unchanged. See
+  [notes/native_projector.md](notes/native_projector.md).
+
+Application policy: `projection=True` requires `exact_speeds=True` (the complex-eigenvalue test
+reads the order-3 flux-Jacobian sub-blocks); `Ma` and `lamin` are baked into the projector. The
+hook is rejected by the `prototype` backend and the `amr_system` target (ADC-177 contract).
+
+Validation (issue criteria, [validate_native_projector.py](validate_native_projector.py)):
+compiled `project` == `relax15` on the 12 goldens (branches 0-4) to ~1e-15, well inside the 1e-12
+to 1e-10 per-branch tolerance; compiled projection over a `(15, ny, nx)` field == `relax_field`;
+at Ma=20 the native non-realizable rate drops as with `relax_field`; and `projection=False` emits
+no hook (bit-identical transport).
+
+Idempotence caveat: `relaxation15` is a relaxation toward a target, not a strict projection
+(`P(P(U)) != P(U)`; re-relaxing relaxes again). The ADC-177 `m.projection` contract documents
+idempotence as the intended property, but the System applies the hook once per macro-step, so a
+single pass reproduces `relax_field` exactly (what the acceptance criteria require). Do not enable
+a repeated / `after_stage` application expecting bit-for-bit `relax_field`: it would keep relaxing,
+faithful to MATLAB but not idempotent. The drivers assert no idempotence, faithful to MATLAB.
 
 ## Correlated crossing initial condition (`r != 0`)
 
@@ -313,7 +337,8 @@ What is not validated at scale:
 - The closure is exact on Gaussians, but the scheme does not preserve realizability: long
   runs => project (realizability section).
 - The realizability projection is a Python per-cell oracle; a compiled device-safe projector
-  is not yet wired (ADC-275, depends on ADC-177).
+  is blocked on two ADC-177/DSL gaps (ADC-275, see the realizability section and
+  [notes/native_projector_feasibility.md](notes/native_projector_feasibility.md)).
 - `crossing_state(r != 0)` raises `NotImplementedError`; the MATLAB parity exists but the gate
   is not yet removed (ADC-274).
 - The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt
