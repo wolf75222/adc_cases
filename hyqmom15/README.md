@@ -80,7 +80,7 @@ reproduce a published physical curve. What that means component by component:
 | Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
 | Proven | realizability under transport | the native compiled projector (`build_projection`, emitted via `m.projection` / ADC-177) reproduces `relax15` branch by branch to ~1e-15 on the 12 goldens and `relax_field` on a field; it runs as the System post-step hook with no per-cell Python callback ([validate_native_projector.py](validate_native_projector.py), [notes/native_projector.md](notes/native_projector.md)). `relax_field` stays the oracle |
 | Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
-| Partial | golden coverage | no spatial golden with relaxation active (transport x relaxation); the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated (ADC-203) |
+| Partial | golden coverage | a code-anchored golden runs the NATIVE projector THROUGH transport (Ma=20 crossing, [run_golden_transport_relax.py](run_golden_transport_relax.py), ADC-203); it pins our own transport x relaxation trajectory against drift, not MATLAB fidelity (the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated, so a MATLAB-anchored transport x relaxation cross-check stays separate) |
 | Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
 | Partial | BGK collision | a generic BGK relaxation toward the local Maxwellian is wired (`moments.bgk_source`, `build_moment_model(collision=True)`, ADC-277); the emitted source is verified `== nu*(M_eq - M)` to machine precision with the collisional invariants M00/M10/M01 zero (`run_relaxation.py` (5)). The full anisotropic `collision15.m` (Kn-dependent branches) is not yet matched |
 | Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
@@ -200,6 +200,36 @@ octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m  # relaxation15 
 The ssprk2 trajectory gap to MATLAB is 4% (the second order, vs ~4.5e-16 for the `time='euler'`
 replay in the table). The Ma=20 realizability contrast (`run_relaxation.py`): projected ~13%
 of cells violated vs ~52% raw, the executable witness that the projection works on a field.
+
+### Code-anchored golden: transport + native relaxation15 (ADC-203)
+
+`run_golden_transport_relax.py` freezes a small deterministic trajectory of the CURRENT adc_cpp code in
+the regime where the projector actually fires: the Ma=20 crossing flow (n=32, HLL + exact speeds,
+`projection=True` so the NATIVE `relaxation15` projector is applied post-step by System, no Poisson,
+3 steps at a frozen `dt=2e-4`) as `golden/golden_transport_relax_state.csv` (+ `..._meta.csv`). It is
+the only fixture that runs the NATIVE projector THROUGH a transport trajectory: `run_relaxation.py`
+(3)/(4) apply the Python `relax_field` ORACLE manually each step (and (4) is MATLAB-anchored, tol 5e-8),
+and `validate_native_projector.py` checks the native projector in ISOLATION (no transport). It is a
+non-regression freeze of OUR own trajectory, deliberately distinct from the MATLAB/RIEMOM2D-anchored
+goldens: it catches silent drift of the transport x projector path, not a divergence from MATLAB. The
+Ma=20 crossing is a stiff flow that Lyapunov-amplifies FP differences, and the NATIVE compiled (Kokkos)
+projector + HLL diverge macOS->Linux far more than the numpy oracle: the golden is SAME-platform
+bit-exact (max|dU|=0) but only CROSS-platform coarse (a macOS golden vs a Linux CI run drifts ~7.6e-6
+over 3 steps). So the CI gate is `atol=1e-4` (~13x the measured drift), a non-regression SMOKE that
+catches the projector firing and gross scheme/projector regressions, not subtle bit drift. The check
+asserts the projector is materially active (a `projection=False` replay differs by ~8e2 here: the
+unprotected Ma=20 run blows up), so the golden cannot silently degrade into a transport-only freeze. It
+is serial only (not bitwise across MPI ranks) and dt is hardcoded, so an eigenvalue change cannot
+silently re-pick dt and pass as "no drift".
+
+```bash
+python3 hyqmom15/run_golden_transport_relax.py            # CHECK against the committed golden (CI)
+python3 hyqmom15/run_golden_transport_relax.py --regen    # rewrite after an INTENTIONAL change
+git add -f hyqmom15/golden/golden_transport_relax_state.csv hyqmom15/golden/golden_transport_relax_meta.csv
+```
+
+Regenerate (and force-add, since `*.csv` is gitignored repo-wide) only after a deliberate change, and
+say so in the PR.
 
 ## Initial ExB drift: a deliberate fix to a MATLAB meshgrid trap
 
@@ -345,7 +375,10 @@ What is not validated at scale:
   fidelity (ADC-197).
 - A generic BGK relaxation toward the local Maxwellian is wired (`build_moment_model(collision=True)`,
   ADC-277); the full anisotropic `collision15.m` (Kn-dependent branches) is not yet fidelity-matched.
-- No spatial golden with relaxation active (transport x relaxation interaction) (ADC-203).
+- Transport with the native relaxation15 projector active is frozen by a code-anchored non-regression
+  golden ([run_golden_transport_relax.py](run_golden_transport_relax.py), ADC-203), but a
+  MATLAB-anchored transport x relaxation cross-check is still missing (the golden pins our own
+  trajectory, not MATLAB fidelity).
 - `riemann="hllc"`/`"roe"` unavailable: no contact wave nor closed eigenstructure for this
   system.
 - Diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
