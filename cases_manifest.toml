@@ -161,6 +161,13 @@ ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments : projecteur natif relaxation15 (m.projection + eig_max_im) vs oracle relax15/relax_field (parite 1e-10, branche VP complexes incluse), chute du taux non-realisable Ma=20, non-regression sans projection."
 
+[[case]]
+path = "hyqmom15/run_golden_transport_relax.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM 15 moments : golden de non-regression code-ancre du transport HLL x projecteur natif relaxation15 (ADC-275, applique par System apres chaque pas) sur le croisement Ma=20 (regime ou la projection se declenche) ; dt gele, serie, 3 pas, atol 1e-4 (smoke cross-plateforme : projecteur compile + flux raide divergent macOS/Linux ~7.6e-6)."
+
 
 [[case]]
 path = "hyqmom15/run_mpi.py"
