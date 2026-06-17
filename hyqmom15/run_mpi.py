@@ -5,11 +5,12 @@ Pourquoi ce cas
 ---------------
 run_diocotron prouve le couplage complet (sources electriques + Poisson) en SERIE. Ici on le
 rejoue sous mpirun (np=2 et 4) avec le solveur de Poisson MULTIGRILLE GEOMETRIQUE
-(solver="geometric_mg"), seul chemin elliptique sur de sous MPI : le solveur FFT direct est
-mono-rang PAR CONCEPTION (il deroule une seule boite en round-robin -> un seul rang la possede)
-et le coeur le REFUSE explicitement quand n_ranks>1. On verifie que le pas complet (transport +
-CFL + Poisson MG) tourne sans interblocage ni divergence, que l'etat final est bit-identique a la
-serie, et que le rejet FFT remonte proprement a travers le driver.
+(solver="geometric_mg") ET, depuis ADC-287, avec le FFT distribue (solver="fft",
+RemappedFFTSolver) qui TOURNE desormais multi-rang : il presente vers l'exterieur la boite unique
+du System et cache un remap boite<->tranches autour du FFT (scatter/gather + alltoall interne).
+Avant ADC-287 le FFT etait refuse sous MPI ; ce n'est plus le cas. On verifie que le pas complet
+(transport + CFL + Poisson) tourne sans interblocage ni divergence, que l'etat final MG est
+bit-identique a la serie, et que le FFT distribue EGALE geometric_mg sur le rang proprietaire.
 
 Topologie des boites (IMPORTANT, mesure, pas suppose)
 -----------------------------------------------------
@@ -18,7 +19,7 @@ Le adc.System cartesien est MONO-BOITE : une seule boite couvre tout le domaine 
 rang 0 ; les autres rangs ont local_size()==0. Ce smoke exerce donc :
   - la SURETE COLLECTIVE du chemin elliptique MG et des reductions (CFL max, masse) sous MPI
     (tous les rangs entrent collectivement dans solve_fields / step_cfl, aucun rang ne deadlock) ;
-  - le garde-fou FFT-sous-MPI ;
+  - la PARITE du FFT distribue (ADC-287, RemappedFFTSolver) vs geometric_mg sous MPI ;
   - la parite numerique serie vs multi-rang.
 Il N'EXERCE PAS l'echange de halos entre boites disjointes (il n'y a qu'une boite). Le decoupage
 multi-boites cartesien distribue (halos inter-rangs) releve d'AMR/polaire (suivis separes).
@@ -33,7 +34,7 @@ coeur voit le bon rang/taille. C'est le meme bootstrap que les tests MPI Python 
 Lancement
 ---------
   mpirun -np 1 python run_mpi.py    # reference serie (ecrit l'etat np=1)
-  mpirun -np 2 python run_mpi.py    # np=2 : checks + parite vs np=1 + rejet FFT
+  mpirun -np 2 python run_mpi.py    # np=2 : checks + parite vs np=1 + parite FFT/MG
   mpirun -np 4 python run_mpi.py    # np=4 : idem
 """
 
@@ -126,7 +127,8 @@ def make_system(
     """System periodique + bloc 15 moments compile + Poisson au solveur demande.
 
     Memes briques que run_diocotron.build_sim, mais le solveur Poisson est un
-    PARAMETRE (geometric_mg pour le run, fft/fft_spectral pour le test de rejet).
+    PARAMETRE (geometric_mg pour le run, fft/fft_spectral pour le test de parite
+    distribue, ADC-287).
     """
     sim = adc.System(n=n, L=1.0, periodic=True)
     sim.add_equation(
@@ -167,29 +169,56 @@ def run_diocotron_mg(n: int, nsteps: int, compiled, U0: np.ndarray):
     return U, phi, mass0, dt_loop
 
 
-def check_fft_rejected(n: int, compiled, U0: np.ndarray) -> dict:
-    """Rejet propre sous MPI des solveurs FFT.
+def check_fft_parity(
+    n: int, compiled, U0: np.ndarray, nsteps: int = NSTEPS
+) -> dict:
+    """Parite du FFT distribue (ADC-287) vs geometric_mg sous MPI.
 
-    solver='fft' (et 'fft_spectral') doivent lever une RuntimeError a travers le
-    driver, sans interblocage ni segfault. Le coeur leve sur TOUS les rangs
-    (ensure_elliptic est collectif), donc chaque rang catch symetriquement.
+    Depuis ADC-287, solver='fft' (et 'fft_spectral') TOURNE multi-rang
+    (RemappedFFTSolver) la ou il etait refuse avant : il presente la boite
+    unique du System et cache un remap boite<->tranches autour du FFT. On
+    avance nsteps depuis la meme CI avec chaque solveur FFT, puis on compare
+    le champ au resultat geometric_mg sur le rang proprietaire (les deux
+    solveurs convergent vers le meme Poisson periodique a precision machine).
+    Le coeur entre/leve collectivement : tous les rangs avancent
+    symetriquement (pas d'interblocage).
 
     Returns:
-        {solver: (verdict, message)}.
+        {solver: (verdict, detail)}.
     """
     out = {}
+    Umg, phimg, _, _ = run_diocotron_mg(n, nsteps, compiled, U0)
+    rank, _ = _rank_size()
     for solver in ("fft", "fft_spectral"):
         sim = make_system(n, compiled, solver)
         sim.set_state("mom", U0)
         try:
             sim.solve_fields()
-            out[solver] = ("NON-REJETE", "")
+            for _ in range(nsteps):
+                sim.step_cfl(0.4)
+            _barrier()
+            if rank == 0:
+                U = np.array(sim.get_state("mom"))
+                phi = np.array(sim.potential())
+                rdphi = float(
+                    np.max(np.abs(phi - phimg))
+                    / (np.max(np.abs(phimg)) + 1e-300)
+                )
+                rdU = float(
+                    np.max(np.abs(U - Umg)) / (np.max(np.abs(Umg)) + 1e-300)
+                )
+                ok = rdphi < 5e-3 and rdU < 5e-3
+                out[solver] = (
+                    "PARITE OK" if ok else "ECART > 5e-3",
+                    "rel|dphi|=%.2e rel|dU|=%.2e" % (rdphi, rdU),
+                )
+            else:
+                out[solver] = ("OK (rang sans boite)", "")
         except RuntimeError as e:
-            out[solver] = ("rejet RuntimeError", str(e).splitlines()[0])
-        except (
-            Exception
-        ) as e:  # noqa: BLE001 -- on veut le type exact pour le rapport
-            out[solver] = (type(e).__name__, str(e).splitlines()[0])
+            out[solver] = (
+                "REJETE (inattendu post-ADC-287)",
+                str(e).splitlines()[0],
+            )
         _barrier()
     return out
 
@@ -228,14 +257,20 @@ def main() -> None:
     rho_bg = float(U0[0].mean())
     compiled = compile_model(rho_bg)
 
-    # (1) rejet FFT/FFT-spectral sous MPI (seulement multi-rang : en serie fft est le chemin valide).
+    # (1) parite FFT distribue (ADC-287) vs geometric_mg sous MPI (seulement
+    #     multi-rang : en serie fft est deja le chemin direct, rien a comparer).
     if nranks > 1:
-        rej = check_fft_rejected(N, compiled, U0)
+        par = check_fft_parity(N, compiled, U0)
         if rank == 0:
-            for solver, (verdict, msg) in rej.items():
+            for solver, (verdict, detail) in par.items():
                 print(
-                    "(rejet) solver=%-13s -> %s | %s"
-                    % (repr(solver), verdict, msg)
+                    "(parite-fft) solver=%-13s -> %s | %s"
+                    % (repr(solver), verdict, detail)
+                )
+            for solver, (verdict, _detail) in par.items():
+                assert "OK" in verdict, (
+                    "FFT %s : ne tourne pas / ne matche pas geometric_mg "
+                    "sous MPI (ADC-287)" % solver
                 )
 
     # (2) run principal : 12 pas, Poisson MG.
