@@ -582,3 +582,51 @@ def relax_field(U, lamin, Ma, corner_eigs=None) -> np.ndarray:
         for i in range(nx):
             out[:, j, i] = relax15(out[:, j, i], lamin, Ma, corner_eigs=fn)
     return out
+
+
+def maxwellian_state(M4):
+    """15 moments bruts de la maxwellienne locale ajustee sur les bas moments de M4.
+
+    Miroir numpy scalaire de moments.maxwellian_moments : densite M00, moyenne (u, v) et
+    covariance (C20, C11, C02) des moments centres d'ordre 2, puis Isserlis (les moments
+    centres pairs gaussiens jusqu'a l'ordre 4). Reutilise gaussian_state de model.py.
+
+    Args:
+        M4: vecteur de 15 moments bruts (ordre MOMENT_NAMES).
+
+    Returns:
+        ndarray (15,) des moments bruts de la maxwellienne d'equilibre.
+    """
+    from model import gaussian_state
+
+    m00 = M4[0]
+    u, v = M4[1] / m00, M4[5] / m00
+    c20 = M4[2] / m00 - u * u
+    c11 = M4[6] / m00 - u * v
+    c02 = M4[9] / m00 - v * v
+    return gaussian_state(m00, u, v, c20, c11, c02)
+
+
+def bgk_field(U, nu, dt):
+    """Relaxation BGK explicite sur un pas, par champ : U <- U + dt*nu*(M_eq - U).
+
+    Oracle de la source BGK compilee (gmom.bgk_source emise par build_moment_model
+    collision=True) : melange convexe de pas theta = nu*dt vers la maxwellienne locale.
+    Masse et qdm sont exactement conservees (M_eq les egale). Boucle hote, pour la
+    validation / des runs moderes seulement, comme relax_field.
+
+    Args:
+        U: champ de moments (15, ...).
+        nu: frequence de collision.
+        dt: pas de temps.
+
+    Returns:
+        Une copie du champ apres un pas BGK explicite, meme forme que U.
+    """
+    out = np.array(U, dtype=float, copy=True)
+    flat = out.reshape(out.shape[0], -1)
+    theta = nu * dt
+    for c in range(flat.shape[1]):
+        meq = maxwellian_state(flat[:, c])
+        flat[:, c] = flat[:, c] + theta * (meq - flat[:, c])
+    return out
