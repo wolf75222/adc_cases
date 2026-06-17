@@ -177,6 +177,8 @@ def build_moment_model(
     projection=False,
     Ma=4.0,
     lamin=1e-12,
+    collision=False,
+    nu_coll=0.0,
 ) -> dsl.Model:
     """Construit le modele DSL 15 moments avec la fermeture donnee.
 
@@ -222,6 +224,14 @@ def build_moment_model(
         Ma: nombre de Mach du clamp |s30|, |s03| <= 4 + Ma/2 (cuit dans le projecteur).
         lamin: seuil de la porte de collision lambda_min(p2p2) <= lamin (cuit dans le
             projecteur).
+        collision: True = ajoute une collision BGK qui relaxe la hierarchie vers la
+            maxwellienne locale (moments.bgk_source) ; elle se compose avec la source de
+            Lorentz dans l'UNIQUE creneau de source, est echelonnee par dt via le splitting
+            (explicite) ou l'IMEX, et est ORTHOGONALE a la projection (M_eq est realisable,
+            donc la cascade transport -> BGK -> projection est sure). Les invariants
+            collisionnels M00/M10/M01 sont nuls (masse et qdm conservees). False (defaut).
+        nu_coll: frequence de collision BGK (constante). Si > 0, borne le pas de temps via
+            dt <= cfl/nu_coll (composee en max avec omega_p en une seule source_frequency).
 
     Returns:
         adc.dsl.Model pret a compiler.
@@ -241,6 +251,21 @@ def build_moment_model(
             return gmom.lorentz_sources(
                 M_, -1.0 * gx, -1.0 * gy, qm, oc
             )  # E = -grad phi
+
+    if collision:
+        # BGK : relaxe la hierarchie vers la maxwellienne locale (gmom.bgk_source). Compose
+        # avec la source de Lorentz dans l'UNIQUE creneau de source ; les invariants
+        # collisionnels (M00/M10/M01) sont nuls -> masse et qdm conservees.
+        base_src = src  # None (pas de Lorentz) ou la fermeture de Lorentz
+
+        def _bgk_src(m_, M_):
+            nu = m_.param("nu_coll", float(nu_coll))
+            bgk = gmom.bgk_source(M_, nu)
+            if base_src is None:
+                return bgk
+            return [a + b for a, b in zip(base_src(m_, M_), bgk)]
+
+        src = _bgk_src
 
     m = gmom.build_moment_model(
         name,
@@ -281,10 +306,15 @@ def build_moment_model(
             x=[ux - k * sx, ux + k * sx], y=[uy - k * sy, uy + k * sy]
         )
 
+    # Borne dt source : UNE seule source_frequency, le max des frequences declarees
+    # (omega_p de la source electrique, nu_coll de la collision BGK). dt <= cfl/freq.
+    freqs = []
     if with_sources and omega_p is not None:
-        m.source_frequency(
-            omega_p + 0.0 * U["M00"]
-        )  # borne dt source (constante)
+        freqs.append(float(omega_p))
+    if collision and nu_coll > 0.0:
+        freqs.append(float(nu_coll))
+    if freqs:
+        m.source_frequency(max(freqs) + 0.0 * U["M00"])  # constante
     if debye is not None:
         inv_l2 = m.param("inv_debye2", 1.0 / float(debye) ** 2)
         rho_bg = m.param("rho_background", float(rho_background))

@@ -50,7 +50,12 @@ for d in (os.path.dirname(HERE),):
 
 import adc  # noqa: E402
 from model import MOMENT_NAMES, build_moment_model, crossing_state  # noqa: E402
-from relaxation import make_corner_eigs, relax15, relax_field  # noqa: E402
+from relaxation import (  # noqa: E402
+    make_corner_eigs,
+    maxwellian_state,
+    relax15,
+    relax_field,
+)
 
 
 def check_golden() -> None:
@@ -359,10 +364,41 @@ def check_crossing_relax_golden() -> None:
     )
 
 
+def check_bgk_source(n: int = 16, nu: float = 5.0) -> None:
+    """(5) source BGK : build_moment_model(collision=True) emet nu*(M_eq - M).
+
+    Compare la source emise (evaluee en numpy par m.source_value, SANS compilation) a l'oracle
+    nu*(M_eq - M) cellule par cellule, sur un etat de croisement anisotrope (M != M_eq). Verifie
+    aussi que les invariants collisionnels M00/M10/M01 de la source sont identiquement nuls (masse
+    et quantite de mouvement conservees par construction du BGK).
+    """
+    U0 = crossing_state(n, 4.0)  # realisable, anisotrope -> M != M_eq, le BGK a du travail
+    m = build_moment_model(
+        name="hyqmom15_bgk", collision=True, nu_coll=nu,
+        with_sources=False, exact_speeds=True,
+    )
+    src = np.asarray(m.eval_source(U0, {}))  # (15, n, n) source BGK emise (eval numpy de la DSL)
+    meq = np.empty_like(U0)
+    flat_u, flat_m = U0.reshape(15, -1), meq.reshape(15, -1)
+    for c in range(flat_u.shape[1]):
+        flat_m[:, c] = maxwellian_state(flat_u[:, c])
+    ref = nu * (meq - U0)
+    dmax = float(np.max(np.abs(src - ref)))
+    assert dmax < 1e-12, "source BGK emise != oracle nu*(M_eq - M) : %.2e" % dmax
+    for k, nm in ((0, "M00"), (1, "M10"), (5, "M01")):
+        inv = float(np.max(np.abs(src[k])))
+        assert inv < 1e-12, "invariant collisionnel %s non nul : %.2e" % (nm, inv)
+    print(
+        "(5) source BGK : emise == nu*(M_eq - M) (%.1e), invariants M00/M10/M01 nuls -- OK"
+        % dmax
+    )
+
+
 def main() -> None:
     check_golden()
     check_crossing_ma20()
     check_crossing_relax_golden()
+    check_bgk_source()
     print("hyqmom15/run_relaxation : OK")
 
 

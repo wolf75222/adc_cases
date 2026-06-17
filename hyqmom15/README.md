@@ -82,7 +82,7 @@ reproduce a published physical curve. What that means component by component:
 | Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
 | Partial | golden coverage | no spatial golden with relaxation active (transport x relaxation); the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated (ADC-203) |
 | Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
-| Missing | BGK collision (`collision15.m`) | not ported; MATLAB branches with `Kn <= 10` are not yet fidelity-covered (ADC-277) |
+| Partial | BGK collision | a generic BGK relaxation toward the local Maxwellian is wired (`moments.bgk_source`, `build_moment_model(collision=True)`, ADC-277); the emitted source is verified `== nu*(M_eq - M)` to machine precision with the collisional invariants M00/M10/M01 zero (`run_relaxation.py` (5)). The full anisotropic `collision15.m` (Kn-dependent branches) is not yet matched |
 | Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
 
 Use the drivers above for validation. Use the native compiled path (`backend="aot"`, exact
@@ -343,8 +343,8 @@ What is not validated at scale:
   is not yet removed (ADC-274).
 - The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt
   fidelity (ADC-197).
-- The MATLAB BGK collision (`collision15.m`) is not ported: branches with `Kn <= 10` are not
-  fidelity-covered (ADC-277).
+- A generic BGK relaxation toward the local Maxwellian is wired (`build_moment_model(collision=True)`,
+  ADC-277); the full anisotropic `collision15.m` (Kn-dependent branches) is not yet fidelity-matched.
 - No spatial golden with relaxation active (transport x relaxation interaction) (ADC-203).
 - `riemann="hllc"`/`"roe"` unavailable: no contact wave nor closed eigenstructure for this
   system.
