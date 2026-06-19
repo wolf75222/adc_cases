@@ -34,7 +34,6 @@ sys.path.insert(0, HERE)
 
 import model as MOD  # noqa: E402
 import relaxation as R  # noqa: E402
-from adc import dsl  # noqa: E402
 
 INCLUDE = os.environ.get(
     "ADC_INCLUDE",

@@ -230,7 +230,7 @@ def main() -> None:
         f"axe ordre atteignable via add_block : {[ORDER_LABEL[o] for o in orders]}"
     )
     print(
-        f"  (O5 = WENO5-Z + SSPRK3, atteignable depuis adc_cpp #88 / master ca803dc)"
+        "  (O5 = WENO5-Z + SSPRK3, atteignable depuis adc_cpp #88 / master ca803dc)"
     )
     print("=" * 78)
     print(

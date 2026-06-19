@@ -9,7 +9,6 @@ Lancer : PYTHONPATH=<adc_cpp>/build-master/python python diag/convergence_reduce
 from __future__ import annotations
 
 import math
-import sys
 
 import numpy as np
 

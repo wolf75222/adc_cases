@@ -51,8 +51,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIGDIR = os.path.join(HERE, "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
-N, NSTEPS = case.main.__defaults__ if case.main.__defaults__ else (48, 15)
-# main() fixe n, n_steps = 48, 15 en dur ; on relit les memes valeurs explicitement.
+# main() fixe n, n_steps = 48, 15 en dur ; on reprend les memes valeurs explicitement.
 N, NSTEPS = 48, 15
 
 ELEC_VARS = ["rho", "rho_u", "rho_v", "E"]
