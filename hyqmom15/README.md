@@ -68,6 +68,13 @@ one).
 invariants and bit-level agreement against the MATLAB reference RIEMOM2D, they do not
 reproduce a published physical curve. What that means component by component:
 
+> Reference pivot (ADC-348): future strict goldens move from the legacy `RIEMOM2D` to
+> the refactored `RieMOM2D_Electrostatic_periodic`. The canonical parameters, known
+> divergences, ADC decisions, and the fidelity plan are locked in
+> [matlab_ref/REFERENCE.md](matlab_ref/REFERENCE.md). The numbers in this README
+> are the current port (e.g. `omega_p=25`); the canonical reference values
+> (e.g. `omega_p=20`) live in that note, and ADC-351 aligns the driver to them.
+
 | Status | Component | Evidence (number, source) |
 |---|---|---|
 | Proven | closure (`closureS5.m`, 6 standardized order-5 formulas) | `hyqmom_closure` ([model.py](model.py)) === `Flux_closure15_2D.m` to 1e-12 on 10 states (`run.py`), exact on Gaussians via the independent Isserlis oracle (`gaussian_raw_moment`) |
@@ -391,3 +398,11 @@ What is not validated at scale:
 - [ADC-197](https://linear.app/romain7522/issue/ADC-197) source dt bound vs `compute_dt.m`
 - [ADC-203](https://linear.app/romain7522/issue/ADC-203) spatial golden with relaxation active, independent Isserlis oracle, per-state rtol
 - [ADC-277](https://linear.app/romain7522/issue/ADC-277) scope and port `collision15.m` / BGK
+
+M8 (`RieMOM2D_Electrostatic_periodic` reference pivot, see [matlab_ref/REFERENCE.md](matlab_ref/REFERENCE.md)):
+
+- [ADC-348](https://linear.app/romain7522/issue/ADC-348) lock the canonical Matlab reference and the fidelity plan
+- [ADC-349](https://linear.app/romain7522/issue/ADC-349) shared `matlab_ref` layer (params, Jacobians, init, dt, L2)
+- [ADC-350](https://linear.app/romain7522/issue/ADC-350) generate goldens from `RieMOM2D_Electrostatic_periodic`
+- [ADC-351](https://linear.app/romain7522/issue/ADC-351) align the diocotron driver on the new periodic Matlab
+- [ADC-356](https://linear.app/romain7522/issue/ADC-356) audit the adc_cpp gaps before any core change

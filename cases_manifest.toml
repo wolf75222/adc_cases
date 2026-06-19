@@ -184,6 +184,13 @@ needs = ["cxx"]
 desc = "HyQMOM 15 moments sur AmrSystem : smoke diocotron AMR (hll exact + MG composite, euler+reflux), coherence grossier/fin vs System uniforme fin, rejets aot/target/hll/ssprk3."
 
 [[case]]
+path = "hyqmom15/matlab_ref/check_reference.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 matlab_ref : garde-fou doc (ADC-348) que REFERENCE.md verrouille la reference RieMOM2D_Electrostatic_periodic (parametres diocotron, divergences Dmax / source magnetique / init_magnetic_wave_field, abandon HLLC-WENO, politique bug-for-bug). Pur Python, sans build."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
