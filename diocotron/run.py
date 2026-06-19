@@ -50,7 +50,6 @@ from adc_cases import (
 from adc_cases.common.initial_conditions import (
     ring_density as _ring_density,
 )  # noqa: E402
-from adc_cases.common.io import case_output_dir  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Geometrie de l'anneau (cibles analytiques du papier reproduites a cette geometrie).

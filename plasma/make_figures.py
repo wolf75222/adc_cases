@@ -36,7 +36,6 @@ except ImportError:
         0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
 from adc_cases import recipes  # noqa: E402
-from adc_cases.common.checks import relative_drift  # noqa: E402
 
 PI = np.pi
 HERE = os.path.dirname(os.path.abspath(__file__))

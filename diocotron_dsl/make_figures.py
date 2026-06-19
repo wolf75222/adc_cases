@@ -126,7 +126,6 @@ def main() -> None:
     p1 = os.path.join(FIGDIR, "equivalence_heatmap.png")
     fig.savefig(p1, dpi=130, bbox_inches="tight")
     plt.close(fig)
-    p2 = p1  # une seule figure desormais (l'ancien final_density.png est fusionne ici)
 
     # --- Provenance : nombres mesures de ce run (rien d'invente) ---
     amp0 = case.perturbation_amplitude(ne0)

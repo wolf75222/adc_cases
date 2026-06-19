@@ -490,7 +490,7 @@ def test_step_frozen_subtracted_call_order_and_cancellation() -> None:
     La carte corrigee step()-R_eq applique deux fois de suite a U_eq doit reproduire U_eq EXACTEMENT
     (R_eq = derive constante : U + D - D = U). On verifie l'ordre des appels facade et l'invariance.
     """
-    adc = _install_fake_adc()
+    _install_fake_adc()
     rp = _import_run_polar()
     params = _params()
     args = _Args(cs2=1.0e-4, dt=1.0e-3)
