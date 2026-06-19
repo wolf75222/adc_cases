@@ -60,6 +60,39 @@
       "source": "diag/make_paper_figures.py 5 (run_mode_real)",
       "resolution": "n=96"
     },
+    "snapshots_l3_n512.png": {
+      "what": "grille 3x3 schlieren HAUTE RESOLUTION n=512 (ADC-79) du modele complet system-schur, mode l=3",
+      "engine": "full-system-schur (model.py compile, FiniteVolume minmod + rusanov, Strang SSPRK3 + CondensedSchur theta=0.5), n=512, t_f=10*T_d",
+      "resolution": "n=512 (vs n=96 pour snapshots_l3.png : ~28x les DDL, ~5.3x la resolution lineaire)",
+      "frames": "8/9 fractions (snap 0..7 = 0.01..0.875 t_f) ; le panneau t_f (1.0) n'a PAS ete atteint (walltime 23h coupe a 0.875 t_f)",
+      "positivity": "minmod ; rho_min ~ +4-8e-7 sur tout le run (stable, pas de divergence)",
+      "raw_state": "ROMEO /scratch_p/rmdraux/650450/npz_l3_n512/state_00000{0..7}.npz (sim.write), rapatries",
+      "reading": "filaments fins et spirales internes resolus (la ou n=96 les etale par diffusion numerique) -- confirme l'hypothese ADC-79 : la resolution est le facteur dominant de l'ecart visuel au papier",
+      "palette": "ADC-80 (percentile p99.5 + gamma 1.5, disque blanc, exterieur ardoise #3C4358, Blues)",
+      "source": "diag/render_hires_npz.py (rendu local des npz) ; calcul : slurm/campaign_figures_n512.sbatch 3 (job 650450)"
+    },
+    "snapshots_l4_n512.png": {
+      "what": "grille 3x3 schlieren HAUTE RESOLUTION n=512 (ADC-79), mode l=4 (Fig 5.2)",
+      "engine": "full-system-schur (minmod + rusanov, Strang + CondensedSchur), n=512, t_f=10*T_d",
+      "resolution": "n=512 (vs n=96 pour snapshots_l4.png)",
+      "frames": "8/9 fractions (snap 0..7) ; t_f non atteint (walltime 23h)",
+      "positivity": "minmod ; rho_min ~ +4-8e-7 (stable)",
+      "raw_state": "ROMEO /scratch_p/rmdraux/650451/npz_l4_n512/state_00000{0..7}.npz (sim.write), rapatries",
+      "reading": "anneau -> carre -> 4 bras -> 4 vortex avec spirales internes fines (vs n=96 plus lisse)",
+      "palette": "ADC-80 (cf. snapshots_l3_n512.png)",
+      "source": "diag/render_hires_npz.py ; calcul : slurm/campaign_figures_n512.sbatch 4 (job 650451)"
+    },
+    "snapshots_l5_n512.png": {
+      "what": "grille 3x3 schlieren HAUTE RESOLUTION n=512 (ADC-79), mode l=5 (Fig 5.3)",
+      "engine": "full-system-schur (minmod + rusanov, Strang + CondensedSchur), n=512, t_f=10*T_d",
+      "resolution": "n=512 (vs n=96 pour snapshots_l5.png)",
+      "frames": "8/9 fractions (snap 0..7) ; t_f non atteint (walltime 23h)",
+      "positivity": "minmod ; rho_min ~ +4-8e-7 (stable)",
+      "raw_state": "ROMEO /scratch_p/rmdraux/650452/npz_l5_n512/state_00000{0..7}.npz (sim.write), rapatries",
+      "reading": "anneau -> pentagone -> 5 vortex en couronne avec filaments fins (vs n=96 plus lisse)",
+      "palette": "ADC-80 (cf. snapshots_l3_n512.png)",
+      "source": "diag/render_hires_npz.py ; calcul : slurm/campaign_figures_n512.sbatch 5 (job 650452)"
+    },
     "diocotron_l3.gif": {
       "what": "animation du rollup diocotron l=3, densite reelle du modele complet (memes couleurs que Fig 5.1)",
       "engine": "full-system-schur (minmod), n=96 -- cf. snapshots_l3.png",
@@ -134,6 +167,14 @@
       },
       "source": "ROMEO job 648140"
     }
+  },
+  "hires_campaign_n512": {
+    "what": "campagne haute resolution n=512 ROMEO (ADC-79), x64cpu : 3 modes x 1 job",
+    "jobs": {"3": 650450, "4": 650451, "5": 650452},
+    "status": "8/9 fractions dumpees par mode (snap 0..7) ; le frame t_f (100%) N'EST PAS atteint -- les 3 jobs coupes au walltime 23h a 0.875 t_f. Runs STABLES (rho_min > 0).",
+    "cost": "cout par frame explosif (wall cumule) : snap5 ~8 ks, snap6 ~26 ks, snap7 ~60 ks -> le seul frame t_f restant ~17 h+ a n=512 (CFL plus fin + dynamique developpee) : prohibitif pour un gain marginal.",
+    "decision": "ADC-79 clos sur 8/9 frames : le rollup developpe (filaments fins, spirales internes) est couvert et confirme l'hypothese resolution ; le frame t_f n'est pas requis pour la conclusion. Rendu reproductible : diag/render_hires_npz.py --npz-root <dir>.",
+    "scaling_note": "le solveur est quasi-sequentiel (Poisson MG + flux, scaling threads ~1.6x cf. romeo_scaling.png) : le gain ROMEO est le parallelisme ENTRE runs (1 job/mode), pas dans un run."
   },
   "paper": "https://arxiv.org/abs/2510.11808",
   "python": "3.12 (anaconda3, macOS arm64)",
