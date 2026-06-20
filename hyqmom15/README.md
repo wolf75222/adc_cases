@@ -75,6 +75,30 @@ reproduce a published physical curve. What that means component by component:
 > are the current port (e.g. `omega_p=25`); the canonical reference values
 > (e.g. `omega_p=20`) live in that note, and ADC-351 aligns the driver to them.
 
+### matlab_ref common layer (ADC-349)
+
+[matlab_ref/](matlab_ref/) is a pure-NumPy port of the shared logic of the new
+periodic reference, used by the upcoming drivers and validated by the ADC-350
+goldens:
+
+- [params.py](matlab_ref/params.py): one `Case` per scenario (`dicotron`,
+  `fluid_wave`, `electrostatic_wave`, `magnetic_wave`, `constant`) with the exact
+  Matlab values, plus the equilibrium Maxwellian builder.
+- [linearized.py](matlab_ref/linearized.py): the three linearized Jacobians and
+  the eigenmode helper (Matlab complex-sort, 1-based `mode`, phase-pin).
+- [initializers.py](matlab_ref/initializers.py): the `init_*_field` routines, with
+  the D2 diocotron drift orientation, the D3 `Dmax` policy, and the D4 magnetic
+  wiring exposed as `intended` (default) vs `as_written`.
+- [dt_policy.py](matlab_ref/dt_policy.py): `compute_dt` (D6), kept explicit.
+- [l2.py](matlab_ref/l2.py): the wave `compute_L2_error` oracle (D9).
+
+[matlab_ref/check_matlab_ref.py](matlab_ref/check_matlab_ref.py) is the build-free
+consistency guard (in CI): it checks the moment order, the Maxwellian against
+frozen Octave `InitializeM4_15` values, the Jacobian structure, the eigenmode
+phase-pin, the per-case initializers, the dt policy, and the L2 oracle. Bit-identity
+of the Jacobians and eigenmodes against Octave, per-case goldens, and a full
+fidelity table are established by ADC-350 and ADC-357.
+
 | Status | Component | Evidence (number, source) |
 |---|---|---|
 | Proven | closure (`closureS5.m`, 6 standardized order-5 formulas) | `hyqmom_closure` ([model.py](model.py)) === `Flux_closure15_2D.m` to 1e-12 on 10 states (`run.py`), exact on Gaussians via the independent Isserlis oracle (`gaussian_raw_moment`) |

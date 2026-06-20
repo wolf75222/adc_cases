@@ -191,6 +191,13 @@ needs = []
 desc = "HyQMOM15 matlab_ref : garde-fou doc (ADC-348) que REFERENCE.md verrouille la reference RieMOM2D_Electrostatic_periodic (parametres diocotron, divergences Dmax / source magnetique / init_magnetic_wave_field, abandon HLLC-WENO, politique bug-for-bug). Pur Python, sans build."
 
 [[case]]
+path = "hyqmom15/matlab_ref/check_matlab_ref.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 matlab_ref : couche commune (ADC-349) parametres, Jacobiennes linearisees, init eigenmode/diocotron, politique compute_dt et oracle L2. Auto-verifications de coherence (ordre des moments, Maxwellienne, structure Jacobienne, phase-pin, init par cas, dt, L2). Pur NumPy, sans build ; goldens Matlab = ADC-350."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
