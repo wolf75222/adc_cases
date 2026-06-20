@@ -103,14 +103,17 @@ def check_smoke(nsteps: int = 10) -> None:
     cfl = CASE.cfl
     U0 = fluid_ic()
     sim = build_fluid_sim(n)
-    sim.set_state("mom", U0)
+    # Orientation grille : l'IC eigenmode layer est (k, x, y) (i selon kx) ; ADC
+    # attend (k, ny, nx) (x en dernier axe, cf. run_crossing) -> swapaxes(1,2) a
+    # l'entree, retranspose a la sortie pour l'oracle L2 (convention layer).
+    sim.set_state("mom", np.swapaxes(U0, 1, 2))
     mass0 = float(U0[0].sum())
     t = 0.0
     for _ in range(nsteps):
         # fluid_wave n'a pas de source : compute_dt se reduit au CFL de flux, donc
         # step_cfl == dt Matlab. On cumule t pour l'oracle L2.
         t += sim.step_cfl(cfl)
-    U = np.array(sim.get_state("mom"))
+    U = np.swapaxes(np.array(sim.get_state("mom")), 1, 2)
     assert np.all(np.isfinite(U)), "smoke : etat non fini"
     assert np.all(U[0] > 0), "smoke : M00 non positif"
     drift = abs(float(U[0].sum()) - mass0) / mass0
