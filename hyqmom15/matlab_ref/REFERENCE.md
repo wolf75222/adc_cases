@@ -200,6 +200,30 @@ HLL speeds (`exact_speeds=True`) are already in the core. The open audit items
 `compute_dt` source policy) are enumerated in ADC-356. ADC-348 changes no
 adc_cpp code and proposes no new core change.
 
+### adc_cpp audit results (ADC-356)
+
+ADC-356 closes the open items above against the built core (CI `_adc`), with no
+adc_cpp change inside the adc_cases PRs:
+
+- Euler backend: `production` + periodic Poisson + Euler run together (with `HLL`,
+  `exact_speeds`, and both the electric and magnetic sources), verified green in CI
+  by ADC-351. The `aot` backend freezes SSPRK2, so the faithful Euler path is
+  `backend="production"` with `adc.Explicit(method="euler")`.
+- MUSCL / minmod: representable with no new core feature. `adc.FiniteVolume(limiter=...)`
+  IS the reconstruction: `limiter="none"` is first order (Matlab `reconstruction="first"`),
+  `limiter="minmod"` is MUSCL with minmod (Matlab `reconstruction="muscl"`, `limiter="minmod"`).
+- `compute_dt` source policy: kept explicit in `matlab_ref/dt_policy.py` (D6), not
+  folded into `source_frequency`. No core change.
+- ROE for a HyQMOM15 DSL model: CONFIRMED GAP. `adc.FiniteVolume(riemann="roe")` is
+  rejected unless the compiled model declares a `"p"` primitive or calls
+  `m.enable_roe()` (`HasRoeDissipation`); `build_moment_model` and `adc.moments`
+  provide neither. Tracked as adc_cpp ADC-368 (generic Roe-dissipation hook for
+  moment DSL models). Until then `fluid_wave` (ADC-352) uses `riemann="hll"` +
+  `exact_speeds` as a named non-strict path.
+
+Wave drivers (ADC-352/353/354) must build the model with `backend="production"`
+and `adc.Explicit(method="euler")` for a faithful Euler step.
+
 `matlab_ref/check_reference.py` is a build-free guard that this note stays
 present, ASCII, em-dash free, and complete (it asserts the canonical parameters
 and the divergence decisions above are documented). It runs in CI via the
