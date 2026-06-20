@@ -95,9 +95,15 @@ goldens:
 [matlab_ref/check_matlab_ref.py](matlab_ref/check_matlab_ref.py) is the build-free
 consistency guard (in CI): it checks the moment order, the Maxwellian against
 frozen Octave `InitializeM4_15` values, the Jacobian structure, the eigenmode
-phase-pin, the per-case initializers, the dt policy, and the L2 oracle. Bit-identity
-of the Jacobians and eigenmodes against Octave, per-case goldens, and a full
-fidelity table are established by ADC-350 and ADC-357.
+phase-pin, the per-case initializers, the dt policy, and the L2 oracle.
+
+The Octave goldens in [matlab_ref/goldens/](matlab_ref/goldens/) (ADC-350) lock the
+Jacobians, eigenvalues, phase-pinned eigenvectors, max_speed, the initial fields
+(Np=16, `intended` plus the `as_written` / `matlab_bug` variants), and the dt
+policy against the reference; [matlab_ref/check_goldens.py](matlab_ref/check_goldens.py)
+(in CI) confirms the layer reproduces them. Source-term and one-step goldens
+validate the native solver and follow in the wave-case PRs; a full fidelity table
+follows in ADC-357.
 
 | Status | Component | Evidence (number, source) |
 |---|---|---|

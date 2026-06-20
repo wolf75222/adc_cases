@@ -80,6 +80,13 @@ def _wave_state(case: P.Case, J: np.ndarray):
     Matlab wave loops and ``compute_L2_error.m``). The physical IC is the real
     part of the complex perturbation; at ``t=0`` ``sin(phase)`` is real so this is
     exact and only the eigenvector's real part survives.
+
+    Deviation from the source (deliberate, locked): ``init_*_wave_field.m`` assigns
+    the complex ``eigen_vect`` into ``M`` (Matlab silently upcasts ``M`` to
+    complex), whereas ADC takes the real part as the physical state. For
+    fluid/electrostatic the eigenvector is real anyway; for the magnetic case it
+    is genuinely complex and only the real part is physical. The ADC-350 Octave
+    generators apply the same ``real(...)`` so the goldens match.
     """
     lam, vec = eigenmode(J, case.mode)
     Mi = case.equilibrium_moments()
