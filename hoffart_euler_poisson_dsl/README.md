@@ -82,6 +82,9 @@ python diag/petri_eigenvalue.py
 #    t-end >= 8.5 because the mapped window of mode 5 is [7.23, 8.48]
 python run.py --engine system-schur --n 96 --t-end 10 --modes 3 4 5 --dt 2e-3 --no-gif
 
+# b') same run, plus the raw state dumped as state_<NNNNNN>.npz next to each mode's outputs
+python run.py --engine system-schur --n 96 --t-end 10 --modes 3 4 5 --dt 2e-3 --no-gif --dump-npz
+
 # c) the normalization audit and the resolution convergence
 python diag/diag_normalization_audit.py 128
 python diag/convergence_reduced.py
@@ -92,6 +95,14 @@ python diag/make_paper_figures.py 3 4 5 --out figures
 
 Output b) writes `growth_rates.csv` with the columns `mode, gamma_raw_sim, gamma_paper_units,
 gamma_paper, relative_error_percent`.
+
+`--dump-npz` (off by default) additionally writes the raw simulation state to
+`out/<case>/mode_<l>/state_<NNNNNN>.npz` at the same times as the schlieren snapshots, via
+`sim.write(format="npz", step=<snapshot_index>)` (per-block conservative fields, `phi`, the clock).
+The simulation trajectory and the `amplitude.csv` / `growth_rates.csv` / PNG / GIF outputs are
+unchanged; `metadata.json` additionally records the `dump_npz` flag. The dump is single-rank only:
+`sim.write` gathers then writes, so under MPI (np>1, the `amr-imex` path) it is disabled with a
+message rather than racing on the file.
 
 ## 4. The physics
 
@@ -107,7 +118,7 @@ without resolving them, which the implicit source stage allows (section 6).
 
 The system, with `Omega = omega e_z` so `m x Omega = (omega m_y, -omega m_x)`:
 
-```text
+```
 d_t rho + div(m)                          = 0
 d_t m   + div(m m^T/rho + p I)            = -rho grad(phi) + m x Omega
 -Delta phi = alpha rho,   p = theta rho
@@ -218,7 +229,7 @@ The source stage `adc.CondensedSchur(theta=0.5, alpha=...)` advances the source 
 over the cyclotron and plasma scales without resolving them. The Lorentz force is inverted by a 2x2
 eliminator
 
-```text
+```
 B^-1 = 1/(1+w^2) [[1, w], [-w, 1]],   w = theta dt B_z,
 ```
 
@@ -284,26 +295,6 @@ Matching animations: `figures/diocotron_l3.gif`, `figures/diocotron_l4.gif` (at 
 `figures/diocotron_l5.gif`. They show the ring rotating, the mode growing, then the fold into vortices and
 the stretching of the filaments.
 
-### High resolution (n=512, ROMEO campaign, ADC-79)
-
-The same `system-schur` model at **n=512** (about 28x the degrees of freedom, 5.3x the linear
-resolution of n=96) resolves the thin internal spiral filaments and braided arms that numerical
-diffusion smears out at n=96 -- confirming that resolution is the dominant factor in the visual gap to
-the paper (figures 5.1-5.3).
-
-![Snapshots l=3, n=512](figures/snapshots_l3_n512.png)
-![Snapshots l=4, n=512](figures/snapshots_l4_n512.png)
-![Snapshots l=5, n=512](figures/snapshots_l5_n512.png)
-
-These show **8 of the 9** snapshot fractions (`0.01 ... 7/8 t_f`): the three ROMEO jobs (650450/451/452,
-one per mode, x64cpu) were cut at the 23 h walltime at `0.875 t_f`. The per-frame wall cost explodes as
-the dynamics develop (snap 5 ~8 ks, snap 6 ~26 ks, snap 7 ~60 ks cumulative), so the final `t_f` frame
-alone would need ~17 h+ at n=512, which is prohibitive for a marginal gain -- the developed rollup is
-already captured. The runs stay positive throughout (minmod, `rho_min > 0`). The solver is near-serial
-(thread scaling ~1.6x, section 10), so the ROMEO speedup is the parallelism **between** runs, not within
-one. Cost and job IDs are recorded in `figures/provenance.json` (`hires_campaign_n512`). Rendering needs
-no ROMEO or `adc`: `python diag/render_hires_npz.py --npz-root <rapatriated npz dir> --out figures`.
-
 Growth rates, figure 5.4 style. Panels (a,b,c): amplitude `|c_l(t)|/|c_l(0)|` on a log scale, the curve
 follows the paper slope (red dashes) within the mapped fit window, then saturates. Panel (d): `gamma_l`
 against the mode, for the paper, the full model, and the reduced ExB drift.
@@ -314,7 +305,8 @@ The snapshots and GIFs are the **actual** density of the full `system-schur` mod
 (TVD) reconstruction: WENO5 overshoots at the ring's top-hat jump, the density goes negative and the run
 collapses around t~0.38 t_f (dt->0 or NaN, see ADC-62/ADC-74); minmod keeps `rho > 0` and reaches the full
 rollup, at the cost of more smeared filaments. The raw state (density + phi) of each snapshot is dumped as
-a reusable `.npz` via `sim.write` (`out/hoffart_paper_figures/mode_*/`). The amplitude curves (a,b,c) of
+a reusable `.npz` via `sim.write` (`out/hoffart_paper_figures/mode_*/`); the main run reproduces this
+on demand with `run.py --dump-npz` (section 3). The amplitude curves (a,b,c) of
 growth_rate use the reduced `ExB` drift (same advection field, `alpha/omega = 1`); the rates of panel (d)
 come from the full `system-schur` model. The generator is `diag/make_paper_figures.py`.
 
@@ -369,7 +361,7 @@ hard, you need much larger problems.
 
 ## 11. Folder structure
 
-```text
+```
 hoffart_euler_poisson_dsl/
 ├── model.py        modèle Euler-Poisson magnétisé en DSL (commenté), paramètres, densité + dérive initiales
 ├── run.py          CAS cartésien system-schur : assemblage, mesure paper-faithful (fenêtres mappées,
@@ -377,7 +369,7 @@ hoffart_euler_poisson_dsl/
 ├── run_polar.py    CAS polaire (anneau résolu) : diverge encore (cf. issue ADC-62)
 ├── results.py      enregistrements CSV/JSON + helpers 2π (paper_to_sim_time_window, gamma_to_paper_units)
 ├── check_model.py  oracle analytique comparé bit-à-bit au modèle compilé (validation, CI)
-├── tests/          garde-fous build-free : assemblage polaire [CI], signes, flag géométrie  → tests/README.md
+├── tests/          garde-fous sur le VRAI adc : assemblage polaire [CI], signes, flag géométrie, dump npz  → tests/README.md
 ├── diag/           diagnostics : Petri, audit normalisation, convergence, figures           → diag/README.md
 ├── docs/           notes d'audit : NORMALIZATION, T2 audit, RESULTS system-schur            → docs/README.md
 ├── slurm/          campagnes ROMEO : geometry, polar                                        → slurm/README.md
