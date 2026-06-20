@@ -140,6 +140,59 @@ Matlab `reconstruction` maps to `adc.FiniteVolume(limiter=...)`: `first` -> `non
 layout in the driver. `fluid_wave` runs `riemann="hll"` (ROE is an adc_cpp gap,
 ADC-368). Not in scope (Matlab placeholders, Sacha): HLLC, WENO, neumann, outflow.
 
+### M8 fidelity and reproduction (ADC-357)
+
+Fidelity of each port. The shared layer (Jacobians, eigenvalues, phase-pinned
+eigenvectors, max_speed, the Maxwellian, and the `compute_dt` policy) is checked
+**bit-identical to Octave** by `check_goldens.py` (ADC-350); the per-case IC is
+locked at `Np=16` there. The native smokes run the compiled model in CI (reduced
+`n`); the full Matlab `Np` and a native one-step golden are out of CI.
+
+| Case | Matlab source | Driver | IC golden | dt | native smoke (CI) | L2 | known limitation |
+|---|---|---|---|---|---|---|---|
+| diocotron | `init_diocotron(_field).m` | `run_diocotron_periodic.py` | ADC-350 (std + matlab_bug) | `compute_dt` (omega_p^2) | E+B + Poisson + HLL + Euler: mass, phi | golden-based (no analytic L2) | growth rate; full Np=128 + native 1-step out of CI |
+| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | HLL + Euler, pure transport: mass | `L2(IC,0)=0` | ROE -> HLL (ADC-368); long trajectory |
+| electrostatic_wave | `init_electrostatic_wave(_field).m` | `run_electrostatic_wave.py` | ADC-350 (Dmax) | `compute_dt` (omega_p^2) | E + Poisson + HLL + Euler: mass, phi | `L2(IC,0)=0` | full Np=128 out of CI |
+| magnetic_wave | `init_magnetic_wave(_field).m` | `run_magnetic_wave.py` | ADC-350 (magnetostatic) | `compute_dt` | E+B + Poisson + HLL + MUSCL + Euler: mass, phi | `L2(IC,0)=0` | magnetostatic init intended (D4); full Np=256 out of CI |
+| constant | `init_constant(_field).m` | `run_constant.py` | ADC-350 (uniform) | n/a | uniform preserved (max abs(U-U0) < 1e-12), mass | n/a | none |
+
+Locked decisions (`matlab_ref/REFERENCE.md`, ADC-348): diocotron runs both sources
+`omega_c=-20` (D1); corrected incompressible ExB IC by default, the transposed
+meshgrid drift only under the named `--ic-matlab-bug` legacy path (D2);
+`diag(Dmax)` electrostatic CFL speed (D3); the magnetostatic `init_magnetic_wave_field`
+for the magnetic IC, not the as-shipped electrostatic wiring (D4); `compute_dt`
+source caps kept explicit (D6); Euler-only (D8); wave L2 oracle only (D9). The wave
+eigenmode is phase-pinned identically on the NumPy and Octave sides, and the
+`magnetic_wave` near-degenerate mode-15 is the deterministic larger-real-part member.
+
+Reproduce (from the adc_cases root):
+
+```bash
+# regenerate the goldens (maintainer-side Matlab on the Octave --path)
+MAT=/Users/romaindespoulain/Documents/RieMOM2D_Electrostatic_periodic
+octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_linearized_gen.m
+octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_init_gen.m
+octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_dt_gen.m
+
+# build-free checks (no adc build needed)
+python3 hyqmom15/matlab_ref/check_reference.py    # REFERENCE.md guard (ADC-348)
+python3 hyqmom15/matlab_ref/check_matlab_ref.py   # layer self-consistency (ADC-349)
+python3 hyqmom15/matlab_ref/check_goldens.py      # layer vs Octave goldens (ADC-350)
+python3 check_cases.py                            # manifest + README lint
+
+# native smokes (need adc on PYTHONPATH from an adc_cpp build)
+python3 hyqmom15/run_diocotron_periodic.py        # ADC-351
+python3 hyqmom15/run_fluid_wave.py                # ADC-352
+python3 hyqmom15/run_electrostatic_wave.py        # ADC-353
+python3 hyqmom15/run_magnetic_wave.py             # ADC-354
+python3 hyqmom15/run_constant.py                  # ADC-355
+```
+
+The milestone (ADC-348 reference lock, ADC-349 layer, ADC-350 goldens, ADC-351
+diocotron, ADC-352/353/354 waves, ADC-355 constant, ADC-356 adc_cpp audit) needs
+no adc_cpp change; the only confirmed core gap is the generic Roe-dissipation hook,
+tracked as adc_cpp ADC-368 (until then `fluid_wave` uses HLL).
+
 | Status | Component | Evidence (number, source) |
 |---|---|---|
 | Proven | closure (`closureS5.m`, 6 standardized order-5 formulas) | `hyqmom_closure` ([model.py](model.py)) === `Flux_closure15_2D.m` to 1e-12 on 10 states (`run.py`), exact on Gaussians via the independent Isserlis oracle (`gaussian_raw_moment`) |
