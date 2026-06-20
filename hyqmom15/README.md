@@ -31,6 +31,7 @@ python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy 
 python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
 python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE->HLL, see ADC-368)
 python hyqmom15/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
+python hyqmom15/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
 python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
 mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```

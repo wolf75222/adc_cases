@@ -131,14 +131,18 @@ def check_smoke(n: int = SMOKE_N, nsteps: int = 10) -> None:
     U0 = es_ic(n)
     rho_bg = float(U0[0].mean())
 
+    # Orientation grille : IC eigenmode layer (k, x, y) -> ADC (k, ny, nx) (x en
+    # dernier axe, cf. run_crossing) via swapaxes(1,2). Pour ky=4*pi (kx=0) l'onde
+    # est 1D mais on garde l'orientation correcte par coherence avec magnetic_wave.
+    U0_adc = np.swapaxes(U0, 1, 2)
     probe = build_es_sim(n, rho_bg=rho_bg)
-    probe.set_state("mom", U0)
+    probe.set_state("mom", U0_adc)
     probe.solve_fields()
     dt_cfl = probe.step_cfl(cfl)
     vmax = cfl * case_n.dx / dt_cfl
 
     sim = build_es_sim(n, rho_bg=rho_bg)
-    sim.set_state("mom", U0)
+    sim.set_state("mom", U0_adc)
     sim.solve_fields()
     mass0 = float(U0[0].sum())
     t = 0.0
