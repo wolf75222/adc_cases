@@ -97,17 +97,33 @@ def linearized_jacobian_magnetostatic(kx: float, ky: float, lam: float, omega_c:
     return J
 
 
-def matlab_sort_indices(w: np.ndarray) -> np.ndarray:
-    """Permutation reproducing Matlab ``sort`` on eigenvalues.
+def matlab_sort_indices(w: np.ndarray, tol: float = 1e-9) -> np.ndarray:
+    """Deterministic, BLAS-robust eigenvalue ordering for mode selection.
 
-    Matlab sorts a real array ascending by value, but a complex array ascending
-    by magnitude with ties broken by phase angle in ``(-pi, pi]``. ``eig``
-    returns a complex array whenever any eigenvalue is complex, matching NumPy's
-    ``iscomplexobj`` discriminator.
+    Octave's ``sort`` orders a real spectrum ascending by value and a complex
+    spectrum ascending by magnitude. Two cases make that raw rule non-portable
+    between Octave and NumPy, so this canonical version reproduces the *selection*
+    while being robust to the ~1e-13 differences between their LAPACK builds (the
+    identical rule is applied in the ADC-350 Octave generators so the chosen mode
+    matches on any BLAS):
+
+    * a numerically real spectrum that NumPy may return as complex dtype
+      (``imag == +0``) is classified by ``max|imag| <= tol*scale`` and sorted
+      ascending by real value, as Octave's ``isreal`` array would be (otherwise
+      ``iscomplexobj`` flips the rule per-build);
+    * a genuinely complex spectrum is sorted ascending by magnitude, but
+      near-magnitude ties (equal to ``tol`` relative) are broken by ``(real,
+      imag)``. The magnetic_wave mode-15 is such a tie: the +/-168.16 modes have
+      magnitudes equal to ~1e-13 but real parts 336 apart, so a raw magnitude sort
+      picks one or the other depending on rounding, while the real-part tie-break
+      is stable.
     """
-    if np.iscomplexobj(w):
-        return np.lexsort((np.angle(w), np.abs(w)))
-    return np.argsort(w, kind="stable")
+    w = np.asarray(w)
+    scale = max(1.0, float(np.max(np.abs(w)))) if w.size else 1.0
+    if float(np.max(np.abs(w.imag))) <= tol * scale:
+        return np.argsort(w.real, kind="stable")
+    q = np.round(np.abs(w) / scale, 9)
+    return np.lexsort((w.imag, w.real, q))
 
 
 def phase_pin(vec: np.ndarray) -> np.ndarray:

@@ -198,6 +198,13 @@ needs = []
 desc = "HyQMOM15 matlab_ref : couche commune (ADC-349) parametres, Jacobiennes linearisees, init eigenmode/diocotron, politique compute_dt et oracle L2. Auto-verifications de coherence (ordre des moments, Maxwellienne, structure Jacobienne, phase-pin, init par cas, dt, L2). Pur NumPy, sans build ; goldens Matlab = ADC-350."
 
 [[case]]
+path = "hyqmom15/matlab_ref/check_goldens.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 matlab_ref : compare la couche (ADC-349) aux goldens Octave (ADC-350) generes depuis RieMOM2D_Electrostatic_periodic : Jacobiennes/valeurs/vecteurs propres phase-pinnes, vitesses max, champs initiaux (Np=16, intended + as_written/matlab_bug), politique dt vs compute_dt.m. Pur NumPy, sans build ; sources/un-pas = PR cas wave (chemin natif)."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
