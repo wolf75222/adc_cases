@@ -32,6 +32,7 @@ python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matla
 python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE->HLL, see ADC-368)
 python hyqmom15/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
 python hyqmom15/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
+python hyqmom15/run_constant.py # uniform-state non-regression (ADC-355)
 python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
 mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```
@@ -118,6 +119,26 @@ HLL+exact_speeds + Euler (production backend) + periodic Poisson smoke with the
 old RIEMOM2D scenario (omega_p=25, magnetic source inactive, SSPRK2) and is
 unchanged; `--ic-matlab-bug` remains the named opt-in for the transposed meshgrid
 drift, never the default.
+
+### New periodic Matlab cases (M8)
+
+The five `RieMOM2D_Electrostatic_periodic` cases, all driven through `matlab_ref`
+and run as light `validation` smokes in CI (reduced `n`; the full Matlab `Np` runs
+out of CI). Each builds the native model with `backend="production"` +
+`adc.Explicit(method="euler")` and `riemann="hll"` + `exact_speeds=True`.
+
+| Driver | Sources | Poisson | recon | IC | Issue |
+|---|---|---|---|---|---|
+| [run_diocotron_periodic.py](run_diocotron_periodic.py) | E + B (oc=-20) | yes | first (none) | ring + ExB | ADC-351 |
+| [run_fluid_wave.py](run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352 |
+| [run_electrostatic_wave.py](run_electrostatic_wave.py) | E (oc=0) | yes | first (none) | eigenmode (Dmax) | ADC-353 |
+| [run_magnetic_wave.py](run_magnetic_wave.py) | E + B (oc=-40) | yes | muscl (minmod) | eigenmode (magnetostatic) | ADC-354 |
+| [run_constant.py](run_constant.py) | none | no | muscl (minmod) | uniform | ADC-355 |
+
+Matlab `reconstruction` maps to `adc.FiniteVolume(limiter=...)`: `first` -> `none`,
+`muscl` -> `minmod` (ADC-356). The wave IC is transposed to ADC's `(k, ny, nx)`
+layout in the driver. `fluid_wave` runs `riemann="hll"` (ROE is an adc_cpp gap,
+ADC-368). Not in scope (Matlab placeholders, Sacha): HLLC, WENO, neumann, outflow.
 
 | Status | Component | Evidence (number, source) |
 |---|---|---|
