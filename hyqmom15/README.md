@@ -27,7 +27,8 @@ U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
 python hyqmom15/run.py            # flux vs MATLAB goldens + Gaussian oracle
 python hyqmom15/run_waves.py      # exact wave speeds vs goldens
 python hyqmom15/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
-python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring
+python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
+python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
 python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
 mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```
@@ -104,6 +105,16 @@ policy against the reference; [matlab_ref/check_goldens.py](matlab_ref/check_gol
 (in CI) confirms the layer reproduces them. Source-term and one-step goldens
 validate the native solver and follow in the wave-case PRs; a full fidelity table
 follows in ADC-357.
+
+[run_diocotron_periodic.py](run_diocotron_periodic.py) (ADC-351) is the diocotron
+driver aligned on the new periodic reference: it pulls params and the IC from
+`matlab_ref` (omega_p=20, omega_c=-20, mode=4, standard ExB drift), activates BOTH
+the electric and magnetic Lorentz sources (omega_c=-20, D1), and runs the faithful
+HLL+exact_speeds + Euler (production backend) + periodic Poisson smoke with the
+`compute_dt` policy. The legacy [run_diocotron.py](run_diocotron.py) stays on the
+old RIEMOM2D scenario (omega_p=25, magnetic source inactive, SSPRK2) and is
+unchanged; `--ic-matlab-bug` remains the named opt-in for the transposed meshgrid
+drift, never the default.
 
 | Status | Component | Evidence (number, source) |
 |---|---|---|

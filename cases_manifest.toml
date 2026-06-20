@@ -141,6 +141,13 @@ needs = ["cxx"]
 desc = "HyQMOM 15 moments Vlasov-Poisson : oracle Poisson analytique, source lisant le champ resolu, anneau diocotron + restart + snapshots."
 
 [[case]]
+path = "hyqmom15/run_diocotron_periodic.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM15 diocotron aligne sur le nouveau Matlab periodique RieMOM2D_Electrostatic_periodic (ADC-351) : params via matlab_ref (op=20, oc=-20, mode=4), IC ExB standard verrouillee (ADC-350), smoke natif HLL+exact_speeds + source electrique ET magnetique + Poisson periodique + Euler (production), dt via compute_dt. Distinct du run_diocotron.py legacy (ancien RIEMOM2D, source magnetique inactive)."
+
+[[case]]
 path = "hyqmom15/run_waves.py"
 category = "validation"
 ci = true
