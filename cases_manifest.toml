@@ -148,6 +148,13 @@ needs = ["cxx"]
 desc = "HyQMOM15 diocotron aligne sur le nouveau Matlab periodique RieMOM2D_Electrostatic_periodic (ADC-351) : params via matlab_ref (op=20, oc=-20, mode=4), IC ExB standard verrouillee (ADC-350), smoke natif HLL+exact_speeds + source electrique ET magnetique + Poisson periodique + Euler (production), dt via compute_dt. Distinct du run_diocotron.py legacy (ancien RIEMOM2D, source magnetique inactive)."
 
 [[case]]
+path = "hyqmom15/run_fluid_wave.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM15 fluid_wave du nouveau Matlab (ADC-352) : onde eigenmode (mode=15, kx=4*pi, eps=0.01), sans Poisson ni source. IC verrouillee matlab_ref (ADC-350), L2(IC,0)=0 vs eigenmode analytique, smoke natif HLL+exact_speeds + Euler (production), transport pur (masse conservee). ROE Matlab -> HLL non-strict (gap adc_cpp ADC-368)."
+
+[[case]]
 path = "hyqmom15/run_waves.py"
 category = "validation"
 ci = true

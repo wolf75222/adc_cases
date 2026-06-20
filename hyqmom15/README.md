@@ -29,6 +29,7 @@ python hyqmom15/run_waves.py      # exact wave speeds vs goldens
 python hyqmom15/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
 python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
 python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
+python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE->HLL, see ADC-368)
 python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
 mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```
