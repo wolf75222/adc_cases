@@ -1,235 +1,127 @@
 #!/usr/bin/env python3
-"""Smoke test for the --geometry flag plumbing of the hoffart case.
+"""Test for the --geometry {square,staircase,cutcell} flag of run.py, against the REAL adc.
 
-Covers the three geometries {square, staircase, cutcell}. This test does not
-need the heavy Kokkos/AMReX `adc` extension: it installs a tiny fake `adc`
-module that records every method call on the fake `System`, then drives
-`build_uniform` for all three geometries. The assertions are real:
+No fake/mock adc: this compiles the real magnetic Euler-Poisson model once, drives the real
+``run.build_uniform`` for each geometry, and asserts on the real System's queryable disc mask
+(``sim.disc_mask()``):
 
-  - 'square' (default) never calls set_disc_domain    -> bit-identical historical path
-  - 'staircase' calls set_disc_domain(L/2, L/2, R, mode='staircase')  -> T2 disc mask
-  - 'cutcell'  calls set_disc_domain(L/2, L/2, R, mode='cutcell')     -> EB cut-cell mask
-  - an unknown geometry raises ValueError
-  - the argparse layer rejects --geometry staircase with --engine amr-imex
+  - 'square' (default)      -> the mask stays FULL (n*n active): historical bit-identical
+                               full-square Cartesian transport, no set_disc_domain.
+  - 'staircase' / 'cutcell' -> the mask is RESTRICTED to the disc centered at (L/2, L/2) with
+                               radius R (the same circle as the Poisson wall).
+  - an unknown geometry     -> ValueError.
+  - --geometry staircase with --engine amr-imex -> rejected at the argument layer (SystemExit).
+
+Needs the real ``adc`` importable AND compile-capable (PYTHONPATH=<adc_cpp>/build/python,
+ADC_INCLUDE=<adc_cpp>/include ; KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 for Kokkos-OpenMP).
 
 Run standalone (`python3 test_geometry_flag.py`) or under pytest.
 """
 
-from __future__ import annotations
-
 import os
 import sys
-import types
 
 import numpy as np
 
+import adc  # noqa: F401  (real extension)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
+if os.path.dirname(HERE) not in sys.path:        # case root: model.py, run*.py
+    sys.path.insert(0, os.path.dirname(HERE))
+import run  # noqa: E402
+from model import (  # noqa: E402
+    PaperParameters,
+    magnetic_euler_poisson_model,
+    paper_initial_density,
+)
+
+N = 16
+_COMPILED = None
 
 
-def _install_fake_adc() -> types.ModuleType:
-    """Register a fake `adc` module that records every System call.
-
-    Returns:
-        The fake `adc` module (also registered in `sys.modules`).
-    """
-    adc = types.ModuleType("adc")
-
-    class FakeSystem:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-            self.calls = []  # ordered list of (method, args, kwargs)
-            self._n = kwargs["n"]
-
-        def _record(self, name, *a, **k):
-            self.calls.append((name, a, k))
-
-        def set_poisson(self, *a, **k):
-            self._record("set_poisson", *a, **k)
-
-        def set_disc_domain(self, cx, cy, R, mode="staircase"):
-            self._record("set_disc_domain", cx, cy, R, mode=mode)
-
-        def set_magnetic_field(self, *a, **k):
-            self._record("set_magnetic_field", *a, **k)
-
-        def add_equation(self, *a, **k):
-            self._record("add_equation", *a, **k)
-
-        def set_primitive_state(self, *a, **k):
-            self._record("set_primitive_state", *a, **k)
-
-        def solve_fields(self, *a, **k):
-            self._record("solve_fields", *a, **k)
-
-        def potential(self):
-            self._record("potential")
-            return np.zeros((self._n, self._n), dtype=np.float64)
-
-    adc.System = FakeSystem
-    # Recipe stand-ins: only need to be callable and return a marker.
-    adc.FiniteVolume = lambda **k: ("FiniteVolume", k)
-    adc.Split = lambda **k: ("Split", k)
-    adc.Strang = lambda **k: ("Strang", k)
-    adc.Explicit = lambda **k: ("Explicit", k)
-    adc.CondensedSchur = lambda **k: ("CondensedSchur", k)
-    # model.py does `from adc import dsl` at import time. We only build a model when
-    # actually running the engine, which this smoke test never does, so a placeholder
-    # submodule is enough to satisfy the import.
-    dsl = types.ModuleType("adc.dsl")
-    adc.dsl = dsl
-    sys.modules["adc"] = adc
-    sys.modules["adc.dsl"] = dsl
-    return adc
+def _compiled():
+    """Compile the real model once (DSL-cached); reused across geometries."""
+    global _COMPILED
+    if _COMPILED is None:
+        _COMPILED = magnetic_euler_poisson_model(PaperParameters(), source="schur").compile(
+            backend="production", target="system", name="hoffart_schur")
+    return _COMPILED
 
 
-def _import_run():
-    """Import the case's `run` module after the fake `adc` is installed."""
-    case_root = os.path.dirname(
-        HERE
-    )  # tests/ -> the case root (model.py, run*.py)
-    if case_root not in sys.path:
-        sys.path.insert(0, case_root)
-    # `from adc_cases.common.io import case_output_dir` must resolve without the
-    # installed package (the case appends the repo root itself on ImportError).
-    import importlib
-
-    return importlib.import_module("run")
+def _build(geometry):
+    p = PaperParameters()
+    sim = run.build_uniform(_compiled(), paper_initial_density(N, 3, p), p, geometry=geometry)
+    return sim, p
 
 
-def _params():
-    """Return the paper's reference parameters."""
-    from model import PaperParameters
-
-    return PaperParameters()
-
-
-def test_square_does_not_call_set_disc_domain() -> None:
-    _install_fake_adc()
-    run = _import_run()
-    params = _params()
-    rho = np.full((16, 16), params.rho_min)
-    sim = run.build_uniform(object(), rho, params, geometry="square")
-    names = [c[0] for c in sim.calls]
-    assert "set_disc_domain" not in names, (
-        "square geometry must stay bit-identical (no set_disc_domain): %r"
-        % names
-    )
+def test_square_keeps_full_cartesian_mask():
+    sim, _ = _build("square")
+    mask = np.asarray(sim.disc_mask())
+    assert float(mask.sum()) == N * N, (
+        "square must keep the FULL Cartesian transport (no disc mask), got %g active of %d"
+        % (float(mask.sum()), N * N))
 
 
-def test_staircase_calls_set_disc_domain_with_center_and_radius() -> None:
-    _install_fake_adc()
-    run = _import_run()
-    params = _params()
-    rho = np.full((16, 16), params.rho_min)
-    sim = run.build_uniform(object(), rho, params, geometry="staircase")
-    disc_calls = [c for c in sim.calls if c[0] == "set_disc_domain"]
-    assert (
-        len(disc_calls) == 1
-    ), "staircase must call set_disc_domain exactly once: %r" % (
-        [c[0] for c in sim.calls],
-    )
-    _, args, kw = disc_calls[0]
-    cx, cy, R = args
-    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (
-        0.5 * params.length,
-        cx,
-    )
-    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (
-        0.5 * params.length,
-        cy,
-    )
-    assert R == params.radius, "R must equal params.radius (%g), got %g" % (
-        params.radius,
-        R,
-    )
-    # The disc center must coincide with the circular Poisson wall center and the
-    # disc radius with the wall radius, so the FV mask and the elliptic wall agree.
-    assert R == params.radius
-    assert (
-        kw.get("mode") == "staircase"
-    ), "mode must be 'staircase', got %r" % kw.get("mode")
+def _assert_disc_restricted(geometry):
+    sim, p = _build(geometry)
+    mask = np.asarray(sim.disc_mask()).reshape(N, N)
+    active = float(mask.sum())
+    assert active < N * N, "%s must restrict transport to the disc (active < n^2)" % geometry
+    # the active cells must lie inside the disc centered at (L/2, L/2), radius R = the wall radius
+    h = p.length / N
+    xc = (np.arange(N) + 0.5) * h - 0.5 * p.length
+    X, Y = np.meshgrid(xc, xc, indexing="xy")
+    inside = np.hypot(X, Y) <= p.radius + h          # disc + one cell (staircase over-approximates)
+    stray = np.logical_and(mask > 0.5, ~inside)
+    assert not stray.any(), (
+        "%s active cells must lie within the disc R=%g centered at L/2 (%d stray)"
+        % (geometry, p.radius, int(stray.sum())))
+    # count is close to the disc area pi R^2 / h^2 (staircase/cutcell over-approximate slightly)
+    assert active <= 1.3 * np.pi * p.radius ** 2 / h ** 2, "%s mask too large vs disc area" % geometry
 
 
-def test_cutcell_calls_set_disc_domain_with_mode_cutcell() -> None:
-    _install_fake_adc()
-    run = _import_run()
-    params = _params()
-    rho = np.full((16, 16), params.rho_min)
-    sim = run.build_uniform(object(), rho, params, geometry="cutcell")
-    disc_calls = [c for c in sim.calls if c[0] == "set_disc_domain"]
-    assert (
-        len(disc_calls) == 1
-    ), "cutcell must call set_disc_domain exactly once: %r" % (
-        [c[0] for c in sim.calls],
-    )
-    _, args, kw = disc_calls[0]
-    cx, cy, R = args
-    assert cx == 0.5 * params.length, "cx must be L/2 (%g), got %g" % (
-        0.5 * params.length,
-        cx,
-    )
-    assert cy == 0.5 * params.length, "cy must be L/2 (%g), got %g" % (
-        0.5 * params.length,
-        cy,
-    )
-    assert R == params.radius, "R must equal params.radius (%g), got %g" % (
-        params.radius,
-        R,
-    )
-    assert (
-        kw.get("mode") == "cutcell"
-    ), "mode must be 'cutcell', got %r" % kw.get("mode")
+def test_staircase_restricts_transport_to_disc():
+    _assert_disc_restricted("staircase")
 
 
-def test_unknown_geometry_raises() -> None:
-    _install_fake_adc()
-    run = _import_run()
-    params = _params()
-    rho = np.full((16, 16), params.rho_min)
+def test_cutcell_restricts_transport_to_disc():
+    _assert_disc_restricted("cutcell")
+
+
+def test_unknown_geometry_raises():
+    p = PaperParameters()
     raised = False
     try:
-        run.build_uniform(object(), rho, params, geometry="hexagon")
+        run.build_uniform(_compiled(), paper_initial_density(N, 3, p), p, geometry="hexagon")
     except ValueError as exc:
         raised = True
-        assert "staircase" in str(exc) or "square" in str(exc)
+        assert "square" in str(exc) or "staircase" in str(exc), str(exc)
     assert raised, "an unknown geometry must raise ValueError"
 
 
-def test_staircase_rejected_for_amr_engine() -> None:
-    _install_fake_adc()
-    run = _import_run()
+def test_staircase_rejected_for_amr_engine():
     argv = sys.argv
-    sys.argv = [
-        "run.py",
-        "--engine",
-        "amr-imex",
-        "--geometry",
-        "staircase",
-        "--acknowledge-amr-approximation",
-    ]
+    sys.argv = ["run.py", "--engine", "amr-imex", "--geometry", "staircase",
+                "--acknowledge-amr-approximation"]
     try:
         raised = False
         try:
             run.main()
         except SystemExit as exc:
             raised = True
-            # main() raises SystemExit with the explanatory message before any build.
-            assert "staircase" in str(
-                exc
-            ), "expected staircase rejection, got %r" % (exc,)
-        assert (
-            raised
-        ), "staircase + amr-imex must be rejected at the argument layer"
+            # main() raises SystemExit with the explanatory message before any build/compile.
+            assert "staircase" in str(exc), "expected staircase rejection, got %r" % (exc,)
+        assert raised, "staircase + amr-imex must be rejected at the argument layer"
     finally:
         sys.argv = argv
 
 
-def _run_all() -> None:
+def _run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
         t()
         print("PASS", t.__name__)
-    print("all %d geometry-flag smoke tests passed" % len(tests))
+    print("all %d geometry-flag tests passed (real adc)" % len(tests))
 
 
 if __name__ == "__main__":
