@@ -169,6 +169,13 @@ needs = ["cxx"]
 desc = "HyQMOM15 magnetic_wave du nouveau Matlab (ADC-354) : onde eigenmode 2D (mode=15, kx=2*pi, ky=4*pi) avec Poisson + source electrique ET magnetique (omega_c=-40, D1). IC via init_magnetic_wave_field magnetostatique (D4 intended != as_written), L2(IC,0)=0, smoke natif HLL+exact_speeds + MUSCL(minmod) + Euler (production), dt via compute_dt. IC transposee en (k,ny,nx) (onde 2D anisotrope). Smoke a n reduit ; Np=256 plein hors CI."
 
 [[case]]
+path = "hyqmom15/run_constant.py"
+category = "validation"
+ci = true
+needs = ["cxx"]
+desc = "HyQMOM15 constant du nouveau Matlab (ADC-355) : Maxwellienne uniforme au repos, sans onde ni Poisson ni source. Non-regression : un champ uniforme en transport pur (HLL+exact_speeds, MUSCL(minmod), Euler production) doit rester exactement uniforme (max|U-U0|<1e-12), masse conservee. IC verrouillee matlab_ref (ADC-350)."
+
+[[case]]
 path = "hyqmom15/run_waves.py"
 category = "validation"
 ci = true
