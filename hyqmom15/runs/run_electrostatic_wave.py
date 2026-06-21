@@ -61,6 +61,7 @@ SMOKE_N = 64  # smoke reduit pour CI ; Np=128 du Matlab = run plein hors CI
 
 
 def es_case(n: int):
+    """Return the electrostatic-wave Case at resolution n."""
     return dataclasses.replace(CASE, Np=n)
 
 

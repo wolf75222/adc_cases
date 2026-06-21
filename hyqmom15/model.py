@@ -15,6 +15,8 @@ Reference mathematique : Bryngelson, Fox & Laurent 2025 (hal-05398171).
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from adc import dsl
@@ -93,7 +95,7 @@ _PROJ_EIG_TOL = 1.0e-9  # |Im(lambda)| > tol*max(1,|lambda|) -> bloc complexe
 _PROJ_EPS = float(np.finfo(float).eps)  # eps MATLAB (Del1)
 
 # Etats gaussiens du jeu golden (rho, ux, uy, C20, C11, C02) : consommes par gen_states.py
-# et par l'oracle d'Isserlis de run.py.
+# et par l'oracle d'Isserlis de runs/run.py.
 GAUSSIAN_PARAMS = [
     (1.0, 0.0, 0.0, 1.0, 0.0, 1.0),  # repos isotrope
     (2.0, 0.5, -0.3, 1.0, 0.0, 2.0),  # derive anisotrope
@@ -967,9 +969,7 @@ def build_projection(m, Ma=4.0, lamin=1e-12) -> list:
 
 
 def _binom(n, k):
-    from math import comb
-
-    return float(comb(n, k))
+    return float(math.comb(n, k))
 
 
 def _gaussian_central(c20, c11, c02, p, q):

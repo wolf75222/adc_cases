@@ -15,7 +15,7 @@ Sections:
   (D) no-reg: projection=False emits no project hook (bit-identical transport).
 
 Run:
-    ADC_INCLUDE=<adc_cpp>/include python3 hyqmom15/validate_native_projector.py
+    ADC_INCLUDE=<adc_cpp>/include python3 hyqmom15/runs/validate_native_projector.py
 (ADC_INCLUDE defaults to ../adc_cpp/include relative to the repo if unset.)
 """
 

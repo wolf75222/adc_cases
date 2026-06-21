@@ -69,6 +69,7 @@ SMOKE_N = 64  # smoke reduit pour CI ; Np=256 du Matlab = run plein hors CI
 
 
 def mag_case(n: int):
+    """Return the magnetic-wave Case at resolution n."""
     return dataclasses.replace(CASE, Np=n)
 
 

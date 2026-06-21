@@ -26,12 +26,15 @@ Validation
       rho = 1e-3) a Ma = 2 (modere : le Ma = 20 du MATLAB exige la projection de realisabilite
       relaxation15, non portee -- question ouverte), robust=True, rusanov, 10 pas CFL 0.4 :
       etat fini, M00 > 0, C20/C02 >= 0 partout, masse conservee a 1e-12 ;
-  (5) snapshot npz des 15 moments ecrit et relisible (System.write).
+  (5) snapshot npz des 15 moments ecrit et relisible (System.write) ;
+  (6) fidelite HLL : adc rejoue le golden HLL de reference (golden_hll_gen.m, Octave sur
+      RIEMOM2D, crossing Ma = 2, Np = 64, 20 pas) avec exact_speeds en riemann='hll' ssprk2 ;
+      l'ecart L2 mesure la difference de schema seule, et adc-HLL est plus proche du golden
+      que adc-Rusanov (check_hll_fidelity).
 
-Ne prouve pas : la fidelite quantitative au MATLAB du crossing (schema different : Rusanov +
-borne bring-up vs HLL exact + relaxation15 a Ma = 20 ; la comparaison fidele attend 
-avec les vitesses exactes et un golden HLL re-genere) ; le couplage Poisson (le champ
-E reste nul ici : ) ; toute convergence en maillage.
+Ne prouve pas : la fidelite du crossing a Ma = 20 (qui exige la projection relaxation15, validee
+isolement par run_relaxation, pas en ligne ici) ; le couplage Poisson (E reste nul dans ce smoke,
+valide par run_diocotron) ; toute convergence en maillage.
 """
 
 from __future__ import annotations
@@ -242,7 +245,7 @@ def check_hll_fidelity() -> None:
     Flux_closure15_2D, HLL de Davis pas_HLL, split dimensionnel ADDITIF + Euler
     explicite -- sur le crossing Ma = 2, Np = 64, 20 pas. adc rejoue la MEME
     sequence de dt (golden_hll_dts.csv) avec le modele exact_speeds (memes
-    vitesses, ) en riemann='hll' NON-splite ssprk2 : l'ecart residuel mesure la
+    vitesses) en riemann='hll' NON-splite ssprk2 : l'ecart residuel mesure la
     difference de SCHEMA seule. Verifie aussi que adc-HLL est PLUS PROCHE du
     golden HLL que adc-Rusanov (HLL moins diffusif : critere qualitatif de
     l'issue, rendu quantitatif).

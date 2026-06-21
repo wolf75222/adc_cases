@@ -39,9 +39,9 @@ Validation (trois oracles independants du pipeline DSL)
       C20 != C02 -- rtol 1e-12 ; plus un controle des zones de crossing_state (fond, anti-
       diagonale, jets haut/bas) qui valide aussi que r != 0 ne leve plus d'exception.
 
-Ne prouve pas : la stabilite d'une evolution temporelle (drivers = ), les vitesses
-d'onde exactes pour HLL,
-le mode robust au-dela de la finitude (gardes hors MATLAB, qui n'en a aucune).
+Ne prouve pas : la stabilite d'une evolution temporelle longue (drivers run_diocotron_periodic
+et run_waves), les vitesses d'onde exactes pour HLL, le mode robust au-dela de la finitude
+(gardes hors MATLAB, qui n'en a aucune).
 """
 
 from __future__ import annotations

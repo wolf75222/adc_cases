@@ -25,6 +25,8 @@ callback Python par cellule. relax15 reste l'oracle de validation.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 # Import the moment order from the pure-NumPy matlab_ref (identical values to
@@ -43,9 +45,7 @@ _EPS = np.finfo(float).eps  # eps MATLAB
 
 
 def _binom(n, k):
-    from math import comb
-
-    return float(comb(n, k))
+    return float(math.comb(n, k))
 
 
 def m2cs4(M4):

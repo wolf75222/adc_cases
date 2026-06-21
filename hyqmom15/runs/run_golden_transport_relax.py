@@ -34,8 +34,8 @@ platform than it was generated on). The check also asserts the projector is MATE
 projection=False replay must differ), otherwise the golden would gate only the transport.
 
 Usage:
-    python3 hyqmom15/run_golden_transport_relax.py            # CHECK against the committed golden (CI)
-    python3 hyqmom15/run_golden_transport_relax.py --regen    # rewrite the golden + meta (manual)
+    python3 hyqmom15/runs/run_golden_transport_relax.py       # CHECK against the committed golden (CI)
+    python3 hyqmom15/runs/run_golden_transport_relax.py --regen  # rewrite the golden + meta (manual)
 """
 
 import argparse
