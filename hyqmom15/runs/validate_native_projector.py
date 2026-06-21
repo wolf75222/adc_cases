@@ -31,13 +31,14 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 import model as MOD  # noqa: E402
 import relaxation as R  # noqa: E402
 
 INCLUDE = os.environ.get(
     "ADC_INCLUDE",
-    os.path.abspath(os.path.join(HERE, "..", "..", "adc_cpp", "include")),
+    os.path.abspath(os.path.join(HERE, "..", "..", "..", "adc_cpp", "include")),
 )
 
 fails = 0
@@ -136,10 +137,10 @@ def main() -> int:
         print("skip: no C++ compiler or adc headers (set ADC_INCLUDE)")
         return 0
     inm = np.loadtxt(
-        os.path.join(HERE, "golden", "golden_relax_in.csv"), delimiter=","
+        os.path.join(os.path.dirname(HERE), "golden", "golden_relax_in.csv"), delimiter=","
     )
     meta = np.loadtxt(
-        os.path.join(HERE, "golden", "golden_relax_meta.csv"), delimiter=","
+        os.path.join(os.path.dirname(HERE), "golden", "golden_relax_meta.csv"), delimiter=","
     )
     lamin0 = float(meta[0, 0])
     fn = R.make_corner_eigs()

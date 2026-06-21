@@ -4,7 +4,7 @@
 Verites de reference et perimetre.
 
  (1) golden : relaxation.relax15 == relaxation15.m EXECUTE (Octave sur RIEMOM2D,
-     golden_relax_gen.m) sur 12 etats couvrant les 5 branches (0 identite, 1 clamp s30/s03,
+     golden/gen/golden_relax_gen.m) sur 12 etats couvrant les 5 branches (0 identite, 1 clamp s30/s03,
      2 bord univarie, 3 clamp s11, 4 projection collision15), rtol 1e-12 + atol echelle ;
      la COUVERTURE est assertee (chaque code de branche present dans le jeu).
  (2) branche 0 = identite A L'ARRONDI du round-trip M -> C -> S -> C -> M pres (rtol 1e-12 ;
@@ -23,7 +23,7 @@ Verites de reference et perimetre.
      ~13 % de cellules < -1e-9 (les violations d'UN pas, bornees) ; nu lambda_min ~ -12.8 et
      ~52 % (accumulation). Asserts a marges : projete >= -5 / < 30 %, nu <= -5 / > 35 % ;
      et l'etat re-projete final est realisable partout (>= -1e-6). + fini, M00 > 0, masse.
- (4) golden spatial AVEC relaxation active (golden_crossing_relax_*, golden_crossing_relax_gen.m) :
+ (4) golden spatial AVEC relaxation active (golden_crossing_relax_*, golden/gen/golden_crossing_relax_gen.m) :
      enchainement transport x relaxation du pilote (flagrelax = 1, Ma = 20). adc rejoue la MEME
      IC et les MEMES dt (transport euler == split additif MATLAB a 4.5e-16, PUIS relax_field) :
      ecart L2 au golden ~4e-9 (residu = port de relaxation15), tolerance 5e-8 ; le replay nu
@@ -44,7 +44,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-for d in (os.path.dirname(HERE),):
+for d in (os.path.dirname(HERE), os.path.dirname(os.path.dirname(HERE))):
     if d not in sys.path:
         sys.path.insert(0, d)
 
@@ -60,14 +60,14 @@ from relaxation import (  # noqa: E402
 
 def check_golden() -> None:
     """(1) + (2) : port relax15 == relaxation15.m sur les 12 goldens + invariants."""
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     inm = np.loadtxt(os.path.join(g, "golden_relax_in.csv"), delimiter=",")
     outm = np.loadtxt(os.path.join(g, "golden_relax_out.csv"), delimiter=",")
     meta = np.loadtxt(os.path.join(g, "golden_relax_meta.csv"), delimiter=",")
     branches = sorted(set(int(b) for b in meta[:, 2]))
     assert branches == [0, 1, 2, 3, 4], (
         "couverture des branches incomplete : %s "
-        "(regenerer golden_relax_gen.m)" % branches
+        "(regenerer golden/gen/golden_relax_gen.m)" % branches
     )
     fn = make_corner_eigs()
     worst = 0.0
@@ -254,7 +254,7 @@ def check_crossing_relax_golden() -> None:
     enchainer transport puis relaxation15 par cellule a chaque pas, comme le
     pilote.
 
-    golden_crossing_relax_gen.m (Octave sur RIEMOM2D) enregistre l'IC interieure, la sequence de
+    golden/gen/golden_crossing_relax_gen.m (Octave sur RIEMOM2D) enregistre l'IC interieure, la sequence de
     dt et l'etat final apres 3 pas (briques REELLES : eigenvalues15_2D, Flux_closure15_2D,
     pas_HLL, split additif, Euler, PUIS relaxation15 par cellule). adc rejoue la MEME IC et les
     MEMES dt : transport en time='euler' (le split additif + Euler du MATLAB est ALGEBRIQUEMENT
@@ -269,7 +269,7 @@ def check_crossing_relax_golden() -> None:
     from adc_cases.common.native import adc_include
     from adc_cases.common.io import case_output_dir
 
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     meta = np.atleast_1d(
         np.loadtxt(
             os.path.join(g, "golden_crossing_relax_meta.csv"), delimiter=","

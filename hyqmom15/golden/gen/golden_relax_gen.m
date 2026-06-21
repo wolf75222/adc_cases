@@ -1,6 +1,6 @@
-% golden_relax_gen.m -- paires in/out de relaxation15.m EXECUTEE (Octave) sur RIEMOM2D.
+% golden/gen/golden_relax_gen.m -- paires in/out de relaxation15.m EXECUTEE (Octave) sur RIEMOM2D.
 %
-%   octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m
+%   octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_relax_gen.m
 %
 % Produit golden/golden_relax_in.csv, golden_relax_out.csv (N x 15, ordre
 % [M00,M10,M20,M30,M40,M01,M11,M21,M31,M02,M12,M22,M03,M13,M04]) et

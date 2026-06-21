@@ -1,4 +1,4 @@
-% golden_crossing_gen.m : produit le golden de parite des conditions initiales correlees,
+% golden/gen/golden_crossing_gen.m : produit le golden de parite des conditions initiales correlees,
 % en faisant tourner InitializeM4_15 (RIEMOM2D) sur des etats gaussiens (M00, u, v, C20, C11, C02).
 %
 % But : montrer que InitializeM4_15 (S22=1, S31=S13=0 dans la base principale + rotation S4toC4
@@ -10,7 +10,7 @@
 %     [M00, u, v, C20, C11, C02, M(1)..M(15)]  (6 parametres + 15 moments).
 %
 % Usage (depuis hyqmom15/) :
-%   octave --no-gui --path /chemin/vers/RIEMOM2D golden_crossing_gen.m
+%   octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_crossing_gen.m
 %
 % Provenance a consigner dans le README : version d'Octave, SHA du depot RIEMOM2D.
 

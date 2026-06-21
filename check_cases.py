@@ -35,6 +35,10 @@ def check() -> int:
         readme = run.parent / "README.md"
         if not readme.exists():
             violations.append(f"{run.parent.name}/ : run.py present mais README.md MANQUANT")
+    for run in sorted(ROOT.glob("*/runs/run.py")):
+        case = run.parent.parent
+        if not (case / "README.md").exists():
+            violations.append(f"{case.name}/ : runs/run.py present mais README.md MANQUANT")
     # 2. chaque path du manifeste existe
     for p in manifest_paths():
         if not (ROOT / p).exists():
@@ -56,7 +60,7 @@ def check() -> int:
         for v in violations:
             print("  " + v, file=sys.stderr)
         return 1
-    n_cases = len(list(ROOT.glob("*/run.py")))
+    n_cases = len(list(ROOT.glob("*/run.py"))) + len(list(ROOT.glob("*/runs/run.py")))
     print(f"CHECK-CASES : OK ({n_cases} cas, tous documentes, manifeste coherent, 0 em-dash)")
     return 0
 

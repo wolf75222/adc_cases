@@ -24,17 +24,17 @@ U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
 
 ```bash
 # from the adc_cases root, with the adc module built (PYTHONPATH pointing at build-*/python)
-python hyqmom15/run.py            # flux vs MATLAB goldens + Gaussian oracle
-python hyqmom15/run_waves.py      # exact wave speeds vs goldens
-python hyqmom15/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
-python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
-python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
-python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE via ADC-368, ADC-371)
-python hyqmom15/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
-python hyqmom15/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
-python hyqmom15/run_constant.py # uniform-state non-regression (ADC-355)
-python hyqmom15/run_relaxation.py # realizability projection + crossing Ma=20
-mpirun -np 2 python hyqmom15/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
+python hyqmom15/runs/run.py            # flux vs MATLAB goldens + Gaussian oracle
+python hyqmom15/runs/run_waves.py      # exact wave speeds vs goldens
+python hyqmom15/runs/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
+python hyqmom15/runs/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
+python hyqmom15/runs/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
+python hyqmom15/runs/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE via ADC-368, ADC-371)
+python hyqmom15/runs/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
+python hyqmom15/runs/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
+python hyqmom15/runs/run_constant.py # uniform-state non-regression (ADC-355)
+python hyqmom15/runs/run_relaxation.py # realizability projection + crossing Ma=20
+mpirun -np 2 python hyqmom15/runs/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
 ```
 
 ## Composing the model
@@ -110,12 +110,12 @@ policy against the reference; [matlab_ref/check_goldens.py](matlab_ref/check_gol
 validate the native solver and follow in the wave-case PRs; a full fidelity table
 follows in ADC-357.
 
-[run_diocotron_periodic.py](run_diocotron_periodic.py) (ADC-351) is the diocotron
+[run_diocotron_periodic.py](runs/run_diocotron_periodic.py) (ADC-351) is the diocotron
 driver aligned on the new periodic reference: it pulls params and the IC from
 `matlab_ref` (omega_p=20, omega_c=-20, mode=4, standard ExB drift), activates BOTH
 the electric and magnetic Lorentz sources (omega_c=-20, D1), and runs the faithful
 HLL+exact_speeds + Euler (production backend) + periodic Poisson smoke with the
-`compute_dt` policy. The legacy [run_diocotron.py](run_diocotron.py) stays on the
+`compute_dt` policy. The legacy [run_diocotron.py](runs/run_diocotron.py) stays on the
 old RIEMOM2D scenario (omega_p=25, magnetic source inactive, SSPRK2) and is
 unchanged; `--ic-matlab-bug` remains the named opt-in for the transposed meshgrid
 drift, never the default.
@@ -131,11 +131,11 @@ the Matlab `space_scheme="ROE"`.
 
 | Driver | Sources | Poisson | recon | IC | Issue |
 |---|---|---|---|---|---|
-| [run_diocotron_periodic.py](run_diocotron_periodic.py) | E + B (oc=-20) | yes | first (none) | ring + ExB | ADC-351 |
-| [run_fluid_wave.py](run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352/371 |
-| [run_electrostatic_wave.py](run_electrostatic_wave.py) | E (oc=0) | yes | first (none) | eigenmode (Dmax) | ADC-353 |
-| [run_magnetic_wave.py](run_magnetic_wave.py) | E + B (oc=-40) | yes | muscl (minmod) | eigenmode (magnetostatic) | ADC-354 |
-| [run_constant.py](run_constant.py) | none | no | muscl (minmod) | uniform | ADC-355 |
+| [run_diocotron_periodic.py](runs/run_diocotron_periodic.py) | E + B (oc=-20) | yes | first (none) | ring + ExB | ADC-351 |
+| [run_fluid_wave.py](runs/run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352/371 |
+| [run_electrostatic_wave.py](runs/run_electrostatic_wave.py) | E (oc=0) | yes | first (none) | eigenmode (Dmax) | ADC-353 |
+| [run_magnetic_wave.py](runs/run_magnetic_wave.py) | E + B (oc=-40) | yes | muscl (minmod) | eigenmode (magnetostatic) | ADC-354 |
+| [run_constant.py](runs/run_constant.py) | none | no | muscl (minmod) | uniform | ADC-355 |
 
 Matlab `reconstruction` maps to `adc.FiniteVolume(limiter=...)`: `first` -> `none`,
 `muscl` -> `minmod` (ADC-356). The wave IC is transposed to ADC's `(k, ny, nx)`
@@ -189,11 +189,11 @@ python3 hyqmom15/campaigns/check_campaign.py      # ROMEO campaign infra (dry-ru
 python3 check_cases.py                            # manifest + README lint
 
 # native smokes (need adc on PYTHONPATH from an adc_cpp build)
-python3 hyqmom15/run_diocotron_periodic.py        # ADC-351
-python3 hyqmom15/run_fluid_wave.py                # ADC-352
-python3 hyqmom15/run_electrostatic_wave.py        # ADC-353
-python3 hyqmom15/run_magnetic_wave.py             # ADC-354
-python3 hyqmom15/run_constant.py                  # ADC-355
+python3 hyqmom15/runs/run_diocotron_periodic.py        # ADC-351
+python3 hyqmom15/runs/run_fluid_wave.py                # ADC-352
+python3 hyqmom15/runs/run_electrostatic_wave.py        # ADC-353
+python3 hyqmom15/runs/run_magnetic_wave.py             # ADC-354
+python3 hyqmom15/runs/run_constant.py                  # ADC-355
 ```
 
 The milestone (ADC-348 reference lock, ADC-349 layer, ADC-350 goldens, ADC-351
@@ -211,10 +211,10 @@ has since landed (adc_cpp ADC-368), so `fluid_wave` now runs `riemann="roe"`
 | Proven | Lorentz sources (E lowers order, B conserves) | `moment_sources` === reference eqs 1.3-1.7 to 1e-14, Larmor rotation === analytic (`run_crossing.py`) |
 | Proven | Euler trajectory replay | replaying the HLL golden steps with `time='euler'`, L2 gap to MATLAB ~4.5e-16 after 20 steps (`run.py`); the MATLAB additive split + Euler is algebraically the unsplit Euler |
 | Proven | Poisson | phi === analytic on a sinusoid to 1e-14 in `fft_spectral`, source E === -grad phi centered to 1e-16, checkpoint/restart bit-identical (`run_diocotron.py`) |
-| Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
-| Proven | realizability under transport | the native compiled projector (`build_projection`, emitted via `m.projection` / ADC-177) reproduces `relax15` branch by branch to ~1e-15 on the 12 goldens and `relax_field` on a field; it runs as the System post-step hook with no per-cell Python callback ([validate_native_projector.py](validate_native_projector.py), [notes/native_projector.md](notes/native_projector.md)). `relax_field` stays the oracle |
+| Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden/gen/golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
+| Proven | realizability under transport | the native compiled projector (`build_projection`, emitted via `m.projection` / ADC-177) reproduces `relax15` branch by branch to ~1e-15 on the 12 goldens and `relax_field` on a field; it runs as the System post-step hook with no per-cell Python callback ([validate_native_projector.py](runs/validate_native_projector.py), [notes/native_projector.md](notes/native_projector.md)). `relax_field` stays the oracle |
 | Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
-| Partial | golden coverage | a code-anchored golden runs the NATIVE projector THROUGH transport (Ma=20 crossing, [run_golden_transport_relax.py](run_golden_transport_relax.py), ADC-203); it pins our own transport x relaxation trajectory against drift, not MATLAB fidelity (the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated, so a MATLAB-anchored transport x relaxation cross-check stays separate) |
+| Partial | golden coverage | a code-anchored golden runs the NATIVE projector THROUGH transport (Ma=20 crossing, [run_golden_transport_relax.py](runs/run_golden_transport_relax.py), ADC-203); it pins our own transport x relaxation trajectory against drift, not MATLAB fidelity (the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated, so a MATLAB-anchored transport x relaxation cross-check stays separate) |
 | Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
 | Partial | BGK collision | a generic BGK relaxation toward the local Maxwellian is wired (`moments.bgk_source`, `build_moment_model(collision=True)`, ADC-277); the emitted source is verified `== nu*(M_eq - M)` to machine precision with the collisional invariants M00/M10/M01 zero (`run_relaxation.py` (5)). The full anisotropic `collision15.m` (Kn-dependent branches) is not yet matched |
 | Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
@@ -278,7 +278,7 @@ Application policy: `projection=True` requires `exact_speeds=True` (the complex-
 reads the order-3 flux-Jacobian sub-blocks); `Ma` and `lamin` are baked into the projector. The
 hook is rejected by the `prototype` backend and the `amr_system` target (ADC-177 contract).
 
-Validation (issue criteria, [validate_native_projector.py](validate_native_projector.py)):
+Validation (issue criteria, [validate_native_projector.py](runs/validate_native_projector.py)):
 compiled `project` == `relax15` on the 12 goldens (branches 0-4) to ~1e-15, well inside the 1e-12
 to 1e-10 per-branch tolerance; compiled projection over a `(15, ny, nx)` field == `relax_field`;
 at Ma=20 the native non-realizable rate drops as with `relax_field`; and `projection=False` emits
@@ -326,9 +326,9 @@ running the real MATLAB code (RIEMOM2D) under Octave; they are never re-transcri
 
 ```bash
 python3 gen_states.py
-octave --no-gui --path /chemin/vers/RIEMOM2D golden_gen.m        # flux + valeurs propres
-octave --no-gui --path /chemin/vers/RIEMOM2D golden_hll_gen.m    # trajectoire HLL (crossing)
-octave --no-gui --path /chemin/vers/RIEMOM2D golden_relax_gen.m  # relaxation15 (5 branches)
+octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_gen.m        # flux + valeurs propres
+octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_hll_gen.m    # trajectoire HLL (crossing)
+octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_relax_gen.m  # relaxation15 (5 branches)
 ```
 
 The ssprk2 trajectory gap to MATLAB is 4% (the second order, vs ~4.5e-16 for the `time='euler'`
@@ -357,8 +357,8 @@ is serial only (not bitwise across MPI ranks) and dt is hardcoded, so an eigenva
 silently re-pick dt and pass as "no drift".
 
 ```bash
-python3 hyqmom15/run_golden_transport_relax.py            # CHECK against the committed golden (CI)
-python3 hyqmom15/run_golden_transport_relax.py --regen    # rewrite after an INTENTIONAL change
+python3 hyqmom15/runs/run_golden_transport_relax.py            # CHECK against the committed golden (CI)
+python3 hyqmom15/runs/run_golden_transport_relax.py --regen    # rewrite after an INTENTIONAL change
 git add -f hyqmom15/golden/golden_transport_relax_state.csv hyqmom15/golden/golden_transport_relax_meta.csv
 ```
 
@@ -409,13 +409,13 @@ reference), pass `--ic-matlab-bug`; it rebuilds the swapped, divergent drift beh
 and the standard, correct drift is always used in CI.
 
 ```bash
-python hyqmom15/run_diocotron.py                  # standard ExB drift (default, CI)
-python hyqmom15/run_diocotron.py --ic-matlab-bug  # reproduce the meshgrid trap + impact table
+python hyqmom15/runs/run_diocotron.py                  # standard ExB drift (default, CI)
+python hyqmom15/runs/run_diocotron.py --ic-matlab-bug  # reproduce the meshgrid trap + impact table
 ```
 
 ## Multi-rank MPI smoke (geometric_mg)
 
-[run_mpi.py](run_mpi.py) replays the Vlasov-Poisson diocotron under `mpirun` (np=2 and 4)
+[run_mpi.py](runs/run_mpi.py) replays the Vlasov-Poisson diocotron under `mpirun` (np=2 and 4)
 with the geometric multigrid Poisson solver (`solver="geometric_mg"`). The direct FFT
 solver is single-rank by design (it unrolls a single box round-robin) and the core rejects
 it explicitly when `n_ranks>1`; the MG is the only distributed elliptic path.
@@ -423,9 +423,9 @@ it explicitly when `n_ranks>1`; the MG is the only distributed elliptic path.
 ```bash
 # mpi4py built against the SAME libmpi as _adc is required: its import calls MPI_Init, after
 # which the core reads the rank via _adc.my_rank()/n_ranks(). Run 1 on-node thread for parity.
-OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/run_mpi.py   # serial reference (writes the np=1 state)
-OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/run_mpi.py   # np=2: checks + parity + FFT rejection
-OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/run_mpi.py   # np=4: same
+OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/runs/run_mpi.py   # serial reference (writes the np=1 state)
+OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/runs/run_mpi.py   # np=2: checks + parity + FFT rejection
+OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/runs/run_mpi.py   # np=4: same
 ```
 
 Topology (measured, not assumed): the Cartesian `adc.System` is SINGLE-BOX (one box covers
@@ -470,7 +470,7 @@ coarse/fine consistency against a uniform `System` at the fine resolution, and t
 rejections:
 
 ```bash
-python hyqmom15/run_amr.py
+python hyqmom15/runs/run_amr.py
 ```
 
 ## Scale: validated CPU/GPU/MPI, and what is not
@@ -510,7 +510,7 @@ What is not validated at scale:
 - A generic BGK relaxation toward the local Maxwellian is wired (`build_moment_model(collision=True)`,
   ADC-277); the full anisotropic `collision15.m` (Kn-dependent branches) is not yet fidelity-matched.
 - Transport with the native relaxation15 projector active is frozen by a code-anchored non-regression
-  golden ([run_golden_transport_relax.py](run_golden_transport_relax.py), ADC-203), but a
+  golden ([run_golden_transport_relax.py](runs/run_golden_transport_relax.py), ADC-203), but a
   MATLAB-anchored transport x relaxation cross-check is still missing (the golden pins our own
   trajectory, not MATLAB fidelity).
 - `riemann="hllc"` unavailable: no contact wave (no `"p"` primitive) for this system.

@@ -471,7 +471,7 @@ def _mn(a, b):
 def _gt0(c):
     """Masque 1 si c > 0, 0 si c < 0, 0.5 en c == 0 : 0.5*(sign(c) + 1).
 
-    Les seuils sont choisis hors du fil du rasoir (cf. golden_relax_gen.m) -- l'egalite
+    Les seuils sont choisis hors du fil du rasoir (cf. golden/gen/golden_relax_gen.m) -- l'egalite
     exacte ne tombe pas sur les goldens.
     """
     return 0.5 * (dsl.sign(c) + 1.0)
@@ -1049,7 +1049,7 @@ def crossing_state(
     (~1e-12) pour tout r dans le domaine : InitializeM4_15 part des moments standardises
     S22 = 1, S31 = S13 = 0 dans la base PRINCIPALE (decorrelee) puis S4toC4 reintroduit la
     correlation par une rotation dependant de C11 -- la gaussienne correlee exacte, pas une
-    approximation (parite verifiee par golden_crossing_gen.m / golden/golden_crossing.csv).
+    approximation (parite verifiee par golden/gen/golden_crossing_gen.m / golden/golden_crossing.csv).
 
     Args:
         n: nombre de cellules par axe (grille n x n).

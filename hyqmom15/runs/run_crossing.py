@@ -43,6 +43,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 from model import (  # noqa: E402
     MOMENT_NAMES,
@@ -55,7 +56,7 @@ from model import (  # noqa: E402
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 import adc  # noqa: E402
 
@@ -236,7 +237,7 @@ def check_crossing_smoke() -> None:
 def check_hll_fidelity() -> None:
     """(6) fidelite HLL au schema MATLAB de reference.
 
-    golden_hll_state.csv est produit par golden_hll_gen.m (Octave sur RIEMOM2D)
+    golden_hll_state.csv est produit par golden/gen/golden_hll_gen.m (Octave sur RIEMOM2D)
     avec le SCHEMA du depot -- vitesses eigenvalues15_2D(M, 1), flux
     Flux_closure15_2D, HLL de Davis pas_HLL, split dimensionnel ADDITIF + Euler
     explicite -- sur le crossing Ma = 2, Np = 64, 20 pas. adc rejoue la MEME
@@ -249,7 +250,7 @@ def check_hll_fidelity() -> None:
     from adc_cases.common.io import case_output_dir
     from adc_cases.common.native import adc_include
 
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     meta = np.loadtxt(os.path.join(g, "golden_hll_meta.csv"), delimiter=",")
     n, ma, nsteps = int(meta[0]), float(meta[1]), int(meta[2])
     dts = np.atleast_1d(

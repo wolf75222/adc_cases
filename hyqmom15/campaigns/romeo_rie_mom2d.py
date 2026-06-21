@@ -27,6 +27,7 @@ HYQMOM = HERE.parent
 REPO = HYQMOM.parent
 sys.path.insert(0, str(HERE))            # synthesis, octave_matlab
 sys.path.insert(0, str(HYQMOM))          # drivers, diagnostics, matlab_ref
+sys.path.insert(0, str(HYQMOM / "runs"))  # run drivers moved to runs/ (ADC-374)
 
 import synthesis  # noqa: E402
 

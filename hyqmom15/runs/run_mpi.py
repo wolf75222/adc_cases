@@ -48,6 +48,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 # mpi4py initialise MPI (effet de bord de l'import) : sans cela _adc.n_ranks() rend 1 (serie) meme
 # sous mpirun, et le smoke ne testerait rien de distribue. mpi4py est facultatif (np=1 pur marche
@@ -62,7 +63,7 @@ except ImportError:
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 import adc  # noqa: E402
 from adc import _adc  # noqa: E402

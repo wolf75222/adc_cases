@@ -1,4 +1,4 @@
-% golden_roe_gen.m : one-step ROE golden of REFERENCE (Octave, RieMOM2D_Electrostatic_periodic).
+% golden/gen/golden_roe_gen.m : one-step ROE golden of REFERENCE (Octave, RieMOM2D_Electrostatic_periodic).
 %
 % Produces the strict-parity golden for hyqmom15/fluid_wave (ADC-380): ONE ROE + Euler step of
 % the reference scheme on the fluid_wave eigenmode IC (Np=32, eps=0.01, mode=15, kx=4*pi, ky=0),
@@ -17,7 +17,7 @@
 % single dt); golden_roe_meta.csv (Np, CFL).
 %
 % Usage (run from hyqmom15/, the outputs go to ./golden/):
-%   octave --no-gui --path /path/to/RieMOM2D_Electrostatic_periodic golden_roe_gen.m
+%   octave --no-gui --path /path/to/RieMOM2D_Electrostatic_periodic golden/gen/golden_roe_gen.m
 
 params = init_fluid_wave(struct());
 Np = params.Np; Nmom = params.Nmom; dx = params.dx; CFL = params.CFL;

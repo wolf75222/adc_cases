@@ -1,13 +1,13 @@
-% golden_crossing_relax_gen.m : mini-crossing HLL Ma=20 AVEC relaxation15 active (flagrelax=1),
+% golden/gen/golden_crossing_relax_gen.m : mini-crossing HLL Ma=20 AVEC relaxation15 active (flagrelax=1),
 % schema MATLAB fidele (Octave, RIEMOM2D).
 %
-% Comble le trou de couverture transport x relaxation : golden_hll_gen.m tourne flagrelax=0 ET
-% Ma=2 (regime ou relaxation15 ne se declenche jamais) ; golden_relax_gen.m couvre la projection
+% Comble le trou de couverture transport x relaxation : golden/gen/golden_hll_gen.m tourne flagrelax=0 ET
+% Ma=2 (regime ou relaxation15 ne se declenche jamais) ; golden/gen/golden_relax_gen.m couvre la projection
 % ISOLEE. AUCUN golden n'enchaine transport puis relaxation comme le pilote de production
 % (main_pb_2Dcrossing_2DHyQMOM15.m:37, flagrelax=1, Ma=20), qui applique relaxation15 a chaque
 % cellule a chaque pas APRES le split additif (lignes 278-291 du pilote).
 %
-% On reprend les briques REELLES de golden_hll_gen.m (vitesses eigenvalues15_2D(M, 1), flux
+% On reprend les briques REELLES de golden/gen/golden_hll_gen.m (vitesses eigenvalues15_2D(M, 1), flux
 % Flux_closure15_2D, HLL de Davis pas_HLL, split dimensionnel ADDITIF Mnp = Mnpx + Mnpy - M,
 % Euler explicite) et on AJOUTE, comme le pilote, l'etape flagrelax=1 : relaxation15(MM, lamin,
 % Ma) par cellule sur Mnp avant de poser M = Mnp. La collision BGK du pilote est inactive (Kn =
@@ -23,7 +23,7 @@
 % cote Python sans dependre de crossing_state), golden_crossing_relax_meta.csv
 % (Np, Ma, nsteps, CFL, lamin) ; golden_crossing_relax_dts.csv (dt par pas).
 %
-% Usage : octave --no-gui --path /chemin/vers/RIEMOM2D golden_crossing_relax_gen.m
+% Usage : octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_crossing_relax_gen.m
 
 Np = 32; CFL = 0.5; Ma = 20.0; T = 1.0; rhol = 1.0; rhor = 1e-3; nsteps = 3;
 lamin = 1.d-12;
@@ -62,7 +62,7 @@ for k = 1:Nmom
   in_out((k-1)*Np+1 : k*Np, :) = M(:, :, k);
 end
 
-% --- boucle temporelle : schema de golden_hll_gen.m (M_ext + ghosts periodiques) + flagrelax=1 ---
+% --- boucle temporelle : schema de golden/gen/golden_hll_gen.m (M_ext + ghosts periodiques) + flagrelax=1 ---
 dts = zeros(nsteps, 1);
 M_ext = zeros(Np+2, Np+2, Nmom);
 Fx = zeros(Np+2, Np+2, Nmom); Fy = Fx;

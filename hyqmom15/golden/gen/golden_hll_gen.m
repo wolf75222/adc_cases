@@ -1,4 +1,4 @@
-% golden_hll_gen.m : mini-crossing HLL de REFERENCE, schema MATLAB fidele (Octave, RIEMOM2D).
+% golden/gen/golden_hll_gen.m : mini-crossing HLL de REFERENCE, schema MATLAB fidele (Octave, RIEMOM2D).
 %
 % Produit le golden de fidelite HLL d': croisement de jets a Ma = 2 (Np = 64, 20 pas,
 % sans relaxation), avance par le SCHEMA DU DEPOT DE REFERENCE -- vitesses par
@@ -14,7 +14,7 @@
 % Sorties (golden/) : golden_hll_state.csv (etat final interieur, (15*Np) x Np, bloc par
 % moment), golden_hll_dts.csv (dt par pas), golden_hll_meta.csv (Np, Ma, nsteps, CFL).
 %
-% Usage : octave --no-gui --path /chemin/vers/RIEMOM2D golden_hll_gen.m
+% Usage : octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_hll_gen.m
 
 Np = 64; CFL = 0.4; Ma = 2.0; T = 1.0; rhol = 1.0; rhor = 1e-3; nsteps = 20;
 xmin = -0.5; xmax = 0.5;

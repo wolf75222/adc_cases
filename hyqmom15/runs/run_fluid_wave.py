@@ -34,13 +34,14 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 from model import build_moment_model  # noqa: E402
 
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 import adc  # noqa: E402
 
@@ -177,14 +178,14 @@ def check_golden_roe(compiled: object) -> None:
     golden_roe_*.csv : un pas ROE + Euler du SCHEMA de reference
     (RieMOM2D_Electrostatic_periodic : spatial_operator -> flux_ROE -> flux_ROE_local,
     moyenne de Roe arithmetique 1/2(UL+UR), A=jacobian15_2D(Uavg), |A| par eig + fix de
-    Harten, compute_div), genere par golden_roe_gen.m (Octave) sur l'IC fluid_wave. On
+    Harten, compute_div), genere par golden/gen/golden_roe_gen.m (Octave) sur l'IC fluid_wave. On
     reseme l'IC EXACTE du golden (M^0) et on rejoue le MEME dt (sim.step(dt)) en
     riemann="roe" : l'ecart residuel mesure le seul OPERATEUR ROE (fermeture + jacobien de
     flux + |A| matrice-signe + divergence). On part du M^0 du golden et NON de l'IC
     matlab_ref python : la convention de signe/phase de l'eigenvecteur differe (le matlab_ref
     phase-pinne, l'init Octave brut non), un ecart O(eps) sans rapport avec le schema.
     """
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     n = int(np.atleast_1d(
         np.loadtxt(os.path.join(g, "golden_roe_meta.csv"), delimiter=","))[0])
     dt = float(np.loadtxt(os.path.join(g, "golden_roe_dt.csv"), delimiter=","))

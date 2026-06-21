@@ -120,84 +120,84 @@ needs = ["cxx"]
 desc = "Fluide isotherme magnetise en formules (adc.dsl.Model) ; force de Lorentz pilotee par B_z (aux etendu)."
 
 [[case]]
-path = "hyqmom15/run.py"
+path = "hyqmom15/runs/run.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "Modele 2D a 15 moments (fermeture HyQMOM) en formules ; flux valide vs RIEMOM2D (golden Octave + oracle gaussien)."
 
 [[case]]
-path = "hyqmom15/run_crossing.py"
+path = "hyqmom15/runs/run_crossing.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments : sources E/B (oracle eq. 1.3-1.7), rotation de Larmor via System, croisement de jets Ma=2 (Rusanov)."
 
 [[case]]
-path = "hyqmom15/run_diocotron.py"
+path = "hyqmom15/runs/run_diocotron.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments Vlasov-Poisson : oracle Poisson analytique, source lisant le champ resolu, anneau diocotron + restart + snapshots."
 
 [[case]]
-path = "hyqmom15/run_diocotron_periodic.py"
+path = "hyqmom15/runs/run_diocotron_periodic.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM15 diocotron aligne sur le nouveau Matlab periodique RieMOM2D_Electrostatic_periodic (ADC-351) : params via matlab_ref (op=20, oc=-20, mode=4), IC ExB standard verrouillee (ADC-350), smoke natif HLL+exact_speeds + source electrique ET magnetique + Poisson periodique + Euler (production), dt via compute_dt. Distinct du run_diocotron.py legacy (ancien RIEMOM2D, source magnetique inactive)."
 
 [[case]]
-path = "hyqmom15/run_fluid_wave.py"
+path = "hyqmom15/runs/run_fluid_wave.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM15 fluid_wave du nouveau Matlab (ADC-352, ROE ADC-371) : onde eigenmode (mode=15, kx=4*pi, eps=0.01), sans Poisson ni source. IC verrouillee matlab_ref (ADC-350), L2(IC,0)=0 vs eigenmode analytique, smoke natif ROE+exact_speeds + Euler (production), transport pur (masse conservee). ROE (space_scheme Matlab) via le hook generique adc_cpp ADC-368 ; HLL garde comme baseline relatif (L2_roe < L2_hll)."
 
 [[case]]
-path = "hyqmom15/run_electrostatic_wave.py"
+path = "hyqmom15/runs/run_electrostatic_wave.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM15 electrostatic_wave du nouveau Matlab (ADC-353) : onde eigenmode (mode=15, ky=4*pi) couplee au Poisson periodique avec source electrique seule (omega_c=0). IC verrouillee matlab_ref (ADC-350) avec CFL speed Dmax (D3, intended != as_written), L2(IC,0)=0, smoke natif Poisson + HLL+exact_speeds + Euler (production), dt via compute_dt (cap source omega_p^2). Smoke a n reduit ; Np=128 plein hors CI."
 
 [[case]]
-path = "hyqmom15/run_magnetic_wave.py"
+path = "hyqmom15/runs/run_magnetic_wave.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM15 magnetic_wave du nouveau Matlab (ADC-354) : onde eigenmode 2D (mode=15, kx=2*pi, ky=4*pi) avec Poisson + source electrique ET magnetique (omega_c=-40, D1). IC via init_magnetic_wave_field magnetostatique (D4 intended != as_written), L2(IC,0)=0, smoke natif HLL+exact_speeds + MUSCL(minmod) + Euler (production), dt via compute_dt. IC transposee en (k,ny,nx) (onde 2D anisotrope). Smoke a n reduit ; Np=256 plein hors CI."
 
 [[case]]
-path = "hyqmom15/run_constant.py"
+path = "hyqmom15/runs/run_constant.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM15 constant du nouveau Matlab (ADC-355) : Maxwellienne uniforme au repos, sans onde ni Poisson ni source. Non-regression : un champ uniforme en transport pur (HLL+exact_speeds, MUSCL(minmod), Euler production) doit rester exactement uniforme (max|U-U0|<1e-12), masse conservee. IC verrouillee matlab_ref (ADC-350)."
 
 [[case]]
-path = "hyqmom15/run_waves.py"
+path = "hyqmom15/runs/run_waves.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments : vitesses HLL exactes (autodiff + eig par blocs) vs eigenvalues15_2D.m flagsym=1 (golden Octave)."
 
 [[case]]
-path = "hyqmom15/run_relaxation.py"
+path = "hyqmom15/runs/run_relaxation.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments : projection de realisabilite relaxation15 (port vs Octave, 5 branches) + crossing Ma=20 HLL exact (contraste de realisabilite projete/nu)."
 
 [[case]]
-path = "hyqmom15/validate_native_projector.py"
+path = "hyqmom15/runs/validate_native_projector.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
 desc = "HyQMOM 15 moments : projecteur natif relaxation15 (m.projection + eig_max_im) vs oracle relax15/relax_field (parite 1e-10, branche VP complexes incluse), chute du taux non-realisable Ma=20, non-regression sans projection."
 
 [[case]]
-path = "hyqmom15/run_golden_transport_relax.py"
+path = "hyqmom15/runs/run_golden_transport_relax.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
@@ -205,14 +205,14 @@ desc = "HyQMOM 15 moments : golden de non-regression code-ancre du transport HLL
 
 
 [[case]]
-path = "hyqmom15/run_mpi.py"
+path = "hyqmom15/runs/run_mpi.py"
 category = "validation"
 ci = false
 needs = ["cxx", "mpi"]
 desc = "HyQMOM 15 moments Vlasov-Poisson : smoke MPI multi-rang (mpirun np=2/4) du diocotron, Poisson geometric_mg, parite bit-a-bit vs serie, rejet FFT sous MPI. Hors CI (exige mpirun + mpi4py compile contre la meme libmpi qu'_adc)."
 
 [[case]]
-path = "hyqmom15/run_amr.py"
+path = "hyqmom15/runs/run_amr.py"
 category = "validation"
 ci = true
 needs = ["cxx"]

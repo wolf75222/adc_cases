@@ -47,15 +47,16 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.dirname(_HERE))  # hyqmom15/ : model, relaxation, gen_states
 try:
     import adc_cases  # noqa: F401  (ensure the package root is importable)
 except ImportError:
-    sys.path.insert(0, os.path.dirname(_HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(_HERE)))
 
 import adc  # noqa: E402
 from model import build_moment_model, crossing_state  # noqa: E402  (path set above)
 
-_GOLD = os.path.join(_HERE, "golden")
+_GOLD = os.path.join(os.path.dirname(_HERE), "golden")
 _STATE_CSV = os.path.join(_GOLD, "golden_transport_relax_state.csv")
 _META_CSV = os.path.join(_GOLD, "golden_transport_relax_meta.csv")
 _N = 32
