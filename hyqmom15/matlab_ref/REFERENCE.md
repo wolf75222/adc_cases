@@ -105,8 +105,9 @@ the intended field is `init_magnetic_wave_field` (Section 4, D4).
 - Moments are the unit-temperature Maxwellian raw moments of `(rho, vx, vy)`
   (e.g. `M20 = rho*(vx^2+1)`), equal to ADC `gaussian_state(rho, vx, vy, 1, 0, 1)`.
 - CFL max speed: `linearized_Jacobian_magnetostatic(kmin, kmin, adim_debye,
-  omega_c)`, then `max(real(eig))`. Here `lambda = diag(D)` is correct (unlike
-  the electrostatic wave case, D3).
+  omega_c)`, then `max(real(eig))`. Here the Jacobian is already taken at
+  `(kmin, kmin)`, so `D` and `Dmax` coincide and `lambda = diag(D)` is the CFL
+  bound. In the electrostatic wave case they differ (the D3 convention).
 
 ## 4. Known divergences and ADC decisions
 
@@ -114,12 +115,26 @@ D1-D5 are the issue's explicit points; D6-D9 were found in the source and are
 documented so the next tickets do not rediscover them. "Intent, not bug" means
 reproduce the physical intent of the reference, not a transcription slip.
 
+These rows are not the same kind of thing, and campaign reports (ADC-376) and
+figures (ADC-377) must annotate each one precisely instead of lumping them under
+the single word "bug":
+
+- Clarified convention: a deliberate reference choice. D3 (`D` for the physical
+  wave init, `Dmax` for the CFL speed) is a convention confirmed by Sacha, not a
+  Matlab bug; ADC follows the intended convention by default.
+- Intentional ADC choice: ADC fixes or fills a gap on purpose (D1 magnetic
+  source, D6 source-dt policy, D7 corner halos).
+- True divergence to arbitrate: a genuine Matlab/ADC gap still open. D4
+  (`init_magnetic_wave` wiring) is unconfirmed by Sacha; D2 (legacy meshgrid
+  drift) is reproduced only under a named legacy path.
+- Test bug: a check artefact, not physics (e.g. the ADC-375 eigenvalue ordering).
+
 | # | Divergence (new Matlab) | Current ADC | ADC decision | Owner |
 |---|---|---|---|---|
 | D1 | Diocotron runs BOTH sources: `electrostatic=1` and `magnetostatic=1`, `omega_c=-20`, so `source_term.m` adds electric + magnetic | `run_diocotron.py` builds `build_moment_model(omega_c=0.0)`: electric source only, B enters only via the IC drift | Activate the magnetic source in the port: `build_moment_model(omega_c=-20, ...)`. The core already supports it (`adc.moments.lorentz_sources`), no adc_cpp change | ADC-351 |
 | D2 | `init_diocotron_field.m` keeps the legacy meshgrid E x B, structurally identical to `initialize_dicotron.m`: `vx=-grad_phi(:,:,2)/omega_c`, `vy=+grad_phi(:,:,1)/omega_c` under `meshgrid(xm,ym)`, the transposed divergent drift (ADC-198), not the standard incompressible one | ADC default is the corrected standard incompressible E x B; `--ic-matlab-bug` reproduces the transposed drift | Intent over bug: keep the corrected drift as the physics default. For strict diocotron golden parity reproduce the reference's literal IC under the named `--ic-matlab-bug` path. ADC-351 must verify the meshgrid axis convention numerically before pinning the golden | ADC-351 |
-| D3 | `init_electrostatic_wave_field.m:28` `lambda_max = diag(D)` for the CFL speed, where `D` is the mode Jacobian at `(kx,ky)`; intent is `diag(Dmax)` from `Jmax` at `(kmin,kmin)` | not ported | Reproduce intent: use `diag(Dmax)` (max possible speed) for the CFL. Bug-for-bug only under a named legacy test | ADC-349/350 |
-| D4 | `init_magnetic_wave.m:83` sets `params.init = init_electrostatic_wave_field`; `init_magnetic_wave_field` (magnetostatic Jacobian, `omega_c`) exists and is the intended init | not ported | Reproduce intent: port the `init_magnetic_wave_field` path. Flagged probable oversight (Sacha unconfirmed); revisit if Sacha confirms it is deliberate | ADC-349/350 |
+| D3 | `init_electrostatic_wave_field.m` evaluates two Jacobians: `D` at the mode `(kx,ky)` for the physical IC eigenmode, and `Dmax` at `(kmin,kmin)` for the CFL speed. Per Sacha this is a deliberate convention (`D` = physical init, `Dmax` = CFL / max possible speed), NOT a bug. Line 28 `lambda_max = diag(D)` does not follow it for the CFL (should read `diag(Dmax)`) | `init_electrostatic_wave_field(dmax_policy=...)`: the physical IC always uses `D` at `(kx,ky)`; the CFL `max_speed` uses `Dmax` at `(kmin,kmin)` by default | Follow the intended convention: `dmax_policy="intended"` (default) uses `Dmax`. The literal `diag(D)` line is reproduced only under the named `dmax_policy="as_written"`, never silently | ADC-349/350 |
+| D4 | `init_magnetic_wave.m:83` sets `params.init = init_electrostatic_wave_field`; `init_magnetic_wave_field` (magnetostatic Jacobian, `omega_c`) exists and is the intended init. True divergence still to arbitrate: Sacha confirmed the D3 convention but did NOT confirm D4 | `init_magnetic_wave_field(wiring=...)`: `wiring="intended"` (default) uses the magnetostatic Jacobian; `wiring="as_written"` reproduces the electrostatic wiring | Reproduce intent (magnetostatic) by default and keep `as_written` named. Revisit if Sacha confirms the electrostatic wiring is deliberate | ADC-349/350 |
 | D5 | `HLLC`, `WENO`, `neumann`, `outflow` appear in the code | ADC has HLL (exact speeds), ROE via the generic Roe hook (ADC-368, `riemann="roe"`), WENO5 in core | ROE is now ported (`fluid_wave` uses it, ADC-371). The rest is not: per Sacha `HLLC`/`WENO`/`neumann`/`outflow` are refactor placeholders (HLLC is not adapted to HyQMOM15). Document, do not transcribe | ADC-348/368/371 |
 | D6 | `compute_dt.m` source cap: `dt_electrostatic = CFL*dx*vmax/omega_p^2` (diocotron, `electrostatic` branch wins over `elseif magnetostatic`) | ADC caps via `source_frequency(omega_p)` -> `dt <= cfl/omega_p`, ~500x laxer, never bites (ADC-197) | Keep the source-dt fidelity out of `source_frequency`. Put the `compute_dt.m` policy in `matlab_ref/dt_policy.py`, audited in ADC-356; do not loosen tolerances to hide the gap | ADC-356 |
 | D7 | `apply_periodic.m` leaves the 4 ghost corners zero; `compute_speeds.m` reads `1:Np+2` including corners -> zero-state `eigenvalues15_2D` | ADC fills halos consistently | Do not reproduce the corner artifact. It only perturbs `vmax` through a spurious corner (max over abs, usually inert). ADC-350 must confirm it does not move the golden `dt` sequence | ADC-350 |
@@ -128,11 +143,15 @@ reproduce the physical intent of the reference, not a transcription slip.
 
 ### Bug-for-bug policy
 
-Default: reproduce the physical intent of the new reference, not its
-transcription bugs (D3, D4). Bug-for-bug parity is allowed only under an
-explicitly named legacy test (a `*_matlab_bug` style smoke), never as the
-default path. This mirrors the existing `--ic-matlab-bug` precedent in
-`run_diocotron.py`.
+Default: reproduce the physical intent of the new reference. D3 is a clarified
+convention (`D` for the physical init, `Dmax` for the CFL), so the default
+`dmax_policy="intended"` follows the reference's intent; it does not reproduce a
+bug. D4 is a true divergence still to arbitrate (the `init_magnetic_wave` wiring,
+Sacha unconfirmed); the default uses the intended magnetostatic init. Literal
+source behaviour (`dmax_policy="as_written"`, `wiring="as_written"`, the
+diocotron `--ic-matlab-bug` drift) is reproduced only under an explicitly named
+legacy option, never as the default path. This mirrors the existing
+`--ic-matlab-bug` precedent in `run_diocotron.py`.
 
 ## 5. Fidelity plan (goldens, tolerances, reproducibility)
 
