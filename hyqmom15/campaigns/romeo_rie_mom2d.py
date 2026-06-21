@@ -121,7 +121,7 @@ def _run_and_record(sim, case, case_dir, n_snapshots, dt_fn, smoke):
     }
 
 
-def _run_diocotron(n, case_dir, n_snapshots, smoke):
+def _run_diocotron(n, case_dir, n_snapshots, smoke, projection=False):
     import run_diocotron_periodic as drv
     from matlab_ref import compute_dt
     case = drv.periodic_case(n)
@@ -131,11 +131,13 @@ def _run_diocotron(n, case_dir, n_snapshots, smoke):
     probe.set_state("mom", u0)
     probe.solve_fields()
     vmax = case.cfl * case.dx / probe.step_cfl(case.cfl)
-    sim = drv.build_periodic_sim(n, rho_bg=rho_bg)
+    sim = drv.build_periodic_sim(n, rho_bg=rho_bg, projection=projection)
     sim.set_state("mom", u0)
     sim.solve_fields()
     rec = _run_and_record(sim, case, case_dir, n_snapshots, lambda t: compute_dt(vmax, case, t), smoke)
-    return case, _solver_config(case, "hll"), rec
+    solver = _solver_config(case, "hll")
+    solver["projection"] = projection  # native relaxation15 projector (build_projection)
+    return case, solver, rec
 
 
 def _run_wave(driver, case_builder, ic, build, n, case_dir, n_snapshots, smoke):
@@ -190,10 +192,14 @@ def _run_constant(n, case_dir, n_snapshots, smoke):
     return case, _solver_config(case, "hll"), rec
 
 
-def run_one(case_name, n, case_dir, n_snapshots, smoke):
-    """Run a single case end-to-end; returns (case, solver_config, record)."""
+def run_one(case_name, n, case_dir, n_snapshots, smoke, projection=False):
+    """Run a single case end-to-end; returns (case, solver_config, record).
+
+    projection enables the native relaxation15 realizability projector; wired for
+    dicotron (the case that loses realizability without it), ignored otherwise.
+    """
     if case_name == "dicotron":
-        return _run_diocotron(n, case_dir, n_snapshots, smoke)
+        return _run_diocotron(n, case_dir, n_snapshots, smoke, projection)
     if case_name == "fluid_wave":
         return _run_fluid(n, case_dir, n_snapshots, smoke)
     if case_name == "constant":
@@ -217,7 +223,7 @@ def _provenance(case_name, params, solver, rec, threads, host, ts):
         host=host, timestamp=ts)
 
 
-def run_campaign(out_dir, cases, smoke, dry_run, threads, matlab_times=None):
+def run_campaign(out_dir, cases, smoke, dry_run, threads, matlab_times=None, projection=False):
     """Run the campaign; write per-case snapshots + run_meta.json and a synthesis table."""
     import datetime
     import socket
@@ -241,7 +247,7 @@ def run_campaign(out_dir, cases, smoke, dry_run, threads, matlab_times=None):
             params, solver, rec = _params(case), _solver_config(case, "hll"), {
                 "Np": n, "n_steps": 0, "status": "dry-run", "wall_clock_s": None}
         else:
-            case, solver, rec = run_one(name, n, case_dir, DEFAULT_SNAPSHOTS, smoke)
+            case, solver, rec = run_one(name, n, case_dir, DEFAULT_SNAPSHOTS, smoke, projection)
             params = _params(case)
             adc_times[name] = rec.get("wall_clock_s")
         meta = _provenance(name, params, solver, rec, threads, host, ts)
@@ -268,6 +274,8 @@ def main(argv=None) -> int:
     grp.add_argument("--smoke", action="store_true", help="reduced Np + capped steps")
     grp.add_argument("--full", action="store_true", help="full Matlab resolution")
     p.add_argument("--dry-run", action="store_true", help="no adc run; structure + meta only")
+    p.add_argument("--projection", action="store_true",
+                   help="enable the native relaxation15 realizability projector (wired for dicotron)")
     args = p.parse_args(argv)
 
     cases = args.cases.split(",") if args.cases else list(CASE_NP)
@@ -279,7 +287,8 @@ def main(argv=None) -> int:
         p.error("specify --smoke, --full, or --dry-run (no silent default)")
     smoke = args.smoke  # --full -> full resolution; --dry-run ignores it (no sim)
     run_campaign(args.out, cases, smoke=smoke, dry_run=args.dry_run,
-                 threads=args.threads, matlab_times=args.matlab_times)
+                 threads=args.threads, matlab_times=args.matlab_times,
+                 projection=args.projection)
     return 0
 
 
