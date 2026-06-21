@@ -247,6 +247,13 @@ needs = []
 desc = "HyQMOM15 matlab_ref : mapping du time_scheme Matlab (Euler/RK2/RK3) vers adc.Explicit(method euler/ssprk2/ssprk3) (ADC-379). Verifie le mapping pur, la casse exacte, le rejet d'un schema inconnu, que les cinq cas M8 restent Euler, et qu'un cas force en RK2/RK3 selectionne le bon integrateur ADC via explicit_for. Pur Python, sans build."
 
 [[case]]
+path = "hyqmom15/plots/check_plots.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 plots : garde-fou de la couche de figures (ADC-377). Synthetise une petite campagne au format adc.System.write(npz), verifie le chargeur pur NumPy et les diagnostics (densite M00, masse, min/max, dt), et rend les figures si matplotlib est present (sinon le rendu est saute, matplotlib n'est pas une dependance CI). Pur Python, sans build."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
