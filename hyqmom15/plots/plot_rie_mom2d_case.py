@@ -196,7 +196,8 @@ def main(argv=None) -> int:
     if args.case:
         case_dirs = [root / args.case]
     else:
-        case_dirs = sorted(d for d in root.iterdir() if d.is_dir() and d.name != "figures")
+        case_dirs = sorted(d for d in root.iterdir()
+                           if d.is_dir() and d.name not in ("figures", "h5", "paraview"))
 
     total = 0
     for cd in case_dirs:
