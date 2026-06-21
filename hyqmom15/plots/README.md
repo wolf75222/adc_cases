@@ -47,6 +47,23 @@ limits), `<case>_phi.png` (potential, skipped when no Poisson field),
 time), and, with `--gif`, a `<case>_density.gif` animation (PillowWriter; no
 ffmpeg needed).
 
+The richer per-moment and realizability figures (ADC-384) come from a second
+command:
+
+```bash
+python3 hyqmom15/plots/diagnostics_plots.py <campaign_dir> [--case NAME] [--out DIR]
+```
+
+Per case it writes `<case>_moments.png` (the 15 M_pq), `<case>_velocities.png`
+(u, v), `<case>_realizability_maps.png` (lam_min(p2p2), H20, H02 and the
+non-realizable mask, from `hyqmom15/diagnostics`),
+`<case>_realizability_series.png` (min lam_min, fraction non-realizable, min
+M00, fraction M00 < 0 over time), and `<case>_symmetry_series.png` (the per-case
+symmetry residual). Every figure
+carries a full provenance footer (case, solver config, backend, threads,
+wall-clock, dt range, AMR flag, commits, host) read from the campaign's
+`run_meta.json` (`provenance.py`).
+
 `matplotlib` is required for rendering but is not a CI dependency, so the
 renderer is a manual tool like the other `make_figures.py` scripts. The
 pure-NumPy loader and diagnostics (`snapshots.py`) and their guard
