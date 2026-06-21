@@ -57,7 +57,11 @@ def run_matlab_case(matlab_src, case_name, timeout=7200):
         subprocess.run(cmd, cwd=str(matlab_src), check=True,
                        capture_output=True, text=True, timeout=timeout)
         wall = time.perf_counter() - t0
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        tail = (getattr(exc, "stderr", "") or "").strip().splitlines()
+        print("  %s: Octave run failed (%s) %s"
+              % (case_name, type(exc).__name__, tail[-1] if tail else ""),
+              file=sys.stderr)
         wall = None
     finally:
         tmp.unlink(missing_ok=True)
@@ -70,7 +74,7 @@ def run_all(matlab_src, cases, out_path):
     for case in cases:
         wall = run_matlab_case(matlab_src, case)
         times[case] = wall
-        print("  %-20s -> %s" % (case, "%.2fs" % wall if wall else "FAILED"))
+        print("  %-20s -> %s" % (case, "%.2fs" % wall if wall is not None else "FAILED"))
     pathlib.Path(out_path).write_text(json.dumps(times, indent=2), encoding="utf-8")
     return times
 

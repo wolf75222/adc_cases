@@ -131,9 +131,9 @@ def build_rapport(campaign_dir, matlab_times=None):
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Generate the hyqmom15 campaign report.")
-    p.add_argument("campaign_dir")
-    p.add_argument("--matlab-times")
-    p.add_argument("--out")
+    p.add_argument("campaign_dir", help="root with one snapshot sub-directory per case")
+    p.add_argument("--matlab-times", help="JSON of Matlab wall-clock per case for the speedup")
+    p.add_argument("--out", help="report path (default: <campaign_dir>/rapport.md)")
     args = p.parse_args(argv)
     root = pathlib.Path(args.campaign_dir)
     if not root.is_dir():
