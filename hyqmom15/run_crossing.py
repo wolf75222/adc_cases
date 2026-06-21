@@ -44,10 +44,10 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from model import (
+from model import (  # noqa: E402
     MOMENT_NAMES,
     build_moment_model,
-    crossing_state,  # noqa: E402
+    crossing_state,
     gaussian_state,
     moment_sources,
 )
