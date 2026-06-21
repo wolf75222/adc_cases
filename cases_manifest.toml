@@ -261,6 +261,13 @@ needs = []
 desc = "HyQMOM15 diagnostics : garde-fou de la couche de realisabilite et de symetrie (ADC-383). Verifie que les cartes de realisabilite vectorisees (moments standardises, valeurs propres p2p2, H20/H02) correspondent cellule-a-cellule a l'oracle scalaire de relaxation.py, qu'un champ Maxwellien est realisable et qu'un etat non-realisable est detecte, que les residus de symetrie par cas sont ~0 pour la structure attendue, et que la politique non-fatale accepte une violation transitoire qui recupere. Pur Python, sans build."
 
 [[case]]
+path = "hyqmom15/campaigns/check_campaign.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 campagne ROMEO : garde-fou de l'infrastructure de campagne (ADC-376). Verifie les tables de synthese et de speedup, le schema run_meta de provenance, la construction de la commande Octave, et un --dry-run complet de l'orchestrateur (ecrit run_meta.json par cas et synthesis.md sans lancer de simulation). Pur Python, sans build ; le run reel adc est le chemin ROMEO."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
