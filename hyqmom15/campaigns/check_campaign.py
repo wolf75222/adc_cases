@@ -26,6 +26,7 @@ import make_rapport  # noqa: E402
 import octave_matlab as om  # noqa: E402
 import romeo_rie_mom2d as campaign  # noqa: E402
 import synthesis  # noqa: E402
+import to_paraview  # noqa: E402
 
 _MOMENTS = ["M00", "M10", "M20", "M30", "M40", "M01", "M11", "M21", "M31",
             "M02", "M12", "M22", "M03", "M13", "M04"]
@@ -137,8 +138,22 @@ def check_dry_run():
     return "dry-run OK (3 cases -> run_meta.json each + synthesis.md, no adc)"
 
 
+def check_paraview():
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _synth_campaign(root, cases=("dicotron",))
+        pvd = to_paraview.export_case(root / "dicotron", root / "paraview")
+        assert pvd and pvd.exists() and pvd.suffix == ".pvd", "no .pvd written"
+        vti = sorted((root / "paraview").glob("dicotron_*.vti"))
+        assert vti, "no .vti written"
+        head = vti[0].read_text()
+        assert 'type="ImageData"' in head and 'Name="density"' in head, "malformed .vti"
+        assert pvd.read_text().count("<DataSet") == len(vti), "pvd/vti count mismatch"
+    return "to_paraview OK (.pvd time series + ImageData .vti per snapshot)"
+
+
 CHECKS = [check_tables, check_run_meta, check_octave_source, check_dry_run,
-          check_make_rapport, check_export_h5]
+          check_make_rapport, check_export_h5, check_paraview]
 
 
 def main() -> int:

@@ -49,4 +49,6 @@ $PY hyqmom15/campaigns/romeo_rie_mom2d.py --full --out "$OUT" --threads "$THREAD
 $PY hyqmom15/campaigns/export_h5.py "$OUT"
 # 3) per-case analysis report (config + realizability + figures + h5)
 $PY hyqmom15/campaigns/make_rapport.py "$OUT"
-echo "campaign + HDF5 + rapport.md written under: $OUT"
+# 4) ParaView time series per case (<case>.pvd + .vti) -- open the .pvd in ParaView
+$PY hyqmom15/campaigns/to_paraview.py "$OUT"
+echo "campaign + HDF5 + rapport.md + ParaView (.pvd) written under: $OUT"

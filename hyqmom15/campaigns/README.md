@@ -44,8 +44,9 @@ threads, wall-clock, dt range, AMR flag, commits, host), and feeds a
 runtime, status). Post-process into exploitable artefacts:
 
 ```bash
-python3 hyqmom15/campaigns/export_h5.py    out/campaign   # -> out/campaign/h5/<case>.h5
-python3 hyqmom15/campaigns/make_rapport.py out/campaign   # -> out/campaign/rapport.md
+python3 hyqmom15/campaigns/export_h5.py     out/campaign  # -> out/campaign/h5/<case>.h5
+python3 hyqmom15/campaigns/make_rapport.py  out/campaign  # -> out/campaign/rapport.md
+python3 hyqmom15/campaigns/to_paraview.py   out/campaign  # -> out/campaign/paraview/<case>.pvd
 python3 hyqmom15/plots/diagnostics_plots.py out/campaign  # -> out/campaign/figures/ (matplotlib)
 ```
 
@@ -55,6 +56,14 @@ is absent). `make_rapport.py` writes the per-case analysis report (config,
 realizability verdict, conservation, positivity, symmetry, figure list, HDF5 ref)
 plus a synthesis table and the optional speedup. Figures come from `hyqmom15/plots`
 (ADC-377/384).
+
+`to_paraview.py` converts each case to a **ParaView** time series on the uniform
+`[-0.5, 0.5]^2` grid: one `<case>_NNNN.vti` (ImageData, cell data: density, ux/uy +
+speed, phi, the realizability margin `lam_min`, and the 15 moments) per snapshot,
+plus a `<case>.pvd` collection -- open the `.pvd` in ParaView for the animated time
+series. The runs are single-rank, so each snapshot is one grid (a single `.vti`);
+parallel pieces (`.pvti`) would only apply to an MPI-distributed run. No VTK/pyvista
+dependency (hand-written VTK XML).
 
 ## Matlab speedup baseline (Octave, run where the Matlab source lives)
 
