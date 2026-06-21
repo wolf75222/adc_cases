@@ -29,7 +29,7 @@ python hyqmom15/run_waves.py      # exact wave speeds vs goldens
 python hyqmom15/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
 python hyqmom15/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
 python hyqmom15/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
-python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE->HLL, see ADC-368)
+python hyqmom15/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE via ADC-368, ADC-371)
 python hyqmom15/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
 python hyqmom15/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
 python hyqmom15/run_constant.py # uniform-state non-regression (ADC-355)
@@ -125,20 +125,23 @@ drift, never the default.
 The five `RieMOM2D_Electrostatic_periodic` cases, all driven through `matlab_ref`
 and run as light `validation` smokes in CI (reduced `n`; the full Matlab `Np` runs
 out of CI). Each builds the native model with `backend="production"` +
-`adc.Explicit(method="euler")` and `riemann="hll"` + `exact_speeds=True`.
+`adc.Explicit(method="euler")` and `exact_speeds=True`; the Riemann solver is
+`riemann="hll"`, except `fluid_wave` which uses `riemann="roe"` (ADC-371) to match
+the Matlab `space_scheme="ROE"`.
 
 | Driver | Sources | Poisson | recon | IC | Issue |
 |---|---|---|---|---|---|
 | [run_diocotron_periodic.py](run_diocotron_periodic.py) | E + B (oc=-20) | yes | first (none) | ring + ExB | ADC-351 |
-| [run_fluid_wave.py](run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352 |
+| [run_fluid_wave.py](run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352/371 |
 | [run_electrostatic_wave.py](run_electrostatic_wave.py) | E (oc=0) | yes | first (none) | eigenmode (Dmax) | ADC-353 |
 | [run_magnetic_wave.py](run_magnetic_wave.py) | E + B (oc=-40) | yes | muscl (minmod) | eigenmode (magnetostatic) | ADC-354 |
 | [run_constant.py](run_constant.py) | none | no | muscl (minmod) | uniform | ADC-355 |
 
 Matlab `reconstruction` maps to `adc.FiniteVolume(limiter=...)`: `first` -> `none`,
 `muscl` -> `minmod` (ADC-356). The wave IC is transposed to ADC's `(k, ny, nx)`
-layout in the driver. `fluid_wave` runs `riemann="hll"` (ROE is an adc_cpp gap,
-ADC-368). Not in scope (Matlab placeholders, Sacha): HLLC, WENO, neumann, outflow.
+layout in the driver. `fluid_wave` runs `riemann="roe"` (the generic adc_cpp Roe
+hook, ADC-368/371); the other M8 cases run `riemann="hll"`. Not in scope (Matlab
+placeholders, Sacha): HLLC, WENO, neumann, outflow.
 
 ### M8 fidelity and reproduction (ADC-357)
 
@@ -151,7 +154,7 @@ locked at `Np=16` there. The native smokes run the compiled model in CI (reduced
 | Case | Matlab source | Driver | IC golden | dt | native smoke (CI) | L2 | known limitation |
 |---|---|---|---|---|---|---|---|
 | diocotron | `init_diocotron(_field).m` | `run_diocotron_periodic.py` | ADC-350 (std + matlab_bug) | `compute_dt` (omega_p^2) | E+B + Poisson + HLL + Euler: mass, phi | golden-based (no analytic L2) | growth rate; full Np=128 + native 1-step out of CI |
-| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | HLL + Euler, pure transport: mass | `L2(IC,0)=0` | ROE -> HLL (ADC-368); long trajectory |
+| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | ROE + Euler, pure transport: mass, `L2_roe < L2_hll` | `L2(IC,0)=0` | native one-step golden vs `flux_ROE` out of CI; long trajectory |
 | electrostatic_wave | `init_electrostatic_wave(_field).m` | `run_electrostatic_wave.py` | ADC-350 (Dmax) | `compute_dt` (omega_p^2) | E + Poisson + HLL + Euler: mass, phi | `L2(IC,0)=0` | full Np=128 out of CI |
 | magnetic_wave | `init_magnetic_wave(_field).m` | `run_magnetic_wave.py` | ADC-350 (magnetostatic) | `compute_dt` | E+B + Poisson + HLL + MUSCL + Euler: mass, phi | `L2(IC,0)=0` | magnetostatic init intended (D4); full Np=256 out of CI |
 | constant | `init_constant(_field).m` | `run_constant.py` | ADC-350 (uniform) | n/a | uniform preserved (max abs(U-U0) < 1e-12), mass | n/a | none |
@@ -190,8 +193,9 @@ python3 hyqmom15/run_constant.py                  # ADC-355
 
 The milestone (ADC-348 reference lock, ADC-349 layer, ADC-350 goldens, ADC-351
 diocotron, ADC-352/353/354 waves, ADC-355 constant, ADC-356 adc_cpp audit) needs
-no adc_cpp change; the only confirmed core gap is the generic Roe-dissipation hook,
-tracked as adc_cpp ADC-368 (until then `fluid_wave` uses HLL).
+no adc_cpp change. The one core gap it surfaced, the generic Roe-dissipation hook,
+has since landed (adc_cpp ADC-368), so `fluid_wave` now runs `riemann="roe"`
+(ADC-371) to match the Matlab `space_scheme="ROE"`.
 
 | Status | Component | Evidence (number, source) |
 |---|---|---|
@@ -504,8 +508,9 @@ What is not validated at scale:
   golden ([run_golden_transport_relax.py](run_golden_transport_relax.py), ADC-203), but a
   MATLAB-anchored transport x relaxation cross-check is still missing (the golden pins our own
   trajectory, not MATLAB fidelity).
-- `riemann="hllc"`/`"roe"` unavailable: no contact wave nor closed eigenstructure for this
-  system.
+- `riemann="hllc"` unavailable: no contact wave (no `"p"` primitive) for this system.
+  `riemann="roe"` is available via the generic Roe-dissipation hook (matrix-sign of the
+  flux Jacobian, adc_cpp ADC-368); `fluid_wave` uses it (ADC-371).
 - Diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
 
 ## Structuring Linear issues

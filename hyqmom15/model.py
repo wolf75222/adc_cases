@@ -174,6 +174,7 @@ def build_moment_model(
     rho_background=0.0,
     omega_p=None,
     exact_speeds=False,
+    roe=False,
     projection=False,
     Ma=4.0,
     lamin=1e-12,
@@ -214,6 +215,12 @@ def build_moment_model(
             flux (autodiff + sous-blocs HYQMOM_BLOCKS) -- requis pour riemann='hll' ; la
             meme verite spectrale sert a la CFL. False (defaut) = borne de demarrage
             k*sqrt(C) (cf. K_SPEED).
+        roe: True = emet aussi la dissipation de Roe generique (adc.moments via
+            m.roe_from_jacobian, hook adc_cpp ADC-368) -- la dissipation matrice-signe
+            |A| du jacobien de flux (noyau adc::roe_abs_apply, repli Rusanov en rayon
+            spectral), qui rend riemann='roe' disponible pour ce modele de moments DSL
+            sans primitive 'p'. False (defaut) = pas de hook Roe (seul riemann='rusanov',
+            ou 'hll' avec exact_speeds=True). Independant d'exact_speeds.
         projection: True = emet le projecteur natif relaxation15 via m.projection
             (ADC-275, hook ADC-177) -- chemin PRODUCTION applique par le System a la fin
             de chaque macro-pas entier, branche par branche fidele a relaxation.relax15
@@ -273,6 +280,7 @@ def build_moment_model(
         closure,
         blocks=HYQMOM_BLOCKS if exact_speeds else None,
         exact_speeds=exact_speeds,
+        roe=roe,
         robust=robust,
         eps_m00=eps_m00,
         eps_cov=eps_c,

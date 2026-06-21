@@ -152,7 +152,7 @@ path = "hyqmom15/run_fluid_wave.py"
 category = "validation"
 ci = true
 needs = ["cxx"]
-desc = "HyQMOM15 fluid_wave du nouveau Matlab (ADC-352) : onde eigenmode (mode=15, kx=4*pi, eps=0.01), sans Poisson ni source. IC verrouillee matlab_ref (ADC-350), L2(IC,0)=0 vs eigenmode analytique, smoke natif HLL+exact_speeds + Euler (production), transport pur (masse conservee). ROE Matlab -> HLL non-strict (gap adc_cpp ADC-368)."
+desc = "HyQMOM15 fluid_wave du nouveau Matlab (ADC-352, ROE ADC-371) : onde eigenmode (mode=15, kx=4*pi, eps=0.01), sans Poisson ni source. IC verrouillee matlab_ref (ADC-350), L2(IC,0)=0 vs eigenmode analytique, smoke natif ROE+exact_speeds + Euler (production), transport pur (masse conservee). ROE (space_scheme Matlab) via le hook generique adc_cpp ADC-368 ; HLL garde comme baseline relatif (L2_roe < L2_hll)."
 
 [[case]]
 path = "hyqmom15/run_electrostatic_wave.py"
