@@ -51,9 +51,10 @@ def _fields(snap):
     names = list(snap.names)
     idx = {n: k for k, n in enumerate(names)}
     rho = m[idx.get("M00", 0)]
-    safe = np.where(np.abs(rho) > 1e-30, rho, 1.0)
-    ux = m[idx["M10"]] / safe if "M10" in idx else np.zeros_like(rho)
-    uy = m[idx["M01"]] / safe if "M01" in idx else np.zeros_like(rho)
+    ok = np.abs(rho) > 1e-30  # vacuum cells read as zero velocity, not the raw moment
+    safe = np.where(ok, rho, 1.0)
+    ux = np.where(ok, m[idx["M10"]] / safe, 0.0) if "M10" in idx else np.zeros_like(rho)
+    uy = np.where(ok, m[idx["M01"]] / safe, 0.0) if "M01" in idx else np.zeros_like(rho)
     fields = {
         "density": rho, "ux": ux, "uy": uy, "speed": np.hypot(ux, uy),
     }
@@ -140,6 +141,9 @@ def main(argv=None) -> int:
         if pvd:
             n += 1
             print("  %-20s -> %s" % (cd.name, pvd))
+    if args.case and n == 0:
+        print("no snapshots found for case %r under %s" % (args.case, root), file=sys.stderr)
+        return 1
     print("wrote %d ParaView collections to %s" % (n, out_dir))
     return 0
 
