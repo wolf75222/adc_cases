@@ -530,11 +530,12 @@ What the compiled path has been measured to do:
 
 What is not validated at scale:
 
-- The realizability projection inside a device/MPI step. The `relaxation15` path that keeps
-  dt stable is still a Python per-cell loop with a host copy; it does not run on device and
-  is not part of the GPU 24706-step run, which therefore advances without per-step projection.
-  The compiled projector (ADC-275, hook ADC-177) is the prerequisite for a high-Ma production
-  run that is both device-resident and realizability-stable.
+- The realizability projection inside a device/MPI step. The compiled projector
+  (`build_projection`, hook `m.projection`/ADC-177) exists and reproduces `relax_field` branch by
+  branch, but it was not wired into the GPU 24706-step run, which therefore advanced without
+  per-step projection; the per-cell Python oracle (`relax_field`) keeps dt stable on host only and
+  does not run on device. Exercising the compiled projector device-resident at high Ma is the open
+  validation step.
 - Distributed multi-box Cartesian halo exchange: the MPI smoke is single-box (rank 0 only),
   so it validates collective correctness, not halo exchange or load balancing. Distributed
   multi-box belongs to AMR.
@@ -544,9 +545,10 @@ What is not validated at scale:
 
 - The closure is exact on Gaussians, but the scheme does not preserve realizability: long
   runs => project (realizability section).
-- The realizability projection is a Python per-cell oracle; a compiled device-safe projector
-  is blocked on two ADC-177/DSL gaps (ADC-275, see the realizability section and
-  [notes/native_projector_feasibility.md](notes/native_projector_feasibility.md)).
+- The realizability projection ships both ways: a Python per-cell oracle (`relax_field`) and a
+  compiled device-safe projector (`build_projection`, `m.projection`/ADC-177) that reproduces it
+  branch by branch (realizability section, [notes/native_projector.md](notes/native_projector.md));
+  what stays unvalidated is exercising the compiled projector inside a device/MPI step at scale.
 - `crossing_state(r != 0)` raises `NotImplementedError`; the MATLAB parity exists but the gate
   is not yet removed (ADC-274).
 - The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt

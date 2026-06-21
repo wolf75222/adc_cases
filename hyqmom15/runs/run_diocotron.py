@@ -130,13 +130,12 @@ def diocotron_state(n: int, ic_matlab_bug: bool = False) -> np.ndarray:
         vx = -gphi_y / OMEGA_C  # derive ExB standard (incompressible)
         vy = gphi_x / OMEGA_C
     U = np.empty((15, n, n))
-    base = gaussian_state(1.0, 0.0, 0.0, T, 0.0, T)
     for j in range(n):
         for i in range(n):
             U[:, j, i] = gaussian_state(
                 rho[j, i], vx[j, i], vy[j, i], T, 0.0, T
             )
-    assert np.all(np.isfinite(U)) and base is not None
+    assert np.all(np.isfinite(U))
     return U
 
 

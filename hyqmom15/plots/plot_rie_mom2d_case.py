@@ -61,6 +61,7 @@ def _title(case, meta):
 
 
 def plot_density(case, snaps, meta, out, n=4):
+    """Render up to n density (M00) snapshots side by side as a PNG; return its path."""
     sel = _pick(snaps, n)
     vmin = min(float(s.density.min()) for s in snaps)
     vmax = max(float(s.density.max()) for s in snaps)
@@ -83,6 +84,7 @@ def plot_density(case, snaps, meta, out, n=4):
 
 
 def plot_phi(case, snaps, meta, out, n=4):
+    """Render up to n potential (phi) snapshots as a PNG; return its path, or None if no phi."""
     with_phi = [s for s in snaps if s.phi is not None]
     if not with_phi:
         return None
@@ -107,6 +109,7 @@ def plot_phi(case, snaps, meta, out, n=4):
 
 
 def plot_diagnostics(case, snaps, meta, out):
+    """Render the mass-drift / M00 positivity / dt time series as a PNG; return its path."""
     ts = time_series(snaps)
     fig, axes = plt.subplots(1, 3, figsize=(12.5, 3.6))
     axes[0].plot(ts["t"], ts["mass_rel_drift"], color="tab:blue")
@@ -131,6 +134,7 @@ def plot_diagnostics(case, snaps, meta, out):
 
 
 def animate_density(case, snaps, meta, out, fps=12):
+    """Render the density (M00) evolution as an animated GIF; return its path."""
     vmin = min(float(s.density.min()) for s in snaps)
     vmax = max(float(s.density.max()) for s in snaps)
     fig, ax = plt.subplots(figsize=(4.6, 4.6))
@@ -155,6 +159,7 @@ def animate_density(case, snaps, meta, out, fps=12):
 
 
 def render_case(case_dir, out_dir, make_gif=False, n_snapshots=4):
+    """Render every figure for one case directory; return the list of written paths."""
     case = pathlib.Path(case_dir).name
     snaps = load_case(case_dir)
     if not snaps:

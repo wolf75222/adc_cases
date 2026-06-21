@@ -367,7 +367,7 @@ def check_crossing_relax_golden() -> None:
 def check_bgk_source(n: int = 16, nu: float = 5.0) -> None:
     """(5) source BGK : build_moment_model(collision=True) emet nu*(M_eq - M).
 
-    Compare la source emise (evaluee en numpy par m.source_value, SANS compilation) a l'oracle
+    Compare la source emise (evaluee en numpy par m.eval_source, SANS compilation) a l'oracle
     nu*(M_eq - M) cellule par cellule, sur un etat de croisement anisotrope (M != M_eq). Verifie
     aussi que les invariants collisionnels M00/M10/M01 de la source sont identiquement nuls (masse
     et quantite de mouvement conservees par construction du BGK).

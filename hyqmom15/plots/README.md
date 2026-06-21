@@ -39,6 +39,9 @@ python3 hyqmom15/plots/plot_rie_mom2d_case.py <campaign_dir> --gif
 
 # one case, custom output directory
 python3 hyqmom15/plots/plot_rie_mom2d_case.py <campaign_dir> --case dicotron --out /tmp/figs
+
+# fewer / more snapshot columns in the static PNGs (default 4)
+python3 hyqmom15/plots/plot_rie_mom2d_case.py <campaign_dir> --n-snapshots 6
 ```
 
 Per case it writes `<case>_density.png` (M00 at key times, shared colour

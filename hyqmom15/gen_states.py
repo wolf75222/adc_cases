@@ -22,7 +22,7 @@ def build_states() -> np.ndarray:
     """Construit les etats echantillons figes de la validation HyQMOM."""
     states = []
     # 1-4 : gaussiennes exactes (oracle Isserlis disponible pour l'ordre 5) -- parametres dans
-    # model.GAUSSIAN_PARAMS (source unique, cross-verifiee par run.py contre le CSV fige).
+    # model.GAUSSIAN_PARAMS (source unique, cross-verifiee par runs/run.py contre le CSV fige).
     for prm in GAUSSIAN_PARAMS:
         states.append(gaussian_state(*prm))
     # 5-9 : melanges discrets (realisables par construction), seed fige.
