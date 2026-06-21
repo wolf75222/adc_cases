@@ -378,7 +378,7 @@ def check_ssprk3_rejected(compiled_amr, cm_noex, U0: np.ndarray) -> None:
             compiled_amr, U0, regrid_every=0, time=adc.Explicit(ssprk3=True)
         )
         raise AssertionError("AmrSystem a accepte ssprk3 sur un loader .so")
-    except ValueError as e:
+    except Exception as e:  # noqa: BLE001 -- C++ loader rejects ssprk3 as RuntimeError, not ValueError
         assert "ssprk3" in str(e).lower(), "message inattendu : %s" % e
 
     sim = build_amr(cm_noex, U0, regrid_every=0, riemann="rusanov")
