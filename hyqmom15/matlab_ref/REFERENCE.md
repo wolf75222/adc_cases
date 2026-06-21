@@ -120,7 +120,7 @@ reproduce the physical intent of the reference, not a transcription slip.
 | D2 | `init_diocotron_field.m` keeps the legacy meshgrid E x B, structurally identical to `initialize_dicotron.m`: `vx=-grad_phi(:,:,2)/omega_c`, `vy=+grad_phi(:,:,1)/omega_c` under `meshgrid(xm,ym)`, the transposed divergent drift (ADC-198), not the standard incompressible one | ADC default is the corrected standard incompressible E x B; `--ic-matlab-bug` reproduces the transposed drift | Intent over bug: keep the corrected drift as the physics default. For strict diocotron golden parity reproduce the reference's literal IC under the named `--ic-matlab-bug` path. ADC-351 must verify the meshgrid axis convention numerically before pinning the golden | ADC-351 |
 | D3 | `init_electrostatic_wave_field.m:28` `lambda_max = diag(D)` for the CFL speed, where `D` is the mode Jacobian at `(kx,ky)`; intent is `diag(Dmax)` from `Jmax` at `(kmin,kmin)` | not ported | Reproduce intent: use `diag(Dmax)` (max possible speed) for the CFL. Bug-for-bug only under a named legacy test | ADC-349/350 |
 | D4 | `init_magnetic_wave.m:83` sets `params.init = init_electrostatic_wave_field`; `init_magnetic_wave_field` (magnetostatic Jacobian, `omega_c`) exists and is the intended init | not ported | Reproduce intent: port the `init_magnetic_wave_field` path. Flagged probable oversight (Sacha unconfirmed); revisit if Sacha confirms it is deliberate | ADC-349/350 |
-| D5 | `HLLC`, `WENO`, `neumann`, `outflow` appear in the code | ADC has HLL (exact speeds), ROE pending audit, WENO5 in core | Do not port this milestone. Per Sacha these are refactor placeholders; HLLC is not adapted to HyQMOM15. Document, do not transcribe | ADC-348 (done here) |
+| D5 | `HLLC`, `WENO`, `neumann`, `outflow` appear in the code | ADC has HLL (exact speeds), ROE via the generic Roe hook (ADC-368, `riemann="roe"`), WENO5 in core | ROE is now ported (`fluid_wave` uses it, ADC-371). The rest is not: per Sacha `HLLC`/`WENO`/`neumann`/`outflow` are refactor placeholders (HLLC is not adapted to HyQMOM15). Document, do not transcribe | ADC-348/368/371 |
 | D6 | `compute_dt.m` source cap: `dt_electrostatic = CFL*dx*vmax/omega_p^2` (diocotron, `electrostatic` branch wins over `elseif magnetostatic`) | ADC caps via `source_frequency(omega_p)` -> `dt <= cfl/omega_p`, ~500x laxer, never bites (ADC-197) | Keep the source-dt fidelity out of `source_frequency`. Put the `compute_dt.m` policy in `matlab_ref/dt_policy.py`, audited in ADC-356; do not loosen tolerances to hide the gap | ADC-356 |
 | D7 | `apply_periodic.m` leaves the 4 ghost corners zero; `compute_speeds.m` reads `1:Np+2` including corners -> zero-state `eigenvalues15_2D` | ADC fills halos consistently | Do not reproduce the corner artifact. It only perturbs `vmax` through a spurious corner (max over abs, usually inert). ADC-350 must confirm it does not move the golden `dt` sequence | ADC-350 |
 | D8 | `RK2`/`RK3` freeze `phi` across substeps (not fully Poisson-coupled) | ADC uses `Explicit()` forward Euler to match | No action: every committed case is `Euler`. If RK is ported later, recompute `phi` per stage for full coupling | future |
@@ -214,12 +214,14 @@ adc_cpp change inside the adc_cases PRs:
   `limiter="minmod"` is MUSCL with minmod (Matlab `reconstruction="muscl"`, `limiter="minmod"`).
 - `compute_dt` source policy: kept explicit in `matlab_ref/dt_policy.py` (D6), not
   folded into `source_frequency`. No core change.
-- ROE for a HyQMOM15 DSL model: CONFIRMED GAP. `adc.FiniteVolume(riemann="roe")` is
-  rejected unless the compiled model declares a `"p"` primitive or calls
-  `m.enable_roe()` (`HasRoeDissipation`); `build_moment_model` and `adc.moments`
-  provide neither. Tracked as adc_cpp ADC-368 (generic Roe-dissipation hook for
-  moment DSL models). Until then `fluid_wave` (ADC-352) uses `riemann="hll"` +
-  `exact_speeds` as a named non-strict path.
+- ROE for a HyQMOM15 DSL model: RESOLVED by adc_cpp ADC-368 (generic Roe-dissipation
+  hook). `build_moment_model(roe=True)` calls `m.roe_from_jacobian()`, which emits the
+  matrix-sign dissipation `|A|` of the flux Jacobian (kernel `adc::roe_abs_apply`,
+  spectral-radius Rusanov fallback) and sets `HasRoeDissipation`, so
+  `adc.FiniteVolume(riemann="roe")` is accepted with no `"p"` primitive. `fluid_wave`
+  (ADC-371) now uses `riemann="roe"` to match the Matlab `space_scheme="ROE"`; the
+  `hll` path is kept only as the relative L2 baseline (ROE tracks the eigenmode
+  strictly better).
 
 Wave drivers (ADC-352/353/354) must build the model with `backend="production"`
 and `adc.Explicit(method="euler")` for a faithful Euler step.
