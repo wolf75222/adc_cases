@@ -45,13 +45,14 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 from model import build_moment_model  # noqa: E402
 
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 import adc  # noqa: E402
 

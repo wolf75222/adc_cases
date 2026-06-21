@@ -80,4 +80,4 @@ Acceptance criteria of the issue, checked by `validate_native_projector.py` (com
   `dsl.eig_lmin` / `dsl.eig_lmax` (ADC-289, witnesses over `adc::real_eig_minmax`,
   `include/adc/numerics/dense_eig.hpp`).
 - Goldens: `hyqmom15/golden/golden_relax_{in,out,meta}.csv` (12 states, branches 0-4, from
-  `golden_relax_gen.m`).
+  `golden/gen/golden_relax_gen.m`).

@@ -7,7 +7,7 @@ H2, |s11| < 1), suppression des valeurs propres de flux complexes (blocs d'ordre
 relaxation vers une cible realisable (Z1 = u+v et Z2 = u-v independants) quand la matrice
 de realisabilite p2p2 a une valeur propre < lamin. Reconstruction M <- C <- S par les
 transformations binomiales ; les references sont les paires in/out produites par
-golden_relax_gen.m (Octave), tolerance 1e-12.
+golden/gen/golden_relax_gen.m (Octave), tolerance 1e-12.
 
 Le test des valeurs propres complexes evalue le jacobien autodiff du modele aux etats
 standardises (seuil |Im| > 1e-9*max(1, |lambda|)). Les deux branches x et y appliquent la

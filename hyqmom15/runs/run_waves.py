@@ -46,6 +46,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 from model import HYQMOM_BLOCKS, build_moment_model  # noqa: E402
 
@@ -56,7 +57,7 @@ NEAR_DEGENERATE = (
 
 def load_golden_vp() -> tuple[np.ndarray, np.ndarray]:
     """Charge les etats golden et les vitesses propres de reference (Octave)."""
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     states = np.loadtxt(os.path.join(g, "golden_states.csv"), delimiter=",")
     vp = np.loadtxt(os.path.join(g, "golden_vp.csv"), delimiter=",")
     return states, vp

@@ -1,4 +1,4 @@
-% golden_gen.m : produit les goldens HyQMOM en faisant tourner le VRAI code MATLAB de reference
+% golden/gen/golden_gen.m : produit les goldens HyQMOM en faisant tourner le VRAI code MATLAB de reference
 % (RIEMOM2D) sur les etats de golden/golden_states.csv.
 %
 % Sorties (memes dossier golden/) :
@@ -8,7 +8,7 @@
 %                   production MATLAB ; reference future d'.
 %
 % Usage (depuis hyqmom15/) :
-%   octave --no-gui --path /chemin/vers/RIEMOM2D golden_gen.m
+%   octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_gen.m
 %
 % Provenance a consigner dans le README : version d'Octave, SHA du depot RIEMOM2D.
 

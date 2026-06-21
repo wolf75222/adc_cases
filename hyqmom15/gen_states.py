@@ -3,7 +3,7 @@
 
 Etats FIGES de la validation HyQMOM, generes de facon deterministe (seed
 fixe). Les goldens MATLAB (golden_fx/fy/vp.csv) sont produits a partir de CE
-fichier par golden_gen.m (Octave) sur le code de reference RIEMOM2D : regenerer les etats impose
+fichier par golden/gen/golden_gen.m (Octave) sur le code de reference RIEMOM2D : regenerer les etats impose
 de regenerer les goldens (provenance dans le README). Etats choisis pour couvrir : maxwellienne
 au repos / en derive / correlee / haut Mach (regime crossing Ma=20), melanges discrets fortement
 asymetriques (S30 != 0), etat quasi-degenere (variance ~1e-6, test de cancellation sqrt) et etat

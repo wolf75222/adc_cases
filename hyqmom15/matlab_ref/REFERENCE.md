@@ -29,7 +29,7 @@ makes no numerical change and touches no driver or golden (ADC-348 scope).
 
 The Matlab is not committed to `adc_cases` (608 vs 101 files, figures and movies
 included). It lives maintainer-side, the same convention the existing goldens
-already use (`octave --no-gui --path /chemin/vers/RIEMOM2D golden_gen.m`). On the
+already use (`octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_gen.m`). On the
 reference machine:
 
 - new: `/Users/romaindespoulain/Documents/RieMOM2D_Electrostatic_periodic`
@@ -240,7 +240,7 @@ adc_cpp change inside the adc_cases PRs:
   `adc.FiniteVolume(riemann="roe")` is accepted with no `"p"` primitive. `fluid_wave`
   (ADC-371) now uses `riemann="roe"` to match the Matlab `space_scheme="ROE"`; the
   `hll` path is kept only as the relative L2 baseline (ROE tracks the eigenmode
-  strictly better). A one-step golden (`golden_roe_gen.m`, Octave) pins the native ROE
+  strictly better). A one-step golden (`golden/gen/golden_roe_gen.m`, Octave) pins the native ROE
   update to the reference `flux_ROE`: on the same IC and dt, `run_fluid_wave.py`
   (check_golden_roe) matches it to ~1e-17 relative (machine precision), asserted < 1e-9
   for cross-platform safety (ADC-380).

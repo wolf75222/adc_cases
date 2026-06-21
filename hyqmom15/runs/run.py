@@ -54,6 +54,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))  # hyqmom15/ : model, relaxation, gen_states
 
 from model import (  # noqa: E402
     GAUSSIAN_PARAMS,
@@ -71,7 +72,7 @@ from model import (  # noqa: E402
 try:
     import adc_cases  # noqa: F401
 except ImportError:
-    sys.path.insert(0, os.path.dirname(HERE))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 # Indices des 6 entrees de fermeture dans Fx et Fy ; le reste = recopies de U.
 CLOSURE_FX = {
@@ -123,7 +124,7 @@ RTOL_GOLDEN_LOOSE = {8: 1e-12}
 def load_goldens() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Charge les etats figes et les goldens MATLAB commites.
 
-    Provenance : golden_gen.m, Octave sur RIEMOM2D ; voir README. Verifie au
+    Provenance : golden/gen/golden_gen.m, Octave sur RIEMOM2D ; voir README. Verifie au
     passage l'ANTI-DERIVE : les 4 premiers etats du CSV sont exactement
     gaussian_state(GAUSSIAN_PARAMS[i]) -- si gen_states.py et les goldens sont
     regeneres sans mettre a jour model.GAUSSIAN_PARAMS (ou inversement), on
@@ -133,7 +134,7 @@ def load_goldens() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     Returns:
         (states, fx, fy, vp), tableaux numpy charges depuis golden/*.csv.
     """
-    g = os.path.join(HERE, "golden")
+    g = os.path.join(os.path.dirname(HERE), "golden")
     states = np.loadtxt(os.path.join(g, "golden_states.csv"), delimiter=",")
     fx = np.loadtxt(os.path.join(g, "golden_fx.csv"), delimiter=",")
     fy = np.loadtxt(os.path.join(g, "golden_fy.csv"), delimiter=",")
@@ -422,12 +423,12 @@ def check_crossing_ic_parity() -> None:
     gaussian_state(formule d'Isserlis) reproduit les 15 moments. Le golden couvre
     r = 0, r = 0.5, r = -0.5 (isotrope C20 = C02 = 1, au repos puis jets du
     croisement Ma = 20) et un etat anisotrope C20 != C02 ; voir
-    golden_crossing_gen.m. Tolerance d'echelle (rtol 1e-12 + atol proportionnel a
+    golden/gen/golden_crossing_gen.m. Tolerance d'echelle (rtol 1e-12 + atol proportionnel a
     l'amplitude des moments) : pour les jets a Ma = 20 les moments d'ordre 4
     valent ~ 4e4, donc l'ecart absolu ~ 7e-12 est a 1e-16 pres en relatif --
     l'arrondi, pas une divergence de modele.
     """
-    g = os.path.join(HERE, "golden", "golden_crossing.csv")
+    g = os.path.join(os.path.dirname(HERE), "golden", "golden_crossing.csv")
     data = np.loadtxt(g, delimiter=",")
     n_states = 0
     for row in data:
