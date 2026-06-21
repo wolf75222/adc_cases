@@ -291,6 +291,50 @@ single pass reproduces `relax_field` exactly (what the acceptance criteria requi
 a repeated / `after_stage` application expecting bit-for-bit `relax_field`: it would keep relaxing,
 faithful to MATLAB but not idempotent. The drivers assert no idempotence, faithful to MATLAB.
 
+## Per-case analysis and the ROMEO campaign (ADC-376/383/384)
+
+Beyond the in-step native projector, `hyqmom15` carries an offline analysis
+toolchain that turns a run into exploitable artefacts:
+
+- `diagnostics/` -- realizability and symmetry monitoring of snapshots, decoupled
+  from the solver. `field_realizability` / `summarize` report the smallest `p2p2`
+  eigenvalue, the fraction of non-realizable cells and M00 positivity per snapshot;
+  `evaluate` applies declarative `RealizabilityCheck`s with a recovery policy
+  (transient negativity that recovers is tolerated, checked at intervals,
+  non-fatal); `symmetry_residual` scores the per-case invariant (uniformity, axis,
+  rotational, mode purity). The vectorized maps are bit-identical to the
+  `relaxation.py` oracle.
+- `plots/` -- Matlab-like figures (density, phi, per-moment grid, velocities,
+  realizability maps/series, symmetry series) plus GIF animations, each stamped
+  with a provenance footer from `run_meta.json`. matplotlib is a manual dependency,
+  not a CI one.
+- `campaigns/` -- run the five reference cases at full resolution on ROMEO, capture
+  `adc.System.write(format="npz")` snapshots plus a `run_meta.json` provenance
+  sidecar (case, params, solver config, backend, threads, wall-clock, dt range, AMR
+  flag, commits, host), monitor realizability at intervals, and emit a consolidated
+  HDF5 per case (`export_h5.py`) and a per-case report (`make_rapport.py`).
+
+```bash
+# the full chain on ROMEO (after _adc is rebuilt from current adc_cpp master,
+# which carries the ADC-368 ROE hook that fluid_wave needs)
+sbatch hyqmom15/campaigns/romeo_rie_mom2d.sbatch     # 5 cases -> snapshots + h5 + rapport.md
+# or step by step, anywhere adc is importable:
+python3 hyqmom15/campaigns/romeo_rie_mom2d.py --smoke --out out/campaign --threads 8
+python3 hyqmom15/campaigns/export_h5.py    out/campaign   # -> out/campaign/h5/<case>.h5
+python3 hyqmom15/campaigns/make_rapport.py out/campaign   # -> out/campaign/rapport.md
+python3 hyqmom15/plots/diagnostics_plots.py out/campaign  # -> out/campaign/figures/ (matplotlib)
+```
+
+The `<case>.h5` holds the time axis, the moment fields, the potential, the
+per-snapshot realizability series, and the full provenance as HDF5 attributes;
+`rapport.md` gives, per case, a config table, the realizability verdict, mass
+conservation, M00 positivity, the symmetry residual, the figure list and the HDF5
+reference, then a synthesis table and the optional Matlab-vs-ADC speedup. See
+[campaigns/README.md](campaigns/README.md) for the case matrix and the Octave
+speedup baseline (the Matlab reference crashes under Octave on the D7 corner-state
+eig, so the speedup needs Matlab proper). `D` / `Dmax` is a clarified convention,
+not a bug (ADC-378).
+
 ## Correlated crossing initial condition (`r != 0`)
 
 `crossing_state(..., r=...)` ([model.py](model.py)) currently raises `NotImplementedError`
