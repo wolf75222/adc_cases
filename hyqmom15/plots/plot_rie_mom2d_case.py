@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt           # noqa: E402
 from matplotlib import animation          # noqa: E402
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from provenance import add_footer  # noqa: E402
 from snapshots import XMIN, XMAX, load_case, load_meta, time_series  # noqa: E402
 
 EXTENT = (XMIN, XMAX, XMIN, XMAX)
@@ -74,7 +75,7 @@ def plot_density(case, snaps, meta, out, n=4):
     if im is not None:
         fig.colorbar(im, ax=axes[0].tolist(), fraction=0.046, pad=0.04, label="M00")
     fig.suptitle("%s  density M00" % _title(case, meta))
-    fig.text(0.5, 0.005, CONVENTION_NOTE, ha="center", fontsize=7, color="0.4")
+    add_footer(fig, meta, extra=CONVENTION_NOTE)
     path = out / ("%s_density.png" % case)
     fig.savefig(path, dpi=130, bbox_inches="tight")
     plt.close(fig)
@@ -98,6 +99,7 @@ def plot_phi(case, snaps, meta, out, n=4):
     if im is not None:
         fig.colorbar(im, ax=axes[0].tolist(), fraction=0.046, pad=0.04, label="phi")
     fig.suptitle("%s  potential phi" % _title(case, meta))
+    add_footer(fig, meta)
     path = out / ("%s_phi.png" % case)
     fig.savefig(path, dpi=130, bbox_inches="tight")
     plt.close(fig)
@@ -121,6 +123,7 @@ def plot_diagnostics(case, snaps, meta, out):
     axes[2].set_xlabel("t")
     axes[2].set_ylabel("dt")
     fig.suptitle("%s  diagnostics" % _title(case, meta))
+    add_footer(fig, meta)
     path = out / ("%s_diagnostics.png" % case)
     fig.savefig(path, dpi=130, bbox_inches="tight")
     plt.close(fig)

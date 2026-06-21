@@ -103,7 +103,52 @@ def check_render():
     return "render OK (density/phi/diagnostics PNG + density GIF; phi panel skipped without a field)"
 
 
-CHECKS = [check_loader, check_no_phi, check_diagnostics, check_render]
+def check_provenance():
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from provenance import provenance_footer
+    meta = {
+        "case": "dicotron", "Np": 128,
+        "solver": {"riemann": "hll", "reconstruction": "muscl", "limiter": "minmod",
+                   "backend": "production"},
+        "amr": False, "threads": 8, "wall_clock_s": 12.3, "n_steps": 420,
+        "dt_min": 1e-5, "dt_max": 3e-4,
+        "commit_adc_cases": "abcdef1234", "commit_adc_cpp": "fedcba4321", "host": "romeo01",
+    }
+    foot = provenance_footer(meta)
+    for tok in ("dicotron", "Np=128", "hll/muscl/minmod", "backend=production", "AMR=no",
+                "threads=8", "wall=12.3s", "steps=420", "cases=abcdef12", "cpp=fedcba43",
+                "host=romeo01"):
+        assert tok in foot, "provenance footer missing %r: %s" % (tok, foot)
+    assert provenance_footer({}) == "", "empty meta must give an empty footer"
+    return "provenance OK (full run_meta -> footer; empty -> empty)"
+
+
+def check_diagnostics_render():
+    try:
+        import matplotlib  # noqa: F401
+    except Exception:
+        return "diagnostics render SKIPPED (matplotlib not installed)"
+    import json
+    import diagnostics_plots as dp
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        cdir = root / "constant"
+        _synth_case(cdir, nsteps=3, n=8, with_phi=False)
+        (cdir / "run_meta.json").write_text(json.dumps({
+            "case": "constant", "Np": 8,
+            "solver": {"riemann": "hll", "backend": "production"}, "threads": 4}))
+        out = root / "figures"
+        dp.render_diagnostics(cdir, out)
+        must = ["constant_moments.png", "constant_velocities.png",
+                "constant_realizability_maps.png", "constant_realizability_series.png",
+                "constant_symmetry_series.png"]
+        for f in must:
+            assert (out / f).exists(), "missing diagnostic figure %s" % f
+    return "diagnostics render OK (moments, velocities, realizability maps + series, symmetry)"
+
+
+CHECKS = [check_loader, check_no_phi, check_diagnostics, check_provenance,
+          check_render, check_diagnostics_render]
 
 
 def main() -> int:
