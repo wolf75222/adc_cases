@@ -275,21 +275,37 @@ deficit. Only the grid residual is physical, and it tends to zero with resolutio
 
 ## 8. The figures you get
 
-Schlieren snapshots of the density **of the full `system-schur` model** (n=96, minmod reconstruction),
-paper palette (white disk, slate exterior, Blues colormap), at the time fractions `0.01, 1/8, ..., 7/8,
-t_f`. The number of vortices equals the mode.
+Schlieren snapshots of the density **of the full `system-schur` model**, paper palette (white disk,
+slate exterior, Blues colormap), at the time fractions `0.01, 1/8, ..., 7/8, t_f`. The number of
+vortices equals the mode. The figures below are the **high-resolution n=512 campaign on ROMEO** (one
+mode per job); the local n=96 versions remain in `figures/snapshots_l*.png`.
+
+Parameters of the n=512 run (`slurm/campaign_figures_n512.sbatch <mode>` produces the npz dumps; the
+local render is `hoffart_n512_romeo/render_n512.py`):
+
+| parameter | value |
+|---|---|
+| model | `system-schur` (full magnetized Euler-Poisson) |
+| grid | 512 x 512, square, side `L = 2R = 32`, non-periodic edges |
+| reconstruction | minmod (TVD); Rusanov flux, conservative variables |
+| integration | Strang: explicit SSPRK3 hyperbolic; `CondensedSchur(theta=0.5, alpha)` source |
+| time step | adaptive, CFL = 0.4 |
+| duration | `t_end = 2pi x 10 = 62.83` (= 10 T_d, T_d = 2pi in simulation time) |
+| Poisson | composite rhs, `geometric_mg`, dirichlet BC, circle wall radius `R = 16` |
+| machine | ROMEO (URCA), x64cpu partition, AMD EPYC 9654, OpenMP 24 threads, account r250127 |
+| snapshots | 8 of 9 dumped; 23 h walltime cut at `0.875 t_f` (the `t_f` frame is not reached, panel (i)) |
 
 Mode l=3 (figure 5.1 of the paper): triangle, then three arms, then three vortices.
 
-![Snapshots l=3](figures/snapshots_l3.png)
+![Snapshots l=3 (n=512, ROMEO)](figures/snapshots_l3_n512.png)
 
 Mode l=4 (figure 5.2): square, then four vortices.
 
-![Snapshots l=4](figures/snapshots_l4.png)
+![Snapshots l=4 (n=512, ROMEO)](figures/snapshots_l4_n512.png)
 
 Mode l=5 (figure 5.3): pentagon, five-pointed star, then five vortices in a crown.
 
-![Snapshots l=5](figures/snapshots_l5.png)
+![Snapshots l=5 (n=512, ROMEO)](figures/snapshots_l5_n512.png)
 
 Matching animations: `figures/diocotron_l3.gif`, `figures/diocotron_l4.gif` (at the top of the page),
 `figures/diocotron_l5.gif`. They show the ring rotating, the mode growing, then the fold into vortices and
@@ -301,14 +317,17 @@ against the mode, for the paper, the full model, and the reduced ExB drift.
 
 ![Growth rates](figures/growth_rate.png)
 
-The snapshots and GIFs are the **actual** density of the full `system-schur` model, advanced in minmod
-(TVD) reconstruction: WENO5 overshoots at the ring's top-hat jump, the density goes negative and the run
-collapses around t~0.38 t_f (dt->0 or NaN, see ADC-62/ADC-74); minmod keeps `rho > 0` and reaches the full
-rollup, at the cost of more smeared filaments. The raw state (density + phi) of each snapshot is dumped as
-a reusable `.npz` via `sim.write` (`out/hoffart_paper_figures/mode_*/`); the main run reproduces this
-on demand with `run.py --dump-npz` (section 3). The amplitude curves (a,b,c) of
-growth_rate use the reduced `ExB` drift (same advection field, `alpha/omega = 1`); the rates of panel (d)
-come from the full `system-schur` model. The generator is `diag/make_paper_figures.py`.
+The snapshots (n=512, ROMEO) and GIFs (n=96, local) are the **actual** density of the full
+`system-schur` model, advanced in minmod (TVD) reconstruction: WENO5 overshoots at the ring's top-hat
+jump, the density goes negative and the run collapses around t~0.38 t_f (dt->0 or NaN, see
+ADC-62/ADC-74); minmod keeps `rho > 0` and reaches the full rollup, at the cost of more smeared
+filaments. The raw state (density + phi) of each snapshot is dumped as a reusable `.npz` via
+`sim.write`: the n=512 campaign pulls these npz back from ROMEO (`hoffart_n512_romeo/npz_l*_n512/`) and
+renders them locally with `render_n512.py` (schlieren palette identical to
+`diag/make_paper_figures.py`); the local n=96 run reproduces its dumps on demand with `run.py
+--dump-npz` (section 3). The amplitude curves (a,b,c) of growth_rate use the reduced `ExB` drift (same
+advection field, `alpha/omega = 1`); the rates of panel (d) come from the full `system-schur` model. The
+generator of the n=96 figures and the growth_rate is `diag/make_paper_figures.py`.
 
 ## 9. Convergence
 
