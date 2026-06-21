@@ -102,10 +102,11 @@ def _wave_state(case: P.Case, J: np.ndarray):
 def _es_max_speed(case: P.Case, policy: str) -> complex:
     """Electrostatic CFL speed, ``intended`` (diag(Dmax)) or ``as_written`` (diag(D)).
 
-    ``intended`` (default per D3) takes the spectrum of the Jacobian at
-    ``(kmin, kmin)``; ``as_written`` reproduces the Matlab bug that reuses the
-    mode Jacobian at ``(kx, ky)``. ``max`` follows Matlab semantics (last element
-    after the eigenvalue sort).
+    ``intended`` (default per the D3 convention) takes the spectrum of ``Dmax``,
+    the Jacobian at ``(kmin, kmin)``; ``as_written`` reproduces the literal Matlab
+    line 28, which does not follow the convention for the CFL (it reuses ``diag(D)``
+    from the mode Jacobian at ``(kx, ky)`` instead of ``diag(Dmax)``). ``max``
+    follows Matlab semantics (last element after the eigenvalue sort).
     """
     lam = case.adim_debye_length
     if policy == "intended":
