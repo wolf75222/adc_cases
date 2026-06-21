@@ -19,9 +19,41 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
+import numpy as np  # noqa: E402
+
+import export_h5  # noqa: E402
+import make_rapport  # noqa: E402
 import octave_matlab as om  # noqa: E402
 import romeo_rie_mom2d as campaign  # noqa: E402
 import synthesis  # noqa: E402
+
+_MOMENTS = ["M00", "M10", "M20", "M30", "M40", "M01", "M11", "M21", "M31",
+            "M02", "M12", "M22", "M03", "M13", "M04"]
+
+
+def _synth_campaign(root, cases=("constant", "fluid_wave"), nsteps=4, n=8):
+    """Write a tiny synthetic campaign (snapshots + run_meta.json) for the smoke."""
+    rng = np.random.default_rng(0)
+    for case in cases:
+        cdir = root / case
+        cdir.mkdir(parents=True, exist_ok=True)
+        for k in range(nsteps):
+            np.savez(
+                cdir / ("step_%06d.npz" % k),
+                t=np.float64(0.01 * k), macro_step=np.int64(k),
+                nx=np.int64(n), ny=np.int64(n), blocks=np.array(["mom"]),
+                state_mom=np.abs(rng.standard_normal((15, n, n))) + 0.1,
+                names_mom=np.array(_MOMENTS), roles_mom=np.array(["custom"] * 15),
+                phi=np.zeros((n, n)))
+        (cdir / "run_meta.json").write_text(json.dumps({
+            "case": case, "Np": n,
+            "params": {"electrostatic": False, "magnetostatic": False, "time_scheme": "Euler",
+                       "tmax": 1.0, "cfl": 0.5, "omega_p": 30, "omega_c": -90},
+            "solver": {"riemann": "hll", "reconstruction": "muscl", "limiter": "minmod",
+                       "backend": "production"},
+            "amr": False, "threads": 8, "wall_clock_s": 5.0, "n_steps": 40,
+            "dt_min": 1e-5, "dt_max": 2e-4, "commit_adc_cases": "abc12345",
+            "commit_adc_cpp": "def67890", "host": "romeo01", "timestamp": "2026-06-21T00:00:00+00:00"}))
 
 
 def check_tables():
@@ -49,11 +81,45 @@ def check_run_meta():
     return "run_meta OK (provenance schema complete, git_commit returns str)"
 
 
-def check_octave_command():
-    cmd = om.octave_command("/tmp/matlab_src", "main_dicotron.m")
-    assert cmd[0] == "octave" and "--no-gui" in cmd, cmd
-    assert cmd[-1].endswith("main_dicotron") and "cd('/tmp/matlab_src')" in cmd[-1], cmd
-    return "octave command OK (headless, cd + script name without .m)"
+def check_octave_source():
+    main = 'clear;\ncase_name = "dicotron";\nparams = init_case(case_name);\n'
+    out = om.case_main_source(main, "magnetic_wave")
+    assert 'case_name = "magnetic_wave";' in out and 'dicotron' not in out, out
+    try:
+        om.case_main_source('no case here', "x")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("case_main_source must raise when no case_name line")
+    return "octave source OK (case_name rewrite + raises when absent)"
+
+
+def check_make_rapport():
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _synth_campaign(root, cases=("constant", "fluid_wave"))
+        make_rapport.main([str(root)])
+        rap = (root / "rapport.md").read_text()
+        assert "## constant" in rap and "## fluid_wave" in rap and "## Synthesis" in rap
+        assert "Realizability" in rap and "config" in rap.lower()
+    return "make_rapport OK (per-case sections + realizability + synthesis)"
+
+
+def check_export_h5():
+    try:
+        import h5py  # noqa: F401
+    except Exception:
+        return "export_h5 SKIPPED (h5py not installed)"
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _synth_campaign(root, cases=("constant",))
+        export_h5.main([str(root)])
+        h5 = root / "h5" / "constant.h5"
+        assert h5.exists(), "export_h5 did not write constant.h5"
+        with h5py.File(h5) as f:
+            assert "moments" in f and "t" in f and "realizability" in f
+            assert f.attrs.get("case") == "constant"
+    return "export_h5 OK (moments + t + realizability + provenance attrs)"
 
 
 def check_dry_run():
@@ -71,7 +137,8 @@ def check_dry_run():
     return "dry-run OK (3 cases -> run_meta.json each + synthesis.md, no adc)"
 
 
-CHECKS = [check_tables, check_run_meta, check_octave_command, check_dry_run]
+CHECKS = [check_tables, check_run_meta, check_octave_source, check_dry_run,
+          check_make_rapport, check_export_h5]
 
 
 def main() -> int:
