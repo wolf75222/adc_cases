@@ -44,7 +44,7 @@ except ImportError:
 
 import adc  # noqa: E402
 
-from matlab_ref import compute_L2_error, get_case, init_fluid_wave_field  # noqa: E402
+from matlab_ref import compute_L2_error, explicit_for, get_case, init_fluid_wave_field  # noqa: E402
 
 CASE = get_case("fluid_wave")  # Np=32, eps=0.01, mode=15, kx=4*pi, ky=0, no sources
 
@@ -91,7 +91,7 @@ def build_fluid_sim(n: int, compiled: object, riemann: str, name: str = "mom") -
         name,
         model=compiled,
         spatial=adc.FiniteVolume(limiter="none", riemann=riemann),
-        time=adc.Explicit(method="euler"),
+        time=explicit_for(CASE.time_scheme),  # "Euler" -> adc.Explicit(method="euler")
     )
     return sim
 

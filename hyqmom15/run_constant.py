@@ -38,7 +38,7 @@ except ImportError:
 
 import adc  # noqa: E402
 
-from matlab_ref import get_case, init_constant_field  # noqa: E402
+from matlab_ref import explicit_for, get_case, init_constant_field  # noqa: E402
 
 CASE = get_case("constant")  # Np=64, source=0, es=0, ms=0, muscl/minmod
 
@@ -68,7 +68,7 @@ def build_constant_sim(n: int, name: str = "mom") -> "adc.System":
         name,
         model=compiled,
         spatial=adc.FiniteVolume(limiter="minmod", riemann="hll"),  # reconstruction=muscl
-        time=adc.Explicit(method="euler"),
+        time=explicit_for(CASE.time_scheme),  # "Euler" -> adc.Explicit(method="euler")
     )
     return sim
 
