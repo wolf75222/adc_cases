@@ -58,6 +58,7 @@ import adc  # noqa: E402
 from matlab_ref import (  # noqa: E402
     compute_L2_error,
     compute_dt,
+    explicit_for,
     get_case,
     init_magnetic_wave_field,
 )
@@ -109,7 +110,7 @@ def build_mag_sim(n: int, rho_bg: float, name: str = "mom") -> "adc.System":
         name,
         model=compiled,
         spatial=adc.FiniteVolume(limiter="minmod", riemann="hll"),  # reconstruction=muscl
-        time=adc.Explicit(method="euler"),
+        time=explicit_for(CASE.time_scheme),  # "Euler" -> adc.Explicit(method="euler")
     )
     sim.set_poisson(rhs="charge_density", solver="fft")
     return sim

@@ -51,7 +51,7 @@ except ImportError:
 
 import adc  # noqa: E402
 
-from matlab_ref import compute_dt, get_case, init_diocotron_field  # noqa: E402
+from matlab_ref import compute_dt, explicit_for, get_case, init_diocotron_field  # noqa: E402
 
 CASE = get_case("dicotron")
 SMOKE_N = 64  # smoke reduit pour CI ; Np=128 du Matlab = run plein hors CI
@@ -103,7 +103,7 @@ def build_periodic_sim(n: int, rho_bg: float, name: str = "mom") -> "adc.System"
         name,
         model=compiled,
         spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
-        time=adc.Explicit(method="euler"),
+        time=explicit_for(CASE.time_scheme),  # "Euler" -> adc.Explicit(method="euler")
     )
     sim.set_poisson(rhs="charge_density", solver="fft")
     return sim

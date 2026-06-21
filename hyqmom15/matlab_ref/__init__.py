@@ -39,6 +39,7 @@ from .initializers import (
 )
 from .dt_policy import compute_dt
 from .l2 import compute_L2_error, exact_field
+from .time_policy import adc_method, explicit_for
 
 __all__ = [
     "CASES", "Case", "get_case",
@@ -50,4 +51,5 @@ __all__ = [
     "init_fluid_wave_field", "init_electrostatic_wave_field", "init_magnetic_wave_field",
     "diocotron_max_speed",
     "compute_dt", "compute_L2_error", "exact_field",
+    "adc_method", "explicit_for",
 ]

@@ -164,7 +164,8 @@ Locked decisions (`matlab_ref/REFERENCE.md`, ADC-348): diocotron runs both sourc
 meshgrid drift only under the named `--ic-matlab-bug` legacy path (D2);
 `diag(Dmax)` electrostatic CFL speed (D3); the magnetostatic `init_magnetic_wave_field`
 for the magnetic IC, not the as-shipped electrostatic wiring (D4); `compute_dt`
-source caps kept explicit (D6); Euler-only (D8); wave L2 oracle only (D9). The wave
+source caps kept explicit (D6); Euler for all five committed cases, with RK2/RK3
+supported by the port layer via `explicit_for` (D8, ADC-379); wave L2 oracle only (D9). The wave
 eigenmode is phase-pinned identically on the NumPy and Octave sides, and the
 `magnetic_wave` near-degenerate mode-15 is the deterministic larger-real-part member.
 
@@ -181,6 +182,7 @@ octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_dt_gen.m
 python3 hyqmom15/matlab_ref/check_reference.py    # REFERENCE.md guard (ADC-348)
 python3 hyqmom15/matlab_ref/check_matlab_ref.py   # layer self-consistency (ADC-349)
 python3 hyqmom15/matlab_ref/check_goldens.py      # layer vs Octave goldens (ADC-350)
+python3 hyqmom15/matlab_ref/check_time_policy.py  # time_scheme Euler/RK2/RK3 mapping (ADC-379)
 python3 check_cases.py                            # manifest + README lint
 
 # native smokes (need adc on PYTHONPATH from an adc_cpp build)
