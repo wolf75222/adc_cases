@@ -240,7 +240,10 @@ adc_cpp change inside the adc_cases PRs:
   `adc.FiniteVolume(riemann="roe")` is accepted with no `"p"` primitive. `fluid_wave`
   (ADC-371) now uses `riemann="roe"` to match the Matlab `space_scheme="ROE"`; the
   `hll` path is kept only as the relative L2 baseline (ROE tracks the eigenmode
-  strictly better).
+  strictly better). A one-step golden (`golden_roe_gen.m`, Octave) pins the native ROE
+  update to the reference `flux_ROE`: on the same IC and dt, `run_fluid_wave.py`
+  (check_golden_roe) matches it to ~1e-17 relative (machine precision), asserted < 1e-9
+  for cross-platform safety (ADC-380).
 
 Wave drivers (ADC-352/353/354) must build the model with `backend="production"`
 and `adc.Explicit(method="euler")` for a faithful Euler step.

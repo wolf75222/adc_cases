@@ -126,7 +126,7 @@ def _evolve(compiled: object, riemann: str, U0: np.ndarray, nsteps: int, cfl: fl
     return U, t
 
 
-def check_smoke(nsteps: int = 10) -> None:
+def check_smoke(compiled: object, nsteps: int = 10) -> None:
     """(2) smoke natif ROE : transport pur fini + masse conservee + L2_roe < L2_hll.
 
     Critere relatif ADC-371 (pas de nouveau golden ni de tolerance absolue) : ROE
@@ -137,7 +137,6 @@ def check_smoke(nsteps: int = 10) -> None:
     cfl = CASE.cfl
     U0 = fluid_ic()
     mass0 = float(U0[0].sum())
-    compiled = build_fluid_model()
 
     # ROE : le chemin fidele (space_scheme="ROE" du Matlab), hook generique ADC-368.
     U_roe, t = _evolve(compiled, "roe", U0, nsteps, cfl)
@@ -164,10 +163,60 @@ def check_smoke(nsteps: int = 10) -> None:
     )
 
 
+# Parite stricte un-pas (ADC-380) : meme IC + meme dt + meme schema (ROE + Euler non-splite)
+# que le golden Matlab flux_ROE -> il ne reste que l'ecart d'eigendecomposition (|A| par
+# adc::roe_abs_apply vs eig Octave) et de jacobien de flux (autodiff vs forme close
+# jacobian15_2D). Mesure locale ~1e-17 (precision machine) ; borne assertee 1e-9, sure
+# inter-plateforme (l'eig LAPACK/Accelerate diffuse selon la plateforme/backend Kokkos).
+GOLDEN_ROE_TOL = 1e-9
+
+
+def check_golden_roe(compiled: object) -> None:
+    """(3) parite stricte un-pas vs le golden Matlab flux_ROE (ADC-380).
+
+    golden_roe_*.csv : un pas ROE + Euler du SCHEMA de reference
+    (RieMOM2D_Electrostatic_periodic : spatial_operator -> flux_ROE -> flux_ROE_local,
+    moyenne de Roe arithmetique 1/2(UL+UR), A=jacobian15_2D(Uavg), |A| par eig + fix de
+    Harten, compute_div), genere par golden_roe_gen.m (Octave) sur l'IC fluid_wave. On
+    reseme l'IC EXACTE du golden (M^0) et on rejoue le MEME dt (sim.step(dt)) en
+    riemann="roe" : l'ecart residuel mesure le seul OPERATEUR ROE (fermeture + jacobien de
+    flux + |A| matrice-signe + divergence). On part du M^0 du golden et NON de l'IC
+    matlab_ref python : la convention de signe/phase de l'eigenvecteur differe (le matlab_ref
+    phase-pinne, l'init Octave brut non), un ecart O(eps) sans rapport avec le schema.
+    """
+    g = os.path.join(HERE, "golden")
+    n = int(np.atleast_1d(
+        np.loadtxt(os.path.join(g, "golden_roe_meta.csv"), delimiter=","))[0])
+    dt = float(np.loadtxt(os.path.join(g, "golden_roe_dt.csv"), delimiter=","))
+
+    def _load(name: str) -> np.ndarray:
+        raw = np.loadtxt(os.path.join(g, name), delimiter=",")  # (15*n, n), bloc par moment
+        return np.stack([raw[k * n:(k + 1) * n, :].T for k in range(15)], axis=0)  # (15, ny, nx)
+
+    M0 = np.ascontiguousarray(_load("golden_roe_state0.csv"))
+    M1 = _load("golden_roe_state.csv")
+
+    sim = build_fluid_sim(n, compiled, "roe")
+    sim.set_state("mom", M0)
+    sim.step(dt)  # un pas ROE + Euler avec le dt EXACT du golden
+    U = np.array(sim.get_state("mom"))
+    assert np.all(np.isfinite(U)), "golden ROE : etat non fini"
+    rel = float(np.sqrt(np.sum((U - M1) ** 2)) / np.sqrt(np.sum(M1 ** 2)))
+    assert rel < GOLDEN_ROE_TOL, (
+        "parite ROE un-pas : ecart L2 relatif natif-vs-golden %.3e > %.0e" % (rel, GOLDEN_ROE_TOL)
+    )
+    print(
+        "(3) parite stricte un-pas vs Matlab flux_ROE (ADC-380) : meme IC + meme dt=%.4e, "
+        "ecart L2 relatif natif-vs-golden = %.2e (< %.0e) -- OK" % (dt, rel, GOLDEN_ROE_TOL)
+    )
+
+
 def main() -> None:
-    print("=== hyqmom15/run_fluid_wave : onde fluide eigenmode (ADC-352, ROE ADC-371) ===")
+    print("=== hyqmom15/run_fluid_wave : onde fluide eigenmode (ADC-352, ROE ADC-371/380) ===")
     check_ic()
-    check_smoke()
+    compiled = build_fluid_model()  # un seul compile, partage par les deux checks ROE
+    check_smoke(compiled)
+    check_golden_roe(compiled)
 
 
 if __name__ == "__main__":
