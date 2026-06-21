@@ -154,7 +154,7 @@ locked at `Np=16` there. The native smokes run the compiled model in CI (reduced
 | Case | Matlab source | Driver | IC golden | dt | native smoke (CI) | L2 | known limitation |
 |---|---|---|---|---|---|---|---|
 | diocotron | `init_diocotron(_field).m` | `run_diocotron_periodic.py` | ADC-350 (std + matlab_bug) | `compute_dt` (omega_p^2) | E+B + Poisson + HLL + Euler: mass, phi | golden-based (no analytic L2) | growth rate; full Np=128 + native 1-step out of CI |
-| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | ROE + Euler, pure transport: mass, `L2_roe < L2_hll` | `L2(IC,0)=0` | native one-step golden vs `flux_ROE` out of CI; long trajectory |
+| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | ROE + Euler, pure transport: mass, `L2_roe < L2_hll`, 1-step golden vs `flux_ROE` (~1e-17) | `L2(IC,0)=0` | long trajectory |
 | electrostatic_wave | `init_electrostatic_wave(_field).m` | `run_electrostatic_wave.py` | ADC-350 (Dmax) | `compute_dt` (omega_p^2) | E + Poisson + HLL + Euler: mass, phi | `L2(IC,0)=0` | full Np=128 out of CI |
 | magnetic_wave | `init_magnetic_wave(_field).m` | `run_magnetic_wave.py` | ADC-350 (magnetostatic) | `compute_dt` | E+B + Poisson + HLL + MUSCL + Euler: mass, phi | `L2(IC,0)=0` | magnetostatic init intended (D4); full Np=256 out of CI |
 | constant | `init_constant(_field).m` | `run_constant.py` | ADC-350 (uniform) | n/a | uniform preserved (max abs(U-U0) < 1e-12), mass | n/a | none |
