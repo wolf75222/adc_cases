@@ -47,6 +47,32 @@ def _cplx(a):
     return a[:, 0] + 1j * a[:, 1]
 
 
+def _match_eigs(w, eg):
+    """Worst-pair distance of an order-free 1-to-1 nearest-neighbour matching.
+
+    ``w`` and ``eg`` hold the same eigenvalue multiset in unspecified order.
+    Each computed eigenvalue is paired with a distinct golden one (closest
+    pairs fixed first) and the largest pairing distance is returned, so a
+    cosmetic reordering scores ~0 while a genuine eigenvalue shift scores its
+    true gap. This replaces ``np.sort_complex``, whose lexicographic
+    (real, then imag) tie-break is FP-fragile for near-degenerate or
+    imaginary-axis modes (see ``check_linearized``).
+    """
+    w = np.asarray(w)
+    eg = np.asarray(eg)
+    assert w.shape == eg.shape and w.ndim == 1, "eigenvalue vectors must match"
+    dist = np.abs(w[:, None] - eg[None, :])
+    used_w = np.zeros(w.size, dtype=bool)
+    used_g = np.zeros(eg.size, dtype=bool)
+    worst = 0.0
+    for _ in range(w.size):
+        masked = np.where(used_w[:, None] | used_g[None, :], np.inf, dist)
+        i, j = np.unravel_index(np.argmin(masked), masked.shape)
+        worst = max(worst, float(masked[i, j]))
+        used_w[i] = used_g[j] = True
+    return worst
+
+
 def check_linearized():
     jac = {
         "fluid_wave": linearized_jacobian_fluid(4 * np.pi, 0.0),
@@ -59,8 +85,16 @@ def check_linearized():
         np.testing.assert_allclose(J, Jg, rtol=0, atol=1e-12, err_msg="%s Jacobian" % name)
         w = np.linalg.eigvals(J)
         eg = _cplx(_load("lin_%s_eigvals.csv" % name))
-        np.testing.assert_allclose(np.sort_complex(w), np.sort_complex(eg), rtol=0, atol=1e-9,
-                                   err_msg="%s eigenvalues" % name)
+        # Order-free comparison: np.sort_complex sorts lexicographically (real,
+        # then imag), which is unstable for the two magnetic_wave modes on the
+        # imaginary axis (real parts ~3e-15 apart, imag parts -0.026 and +0.491).
+        # FP noise in the near-zero real part can swap their order between w and
+        # eg, so an elementwise compare fails on a ~0.5 cosmetic permutation even
+        # though the eigenvalue *sets* still agree to ~4e-13.
+        dmax = _match_eigs(w, eg)
+        assert dmax <= 1e-9, (
+            "%s eigenvalues: nearest-neighbour match exceeds tol "
+            "(max pairing distance %.3e > 1e-9)" % (name, dmax))
         _, vec = eigenmode(J, 15)
         vg = _cplx(_load("lin_%s_eigvec.csv" % name))
         np.testing.assert_allclose(vec, vg, rtol=0, atol=1e-9, err_msg="%s phase-pinned eigenvector" % name)
