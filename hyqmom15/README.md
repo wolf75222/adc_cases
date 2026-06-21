@@ -1,582 +1,154 @@
-# hyqmom15: 2D Vlasov-Poisson with 15 moments (HyQMOM closure)
+# hyqmom15: 2D Vlasov-Poisson with the 15-moment HyQMOM closure
 
-A 2D kinetic model: you transport the velocity moments `M_pq = integral f v_x^p v_y^q dv`
-of order p+q <= 4 (15 components) of the Vlasov equation, coupled to the system's Poisson
-equation. For each moment,
+A 2D kinetic solver built on the `adc` engine. It transports the velocity moments
+`M_pq = integral f v_x^p v_y^q dv` of order `p+q <= 4` (15 components) of the Vlasov
+equation, coupled to the system's Poisson equation:
 
 ```text
-∂t M_pq + ∂x M_{p+1,q} + ∂y M_{p,q+1} = q/m (p Ex M_{p-1,q} + q Ey M_{p,q-1})
-                                        + Ωc (p M_{p-1,q+1} − q M_{p+1,q-1})
+d_t M_pq + d_x M_{p+1,q} + d_y M_{p,q+1}
+   = (q/m) (p Ex M_{p-1,q} + q Ey M_{p,q-1}) + Omega_c (p M_{p-1,q+1} - q M_{p+1,q-1})
 ```
 
-The flux at the highest order brings in order-5 moments that are absent from the state
-vector: this is the closure problem. The HyQMOM closure (Bryngelson, Fox & Laurent 2025,
-hal-05398171) expresses the six standardized order-5 moments as functions of the lower
-orders and makes the system hyperbolic.
-
-State (component order shared with the MATLAB reference RIEMOM2D):
+The flux at the highest order needs order-5 moments absent from the state: the closure
+problem. The HyQMOM closure (Bryngelson, Fox and Laurent 2025, hal-05398171) expresses the
+six standardized order-5 moments from the lower orders and makes the system hyperbolic. The
+state vector order matches the MATLAB reference RIEMOM2D:
 
 ```text
 U = [M00, M10, M20, M30, M40, M01, M11, M21, M31, M02, M12, M22, M03, M13, M04]
 ```
 
+This package is the Python case suite (drivers, validation, analysis, the ROMEO campaign).
+The numerics live in adc_cpp; the physics written here is only the closure.
+
 ## Quick start
 
+Build the `adc` module first (point `PYTHONPATH` at an adc_cpp `build-*/python`), then:
+
 ```bash
-# from the adc_cases root, with the adc module built (PYTHONPATH pointing at build-*/python)
-python hyqmom15/runs/run.py            # flux vs MATLAB goldens + Gaussian oracle
-python hyqmom15/runs/run_waves.py      # exact wave speeds vs goldens
-python hyqmom15/runs/run_crossing.py   # E/B sources, Larmor rotation, crossing jets
-python hyqmom15/runs/run_diocotron.py  # full Vlasov-Poisson: diocotron ring (legacy RIEMOM2D)
-python hyqmom15/runs/run_diocotron_periodic.py  # diocotron on the new periodic Matlab (ADC-351)
-python hyqmom15/runs/run_fluid_wave.py # fluid eigenmode wave, new Matlab (ADC-352; ROE via ADC-368, ADC-371)
-python hyqmom15/runs/run_electrostatic_wave.py # electrostatic eigenmode wave + Poisson (ADC-353)
-python hyqmom15/runs/run_magnetic_wave.py # magnetic eigenmode wave, E+B sources (ADC-354)
-python hyqmom15/runs/run_constant.py # uniform-state non-regression (ADC-355)
-python hyqmom15/runs/run_relaxation.py # realizability projection + crossing Ma=20
-mpirun -np 2 python hyqmom15/runs/run_mpi.py  # multi-rank MPI smoke (Poisson geometric_mg); see section
+# validation drivers (each asserts against the MATLAB reference)
+python hyqmom15/runs/run.py                       # flux/closure vs goldens + Gaussian oracle
+python hyqmom15/runs/run_waves.py                 # exact wave speeds vs goldens
+python hyqmom15/runs/run_relaxation.py            # realizability projection, crossing Ma=20
+python hyqmom15/runs/run_diocotron_periodic.py    # full Vlasov-Poisson: the diocotron ring
+
+# build-free checks (no adc build needed)
+python hyqmom15/matlab_ref/check_reference.py     # the REFERENCE.md contract
+python hyqmom15/matlab_ref/check_goldens.py       # the layer vs the Octave goldens
+python hyqmom15/diagnostics/check_diagnostics.py  # realizability + symmetry diagnostics
+python hyqmom15/campaigns/check_campaign.py        # campaign infrastructure
+python check_cases.py                              # manifest + README lint (from the repo root)
 ```
 
-## Composing the model
+## The model
 
 Everything goes through `build_moment_model` ([model.py](model.py)), which delegates the
-moment algebra to the generic generator `adc.moments` in adc_cpp. The only physics written
-here is the closure, a callable that receives the standardized moments and returns the
-order-5 ones:
+moment algebra to the generic `adc.moments` generator. You supply the closure (a callable
+that maps standardized moments to the order-5 ones); writing another moment system means
+supplying another closure with the same contract.
 
 ```python
 from model import build_moment_model, hyqmom_closure
 
 m = build_moment_model(
-    closure=hyqmom_closure,   # la physique : S (ordres 2-4) -> S50..S05
-    exact_speeds=True,        # vitesses d'onde par valeurs propres du jacobien (HLL fidèle)
-    with_sources=True,        # sources électriques (lit grad phi) + magnétique (omega_c)
-    debye=0.04,               # couplage Poisson : Delta phi = (M00 - rho_background)/debye^2
-    rho_background=rho_bg,    # fond neutralisant = moyenne de M00 (obligatoire en périodique)
-    omega_p=25.0,             # borne le pas de temps de la source
+    closure=hyqmom_closure,   # the physics: standardized orders 2-4 -> S50..S05
+    exact_speeds=True,        # wave speeds from the Jacobian eigenvalues (faithful HLL)
+    with_sources=True,        # electric (reads grad phi) + magnetic (omega_c) sources
+    debye=0.04,               # Poisson coupling: laplacian(phi) = (M00 - rho_background)/debye^2
+    rho_background=rho_bg,     # neutralizing background (mean of M00; required when periodic)
+    projection=False,         # True emits the native realizability projector (see below)
 )
-compiled = m.compile(so_path, include_dir, backend="aot")
+compiled = m.compile(so_path, include_dir, backend="production")
 sim = adc.System(n=128, L=1.0, periodic=True)
 sim.add_equation("mom", model=compiled,
                  spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
-                 time=adc.Explicit())
+                 time=adc.Explicit(method="euler"))
 sim.set_poisson(rhs="charge_density", solver="fft")
 ```
 
-Writing another moment system = supplying another closure callable (same contract) and, if
-you want exact per-block wave speeds, a partition of the Jacobian (`HYQMOM_BLOCKS` for this
-one).
+## Cases
 
-## MATLAB fidelity: proven, partial, missing
+Five reference cases on the periodic domain `[-0.5, 0.5]^2`, ported from the MATLAB
+RieMOM2D_Electrostatic_periodic suite. `Np` is the per-case mesh resolution.
 
-`hyqmom15` is a `validation` case (manifest `cases_manifest.toml`): the drivers assert
-invariants and bit-level agreement against the MATLAB reference RIEMOM2D, they do not
-reproduce a published physical curve. What that means component by component:
+| case | Np | riemann | sources | notes |
+|---|---|---|---|---|
+| `constant` | 64 | HLL / MUSCL | none | uniform-state non-regression |
+| `fluid_wave` | 32 | ROE | none | fluid eigenmode, no Poisson |
+| `electrostatic_wave` | 128 | HLL | E + Poisson | electrostatic eigenmode |
+| `magnetic_wave` | 256 | HLL | E + B + Poisson | magnetic eigenmode |
+| `diocotron` | 128 | HLL | E + B + Poisson | the diocotron rollup |
 
-> Reference pivot (ADC-348): future strict goldens move from the legacy `RIEMOM2D` to
-> the refactored `RieMOM2D_Electrostatic_periodic`. The canonical parameters, known
-> divergences, ADC decisions, and the fidelity plan are locked in
-> [matlab_ref/REFERENCE.md](matlab_ref/REFERENCE.md). The numbers in this README
-> are the current port (e.g. `omega_p=25`); the canonical reference values
-> (e.g. `omega_p=20`) live in that note, and ADC-351 aligns the driver to them.
+Drivers are under [runs/](runs); each is a single case wired to its MATLAB initial condition.
 
-### matlab_ref common layer (ADC-349)
+## Validation
 
-[matlab_ref/](matlab_ref/) is a pure-NumPy port of the shared logic of the new
-periodic reference, used by the upcoming drivers and validated by the ADC-350
-goldens:
+The closure, flux assembly, per-block wave speeds, Lorentz sources, the Euler trajectory,
+and the Poisson coupling are each proven against the MATLAB reference to machine precision
+(roughly 1e-16 to 1e-11 depending on conditioning). The proven / partial / missing map, the
+exact tolerances, and the golden-regeneration recipe live in
+[matlab_ref/REFERENCE.md](matlab_ref/REFERENCE.md) -- this README does not duplicate them.
+The `matlab_ref/` layer is the Matlab-faithful reference (initializers, the dt policy, the
+linearized eigenmodes); the build-free `check_*.py` scripts guard it without an adc build.
 
-- [params.py](matlab_ref/params.py): one `Case` per scenario (`dicotron`,
-  `fluid_wave`, `electrostatic_wave`, `magnetic_wave`, `constant`) with the exact
-  Matlab values, plus the equilibrium Maxwellian builder.
-- [linearized.py](matlab_ref/linearized.py): the three linearized Jacobians and
-  the eigenmode helper (Matlab complex-sort, 1-based `mode`, phase-pin).
-- [initializers.py](matlab_ref/initializers.py): the `init_*_field` routines, with
-  the D2 diocotron drift orientation, the D3 `Dmax` policy, and the D4 magnetic
-  wiring exposed as `intended` (default) vs `as_written`.
-- [dt_policy.py](matlab_ref/dt_policy.py): `compute_dt` (D6), kept explicit.
-- [l2.py](matlab_ref/l2.py): the wave `compute_L2_error` oracle (D9).
+## Realizability
 
-[matlab_ref/check_matlab_ref.py](matlab_ref/check_matlab_ref.py) is the build-free
-consistency guard (in CI): it checks the moment order, the Maxwellian against
-frozen Octave `InitializeM4_15` values, the Jacobian structure, the eigenmode
-phase-pin, the per-case initializers, the dt policy, and the L2 oracle.
+A moment vector must stay that of a positive distribution. The scheme does not preserve this,
+so long runs project. Two implementations, validated branch by branch against each other:
 
-The Octave goldens in [matlab_ref/goldens/](matlab_ref/goldens/) (ADC-350) lock the
-Jacobians, eigenvalues, phase-pinned eigenvectors, max_speed, the initial fields
-(Np=16, `intended` plus the `as_written` / `matlab_bug` variants), and the dt
-policy against the reference; [matlab_ref/check_goldens.py](matlab_ref/check_goldens.py)
-(in CI) confirms the layer reproduces them. Source-term and one-step goldens
-validate the native solver and follow in the wave-case PRs; a full fidelity table
-follows in ADC-357.
-
-[run_diocotron_periodic.py](runs/run_diocotron_periodic.py) (ADC-351) is the diocotron
-driver aligned on the new periodic reference: it pulls params and the IC from
-`matlab_ref` (omega_p=20, omega_c=-20, mode=4, standard ExB drift), activates BOTH
-the electric and magnetic Lorentz sources (omega_c=-20, D1), and runs the faithful
-HLL+exact_speeds + Euler (production backend) + periodic Poisson smoke with the
-`compute_dt` policy. The legacy [run_diocotron.py](runs/run_diocotron.py) stays on the
-old RIEMOM2D scenario (omega_p=25, magnetic source inactive, SSPRK2) and is
-unchanged; `--ic-matlab-bug` remains the named opt-in for the transposed meshgrid
-drift, never the default.
-
-### New periodic Matlab cases (M8)
-
-The five `RieMOM2D_Electrostatic_periodic` cases, all driven through `matlab_ref`
-and run as light `validation` smokes in CI (reduced `n`; the full Matlab `Np` runs
-out of CI). Each builds the native model with `backend="production"` +
-`adc.Explicit(method="euler")` and `exact_speeds=True`; the Riemann solver is
-`riemann="hll"`, except `fluid_wave` which uses `riemann="roe"` (ADC-371) to match
-the Matlab `space_scheme="ROE"`.
-
-| Driver | Sources | Poisson | recon | IC | Issue |
-|---|---|---|---|---|---|
-| [run_diocotron_periodic.py](runs/run_diocotron_periodic.py) | E + B (oc=-20) | yes | first (none) | ring + ExB | ADC-351 |
-| [run_fluid_wave.py](runs/run_fluid_wave.py) | none | no | first (none) | eigenmode | ADC-352/371 |
-| [run_electrostatic_wave.py](runs/run_electrostatic_wave.py) | E (oc=0) | yes | first (none) | eigenmode (Dmax) | ADC-353 |
-| [run_magnetic_wave.py](runs/run_magnetic_wave.py) | E + B (oc=-40) | yes | muscl (minmod) | eigenmode (magnetostatic) | ADC-354 |
-| [run_constant.py](runs/run_constant.py) | none | no | muscl (minmod) | uniform | ADC-355 |
-
-Matlab `reconstruction` maps to `adc.FiniteVolume(limiter=...)`: `first` -> `none`,
-`muscl` -> `minmod` (ADC-356). The wave IC is transposed to ADC's `(k, ny, nx)`
-layout in the driver. `fluid_wave` runs `riemann="roe"` (the generic adc_cpp Roe
-hook, ADC-368/371); the other M8 cases run `riemann="hll"`. Not in scope (Matlab
-placeholders, Sacha): HLLC, WENO, neumann, outflow.
-
-### M8 fidelity and reproduction (ADC-357)
-
-Fidelity of each port. The shared layer (Jacobians, eigenvalues, phase-pinned
-eigenvectors, max_speed, the Maxwellian, and the `compute_dt` policy) is checked
-**bit-identical to Octave** by `check_goldens.py` (ADC-350); the per-case IC is
-locked at `Np=16` there. The native smokes run the compiled model in CI (reduced
-`n`); the full Matlab `Np` and a native one-step golden are out of CI.
-
-| Case | Matlab source | Driver | IC golden | dt | native smoke (CI) | L2 | known limitation |
-|---|---|---|---|---|---|---|---|
-| diocotron | `init_diocotron(_field).m` | `run_diocotron_periodic.py` | ADC-350 (std + matlab_bug) | `compute_dt` (omega_p^2) | E+B + Poisson + HLL + Euler: mass, phi | golden-based (no analytic L2) | growth rate; full Np=128 + native 1-step out of CI |
-| fluid_wave | `init_fluid_wave(_field).m` | `run_fluid_wave.py` | ADC-350 | bare CFL (no source) | ROE + Euler, pure transport: mass, `L2_roe < L2_hll`, 1-step golden vs `flux_ROE` (~1e-17) | `L2(IC,0)=0` | long trajectory |
-| electrostatic_wave | `init_electrostatic_wave(_field).m` | `run_electrostatic_wave.py` | ADC-350 (Dmax) | `compute_dt` (omega_p^2) | E + Poisson + HLL + Euler: mass, phi | `L2(IC,0)=0` | full Np=128 out of CI |
-| magnetic_wave | `init_magnetic_wave(_field).m` | `run_magnetic_wave.py` | ADC-350 (magnetostatic) | `compute_dt` | E+B + Poisson + HLL + MUSCL + Euler: mass, phi | `L2(IC,0)=0` | magnetostatic init intended (D4); full Np=256 out of CI |
-| constant | `init_constant(_field).m` | `run_constant.py` | ADC-350 (uniform) | n/a | uniform preserved (max abs(U-U0) < 1e-12), mass | n/a | none |
-
-Locked decisions (`matlab_ref/REFERENCE.md`, ADC-348): diocotron runs both sources
-`omega_c=-20` (D1); corrected incompressible ExB IC by default, the transposed
-meshgrid drift only under the named `--ic-matlab-bug` legacy path (D2);
-`diag(Dmax)` electrostatic CFL speed (D3); the magnetostatic `init_magnetic_wave_field`
-for the magnetic IC, not the as-shipped electrostatic wiring (D4); `compute_dt`
-source caps kept explicit (D6); Euler for all five committed cases, with RK2/RK3
-supported by the port layer via `explicit_for` (D8, ADC-379); wave L2 oracle only (D9). The wave
-eigenmode is phase-pinned identically on the NumPy and Octave sides, and the
-`magnetic_wave` near-degenerate mode-15 is the deterministic larger-real-part member.
-
-Reproduce (from the adc_cases root):
-
-```bash
-# regenerate the goldens (maintainer-side Matlab on the Octave --path)
-MAT=/Users/romaindespoulain/Documents/RieMOM2D_Electrostatic_periodic
-octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_linearized_gen.m
-octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_init_gen.m
-octave --no-gui -p "$MAT" hyqmom15/matlab_ref/golden_dt_gen.m
-
-# build-free checks (no adc build needed)
-python3 hyqmom15/matlab_ref/check_reference.py    # REFERENCE.md guard (ADC-348)
-python3 hyqmom15/matlab_ref/check_matlab_ref.py   # layer self-consistency (ADC-349)
-python3 hyqmom15/matlab_ref/check_goldens.py      # layer vs Octave goldens (ADC-350)
-python3 hyqmom15/matlab_ref/check_time_policy.py  # time_scheme Euler/RK2/RK3 mapping (ADC-379)
-python3 hyqmom15/plots/check_plots.py             # plotting-layer loader + diagnostics (ADC-377)
-python3 hyqmom15/diagnostics/check_diagnostics.py # realizability + symmetry diagnostics (ADC-383)
-python3 hyqmom15/campaigns/check_campaign.py      # ROMEO campaign infra (dry-run) (ADC-376)
-python3 check_cases.py                            # manifest + README lint
-
-# native smokes (need adc on PYTHONPATH from an adc_cpp build)
-python3 hyqmom15/runs/run_diocotron_periodic.py        # ADC-351
-python3 hyqmom15/runs/run_fluid_wave.py                # ADC-352
-python3 hyqmom15/runs/run_electrostatic_wave.py        # ADC-353
-python3 hyqmom15/runs/run_magnetic_wave.py             # ADC-354
-python3 hyqmom15/runs/run_constant.py                  # ADC-355
-```
-
-The milestone (ADC-348 reference lock, ADC-349 layer, ADC-350 goldens, ADC-351
-diocotron, ADC-352/353/354 waves, ADC-355 constant, ADC-356 adc_cpp audit) needs
-no adc_cpp change. The one core gap it surfaced, the generic Roe-dissipation hook,
-has since landed (adc_cpp ADC-368), so `fluid_wave` now runs `riemann="roe"`
-(ADC-371) to match the Matlab `space_scheme="ROE"`.
-
-| Status | Component | Evidence (number, source) |
-|---|---|---|
-| Proven | closure (`closureS5.m`, 6 standardized order-5 formulas) | `hyqmom_closure` ([model.py](model.py)) === `Flux_closure15_2D.m` to 1e-12 on 10 states (`run.py`), exact on Gaussians via the independent Isserlis oracle (`gaussian_raw_moment`) |
-| Proven | moment algebra M->C->S->C5->M5 (binomials) | delegated to `adc.moments`; the 15-component order and the `(p,q)` map are asserted equal to `gmom.moment_names(4)` / `gmom.moment_indices(4)` at import ([model.py](model.py)) |
-| Proven | flux assembly order, 15 components Fx/Fy | `MOMENT_NAMES` / `MOMENT_PQ` shared with RIEMOM2D ([model.py](model.py)) |
-| Proven | per-block wave speeds | `HYQMOM_BLOCKS` === `eigenvalues15_2D.m` flagsym=1 to ~1e-11 (`run_waves.py`), near-degenerate state judged against its measured conditioning |
-| Proven | Lorentz sources (E lowers order, B conserves) | `moment_sources` === reference eqs 1.3-1.7 to 1e-14, Larmor rotation === analytic (`run_crossing.py`) |
-| Proven | Euler trajectory replay | replaying the HLL golden steps with `time='euler'`, L2 gap to MATLAB ~4.5e-16 after 20 steps (`run.py`); the MATLAB additive split + Euler is algebraically the unsplit Euler |
-| Proven | Poisson | phi === analytic on a sinusoid to 1e-14 in `fft_spectral`, source E === -grad phi centered to 1e-16, checkpoint/restart bit-identical (`run_diocotron.py`) |
-| Proven | `relaxation15` isolated projection (5 branches) | `relax15` === Octave `golden/gen/golden_relax_gen.m` to 4e-14 on 12 states, branch coverage asserted (`run_relaxation.py`) |
-| Proven | realizability under transport | the native compiled projector (`build_projection`, emitted via `m.projection` / ADC-177) reproduces `relax15` branch by branch to ~1e-15 on the 12 goldens and `relax_field` on a field; it runs as the System post-step hook with no per-cell Python callback ([validate_native_projector.py](runs/validate_native_projector.py), [notes/native_projector.md](notes/native_projector.md)). `relax_field` stays the oracle |
-| Partial | correlated crossing IC (`r != 0`) | blocked by `NotImplementedError` in `crossing_state` ([model.py](model.py)); Octave shows `gaussian_state` === `InitializeM4_15` for `r != 0`, so the gate is removable, not a divergence (ADC-274) |
-| Partial | golden coverage | a code-anchored golden runs the NATIVE projector THROUGH transport (Ma=20 crossing, [run_golden_transport_relax.py](runs/run_golden_transport_relax.py), ADC-203); it pins our own transport x relaxation trajectory against drift, not MATLAB fidelity (the HLL golden runs `flagrelax=0` Ma=2, the relax golden runs the projection isolated, so a MATLAB-anchored transport x relaxation cross-check stays separate) |
-| Missing | source dt bound === `compute_dt.m` | our `omega_p` bound is ~500x laxer than the MATLAB source CFL and never bites (ADC-197, section below) |
-| Partial | BGK collision | a generic BGK relaxation toward the local Maxwellian is wired (`moments.bgk_source`, `build_moment_model(collision=True)`, ADC-277); the emitted source is verified `== nu*(M_eq - M)` to machine precision with the collisional invariants M00/M10/M01 zero (`run_relaxation.py` (5)). The full anisotropic `collision15.m` (Kn-dependent branches) is not yet matched |
-| Missing | diocotron growth rate vs a long MATLAB golden | dedicated campaign, out of CI |
-
-Use the drivers above for validation. Use the native compiled path (`backend="aot"`, exact
-speeds, Poisson `geometric_mg`) for production runs, with the realizability projection emitted
-natively (`projection=True`, section below) so it runs in the step without a per-cell Python loop.
-
-### Useful options
-
-| Option | Effect |
-|---|---|
-| `robust=True` | smooth floors on M00, C20, C02 (protected divisions and roots). The default `False` reproduces the MATLAB, which protects nothing. |
-| `exact_speeds=False` | speed bound `u +- 3*sqrt(C)` instead of the exact eigenvalues. Good enough to start in Rusanov; realizable states exceed it (checked by run.py), so never for HLL. |
-| `solver=` (drivers) | `fft` (direct periodic), `fft_spectral` (continuous symbol, exact on sinusoids), `geometric_mg` (general, required under MPI). |
-
-## Realizability: oracle vs native projector
-
-A moment vector must stay that of a positive distribution (realizability, tested by the
-smallest eigenvalue of the `p2p2` matrix, `p2p2_2D.m`). The scheme does not preserve it.
-Measured on a local crossing Ma=20 run, without projection: dt decays as ~exp(-18.5 t), a
-ratio ~212 from start to end, because the state leaves the realizable set and the Jacobian
-eigenvalues blow up. With the projection applied at every step, dt stays ~1.2e-3 over a full
-`tend=4` run (ROMEO CPU job 654809, 3566 steps, mass exact).
-
-The projection is `relaxation15` ([relaxation.py](relaxation.py)): clamp the standardized
-moments, then relax toward a realizable target. The port follows the MATLAB branch by
-branch; the "complex eigenvalues" test evaluates the order-3 Jacobian sub-blocks at the
-standardized state.
-
-Two paths, two purposes:
-
-- Oracle: `relax_field` ([relaxation.py](relaxation.py)) is a per-cell Python loop with a host
-  copy and a `numpy.linalg.eigvals` per cell. It is the reference for validation (=== Octave to
-  4e-14, `run_relaxation.py`) and the source of truth for the native projector. It is not
-  scalable: do not use it inside a GPU/MPI time step. Per-field usage:
-
-  ```python
-  from relaxation import make_corner_eigs, relax_field
-  fn = make_corner_eigs()
-  U = relax_field(U, lamin=1e-12, Ma=4.0, corner_eigs=fn)   # (15, ny, nx) -> projeté
-  ```
-
-- Native projector (production): `build_projection` ([model.py](model.py)) emits `relaxation15`
-  through the generic post-step hook `m.projection` (ADC-177). Enable it at build time:
-
-  ```python
-  m = build_moment_model("hq", exact_speeds=True, projection=True, Ma=20.0, lamin=1e-12)
-  ```
-
-  It is a branch-by-branch transcription of `relax15` into the DSL `Expr` algebra with no
-  dynamic branch (each MATLAB branch is a branchless mask blend in `max`/`min`/`abs_`/`sign`);
-  the "complex eigenvalues" witness uses `dsl.eig_max_im` and the `p2p2` realizability gate uses
-  `dsl.eig_lmin` (ADC-289, over `adc::real_eig_minmax`). The System applies the compiled
-  `project(U, aux)` at the end of each whole step (post-step, MATLAB `flagrelax=1`; an
-  `after_stage` variant would trade fidelity for robustness) on the valid cells, with no per-cell
-  Python callback. `M00`, `M10`, `M01` pass through unchanged. See
+- **Oracle**: `relax_field` ([relaxation.py](relaxation.py)) is the per-cell Python reference
+  (a port of `relaxation15.m`), used for validation.
+- **Native projector**: `build_moment_model(projection=True)` emits `build_projection`
+  ([model.py](model.py)), the compiled device-safe projector. It runs as the System post-step
+  hook with no per-cell Python callback and reproduces `relax_field`. See
   [notes/native_projector.md](notes/native_projector.md).
 
-Application policy: `projection=True` requires `exact_speeds=True` (the complex-eigenvalue test
-reads the order-3 flux-Jacobian sub-blocks); `Ma` and `lamin` are baked into the projector. The
-hook is rejected by the `prototype` backend and the `amr_system` target (ADC-177 contract).
+The diocotron rollup is the case that needs it: without the projector it leaves the realizable
+set (see Campaign results).
 
-Validation (issue criteria, [validate_native_projector.py](runs/validate_native_projector.py)):
-compiled `project` == `relax15` on the 12 goldens (branches 0-4) to ~1e-15, well inside the 1e-12
-to 1e-10 per-branch tolerance; compiled projection over a `(15, ny, nx)` field == `relax_field`;
-at Ma=20 the native non-realizable rate drops as with `relax_field`; and `projection=False` emits
-no hook (bit-identical transport).
+## Analysis, figures, and ParaView
 
-Idempotence caveat: `relaxation15` is a relaxation toward a target, not a strict projection
-(`P(P(U)) != P(U)`; re-relaxing relaxes again). The ADC-177 `m.projection` contract documents
-idempotence as the intended property, but the System applies the hook once per macro-step, so a
-single pass reproduces `relax_field` exactly (what the acceptance criteria require). Do not enable
-a repeated / `after_stage` application expecting bit-for-bit `relax_field`: it would keep relaxing,
-faithful to MATLAB but not idempotent. The drivers assert no idempotence, faithful to MATLAB.
+The campaign ([campaigns/](campaigns)) runs the five cases, writes
+`adc.System.write` snapshots plus the native ParaView `.vti` per snapshot and a
+`run_meta.json` provenance sidecar, and monitors realizability and symmetry at the snapshot
+interval (non-fatal). Post-processing turns a run into exploitable artefacts:
 
-## Per-case analysis and the ROMEO campaign (ADC-376/383/384)
+- `diagnostics/` -- realizability margin and symmetry residuals, decoupled from the solver.
+- `plots/` -- Matlab-like figures (density, phi, per-moment, velocities, realizability maps
+  and series, symmetry) plus GIF animations. See [plots/README.md](plots/README.md).
+- `campaigns/export_h5.py` -- one consolidated HDF5 per case; `to_paraview.py` -- an enriched
+  ParaView time series (density, velocities, the realizability margin, the 15 moments) plus a
+  `.pvd` collection; `make_rapport.py` -- a per-case report. See
+  [campaigns/README.md](campaigns/README.md).
 
-Beyond the in-step native projector, `hyqmom15` carries an offline analysis
-toolchain that turns a run into exploitable artefacts:
+## Campaign results
 
-- `diagnostics/` -- realizability and symmetry monitoring of snapshots, decoupled
-  from the solver. `field_realizability` / `summarize` report the smallest `p2p2`
-  eigenvalue, the fraction of non-realizable cells and M00 positivity per snapshot;
-  `evaluate` applies declarative `RealizabilityCheck`s with a recovery policy
-  (transient negativity that recovers is tolerated, checked at intervals,
-  non-fatal); `symmetry_residual` scores the per-case invariant (uniformity, axis,
-  rotational, mode purity). The vectorized maps are bit-identical to the
-  `relaxation.py` oracle.
-- `plots/` -- Matlab-like figures (density, phi, per-moment grid, velocities,
-  realizability maps/series, symmetry series) plus GIF animations, each stamped
-  with a provenance footer from `run_meta.json`. matplotlib is a manual dependency,
-  not a CI one.
-- `campaigns/` -- run the five reference cases at full resolution on ROMEO, capture
-  `adc.System.write(format="npz")` snapshots plus a `run_meta.json` provenance
-  sidecar (case, params, solver config, backend, threads, wall-clock, dt range, AMR
-  flag, commits, host), monitor realizability at intervals, and emit a consolidated
-  HDF5 per case (`export_h5.py`) and a per-case report (`make_rapport.py`).
+A full ROMEO run (x64cpu, Kokkos OpenMP) of the five cases:
 
-```bash
-# the full chain on ROMEO (after _adc is rebuilt from current adc_cpp master,
-# which carries the ADC-368 ROE hook that fluid_wave needs)
-sbatch hyqmom15/campaigns/romeo_rie_mom2d.sbatch     # 5 cases -> snapshots + h5 + rapport.md
-# or step by step, anywhere adc is importable:
-python3 hyqmom15/campaigns/romeo_rie_mom2d.py --smoke --out out/campaign --threads 8
-python3 hyqmom15/campaigns/export_h5.py    out/campaign   # -> out/campaign/h5/<case>.h5
-python3 hyqmom15/campaigns/make_rapport.py out/campaign   # -> out/campaign/rapport.md
-python3 hyqmom15/plots/diagnostics_plots.py out/campaign  # -> out/campaign/figures/ (matplotlib)
-```
-
-The `<case>.h5` holds the time axis, the moment fields, the potential, the
-per-snapshot realizability series, and the full provenance as HDF5 attributes;
-`rapport.md` gives, per case, a config table, the realizability verdict, mass
-conservation, M00 positivity, the symmetry residual, the figure list and the HDF5
-reference, then a synthesis table and the optional Matlab-vs-ADC speedup. See
-[campaigns/README.md](campaigns/README.md) for the case matrix and the Octave
-speedup baseline (the Matlab reference crashes under Octave on the D7 corner-state
-eig, so the speedup needs Matlab proper). `D` / `Dmax` is a clarified convention,
-not a bug (ADC-378).
-
-## Correlated crossing initial condition (`r != 0`)
-
-`crossing_state(..., r=...)` ([model.py](model.py)) currently raises `NotImplementedError`
-for `r != 0`. The historical comment said MATLAB freezes `S22=1, S31=S13=0`, distinct from an
-exact correlated Gaussian. Direct Octave check (audit ADC-274): for correlated states,
-`RIEMOM2D/InitializeM4_15(...)` and our `gaussian_state(...)` produce the same 15 moments to
-~1e-15, because MATLAB encodes the correlation through `C11 = r*sqrt(C20*C02)` then
-`S4toC4(...)` reconstructs the equivalent raw/central moments. So `r != 0` is removable (set
-`C11 = r*T` since here `C20 = C02 = T`), not a real divergence; the gate stays until ADC-274
-lands the parity test. Until then, `r = 0` is the only validated crossing IC.
-
-## Time-step policy: `omega_p` vs `compute_dt.m`
-
-The case bounds the source coupling with a constant `omega_p` (default 25.0):
-`m.source_frequency(omega_p)` ([model.py](model.py)) yields `dt <= cfl/omega_p`. MATLAB
-(`compute_dt.m`) instead imposes `dt_source = CFL*dx*lambda_flux*k_min^2/max_speed^2`, and
-that is the bound that bites. On the diocotron n=64 IC (Octave): `dt_source = 2.99e-5`,
-`dt_MATLAB = min(dt_flux=2.69e-3, dt_source) = 2.99e-5` (source-limited). The ADC source
-bound at the same point is ~1.6e-2, ~535x laxer; it never triggers, the transport bound
-(`last_dt_bound()='transport:mom'`) governs, and ADC advances ~60x the MATLAB dt.
-
-Implication (ADC-197): the runs stayed stable (ssprk2 + projection), so this is not an
-observed instability, but it is an undocumented fidelity gap: a measured growth rate is taken
-at a dt very different from the reference, and the explicit-source coupling is protected only
-by the transport bound. Resolution is open (recompute an effective `source_frequency` per
-step, or cap dt explicitly, or document it as an approved gap with a control run at the
-MATLAB dt). Until then, do not claim MATLAB dt fidelity.
-
-## Validation: regenerating the goldens
-
-The proven rows of the fidelity table are checked in CI. The references are generated by
-running the real MATLAB code (RIEMOM2D) under Octave; they are never re-transcribed:
-
-```bash
-python3 gen_states.py
-octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_gen.m        # flux + valeurs propres
-octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_hll_gen.m    # trajectoire HLL (crossing)
-octave --no-gui --path /chemin/vers/RIEMOM2D golden/gen/golden_relax_gen.m  # relaxation15 (5 branches)
-```
-
-The ssprk2 trajectory gap to MATLAB is 4% (the second order, vs ~4.5e-16 for the `time='euler'`
-replay in the table). The Ma=20 realizability contrast (`run_relaxation.py`): projected ~13%
-of cells violated vs ~52% raw, the executable witness that the projection works on a field.
-
-### Code-anchored golden: transport + native relaxation15 (ADC-203)
-
-`run_golden_transport_relax.py` freezes a small deterministic trajectory of the CURRENT adc_cpp code in
-the regime where the projector actually fires: the Ma=20 crossing flow (n=32, HLL + exact speeds,
-`projection=True` so the NATIVE `relaxation15` projector is applied post-step by System, no Poisson,
-3 steps at a frozen `dt=2e-4`) as `golden/golden_transport_relax_state.csv` (+ `..._meta.csv`). It is
-the only fixture that runs the NATIVE projector THROUGH a transport trajectory: `run_relaxation.py`
-(3)/(4) apply the Python `relax_field` ORACLE manually each step (and (4) is MATLAB-anchored, tol 5e-8),
-and `validate_native_projector.py` checks the native projector in ISOLATION (no transport). It is a
-non-regression freeze of OUR own trajectory, deliberately distinct from the MATLAB/RIEMOM2D-anchored
-goldens: it catches silent drift of the transport x projector path, not a divergence from MATLAB. The
-Ma=20 crossing is a stiff flow that Lyapunov-amplifies FP differences, and the NATIVE compiled (Kokkos)
-projector + HLL diverge macOS->Linux far more than the numpy oracle: the golden is SAME-platform
-bit-exact (max|dU|=0) but only CROSS-platform coarse (a macOS golden vs a Linux CI run drifts ~7.6e-6
-over 3 steps). So the CI gate is `atol=1e-4` (~13x the measured drift), a non-regression SMOKE that
-catches the projector firing and gross scheme/projector regressions, not subtle bit drift. The check
-asserts the projector is materially active (a `projection=False` replay differs by ~8e2 here: the
-unprotected Ma=20 run blows up), so the golden cannot silently degrade into a transport-only freeze. It
-is serial only (not bitwise across MPI ranks) and dt is hardcoded, so an eigenvalue change cannot
-silently re-pick dt and pass as "no drift".
-
-```bash
-python3 hyqmom15/runs/run_golden_transport_relax.py            # CHECK against the committed golden (CI)
-python3 hyqmom15/runs/run_golden_transport_relax.py --regen    # rewrite after an INTENTIONAL change
-git add -f hyqmom15/golden/golden_transport_relax_state.csv hyqmom15/golden/golden_transport_relax_meta.csv
-```
-
-Regenerate (and force-add, since `*.csv` is gitignored repo-wide) only after a deliberate change, and
-say so in the PR.
-
-## Initial ExB drift: a deliberate fix to a MATLAB meshgrid trap
-
-The diocotron IC builds the velocity from the drift `v = (E x B) / B^2`, i.e.
-`vx = -d_y(phi) / omega_c`, `vy = +d_x(phi) / omega_c`. For a ring potential this drift is
-azimuthal and incompressible (`div v = 0`). `run_diocotron.py:108-110` (`diocotron_state`,
-line 109 `vx = -gphi_y / OMEGA_C`) computes exactly that.
-
-The reference `initialize_dicotron.m:34-48` does not. With `[X,Y] = meshgrid(xm,ym)` the first
-matrix index runs along y and the second along x; the loop differences `phi_ghosted` on the
-first index but stores it into the component labelled x (and divides by `dx`), without
-transposing. The result is `vx = -d_x(phi) / omega_c`, `vy = +d_y(phi) / omega_c`: the two
-components are swapped relative to the drift, the field is no longer azimuthal, and it is
-divergent (`div v = -d2x(phi) + d2y(phi) != 0`). This is the classic MATLAB meshgrid trap.
-
-This is a deliberate discrepancy where the port is right against the reference. Measured at
-n=64 (Octave running `initialize_dicotron.m` vs the numpy `diocotron_state`):
-
-- `rho` and `phi` are faithful: relative error 5.0e-10 and 3.7e-9 (same scalar equations, same
-  `poisson_fft` to FFT round-off). Only the velocity orientation differs.
-- the swap is exact: `PY vx == -MAT vy` and `PY vy == -MAT vx` to 1.1e-9; equivalently
-  `MAT vx == -d_x(phi)/omega_c` to 1.1e-9, the wrong axis.
-- the physical signature: the normalized divergence `max|div v| / (Vmax/h)` is 1.2e-16 for the
-  standard drift (incompressible) and 0.55 for the MATLAB field (divergent).
-
-Note: this is the IC only. The electric source term is faithful (the M10 flux uses the same
-index convention as its source, so the two are consistent); do not "fix" it by analogy.
-
-Impact on the dynamics (issue point b), measured with the same `phi` so only the orientation
-changes, n=64, Rusanov, no `relaxation15`: the mode-4 azimuthal amplitude `A4` of the density
-starts identical (`A4(0) = 4.93e-2`, both ICs share `phi` and `rho`) and the two runs then
-diverge. The relative gap on `A4` is 11% at 20 steps, 18% at 40, 16% at 80; the kinetic-energy
-proxy `0.5 (M10^2 + M01^2)` differs by 5 to 20%; the full state by `max|U_std - U_bug|` ~
-0.2 to 0.36. The effect is therefore not negligible: the ring density is quasi-axisymmetric,
-but the velocity field is fully reoriented (azimuthal vs divergent), so the trajectories part
-quickly. These are short smoke windows (the perturbation is damped by Rusanov, `A4` decreases
-in both), not the saturated growth regime; the quantitative growth rate is a dedicated campaign
-(see Limitations).
-
-To reproduce the MATLAB field on purpose (strict trajectory comparison against the Octave
-reference), pass `--ic-matlab-bug`; it rebuilds the swapped, divergent drift behind
-`diocotron_state(n, ic_matlab_bug=True)` and prints the impact table above. The default is off
-and the standard, correct drift is always used in CI.
-
-```bash
-python hyqmom15/runs/run_diocotron.py                  # standard ExB drift (default, CI)
-python hyqmom15/runs/run_diocotron.py --ic-matlab-bug  # reproduce the meshgrid trap + impact table
-```
-
-## Multi-rank MPI smoke (geometric_mg)
-
-[run_mpi.py](runs/run_mpi.py) replays the Vlasov-Poisson diocotron under `mpirun` (np=2 and 4)
-with the geometric multigrid Poisson solver (`solver="geometric_mg"`). The direct FFT
-solver is single-rank by design (it unrolls a single box round-robin) and the core rejects
-it explicitly when `n_ranks>1`; the MG is the only distributed elliptic path.
-
-```bash
-# mpi4py built against the SAME libmpi as _adc is required: its import calls MPI_Init, after
-# which the core reads the rank via _adc.my_rank()/n_ranks(). Run 1 on-node thread for parity.
-OMP_NUM_THREADS=1 mpirun -np 1 python hyqmom15/runs/run_mpi.py   # serial reference (writes the np=1 state)
-OMP_NUM_THREADS=1 mpirun -np 2 python hyqmom15/runs/run_mpi.py   # np=2: checks + parity + FFT rejection
-OMP_NUM_THREADS=1 mpirun -np 4 python hyqmom15/runs/run_mpi.py   # np=4: same
-```
-
-Topology (measured, not assumed): the Cartesian `adc.System` is SINGLE-BOX (one box covers
-the whole domain); under MPI the `DistributionMapping(1, n_ranks)` assigns it to rank 0
-alone. The smoke therefore exercises the collective safety of the MG Poisson and of the
-reductions (max CFL, mass) under MPI, plus the FFT guard, but not the halo exchange between
-disjoint boxes (there is only one; distributed multi-box Cartesian belongs to AMR).
-
-Measured (n=64, 12 steps, 1 on-node thread, Mac M1, MPI+Kokkos Serial build):
-
-- np=1/2/4: 12 steps finished, mass conserved to 2.6e-16, phi finite; `solver="fft"`
-  rejected by the core message "solveur fft non supporte en MPI (n_ranks>1)",
-  `solver="fft_spectral"` rejected as an unknown solver (not implemented in this revision of
-  the core), both as a clean RuntimeError with no deadlock or segfault;
-- np=2 and np=4 parity vs np=1: BIT-IDENTICAL (dU_max = dphi_max = 0), deterministic halos;
-- indicative cost/scaling: the 12-step loop ~0.11 s (np=1), ~0.21 s (np=2), ~0.19 s (np=4);
-  no speedup, which is expected (the grid fits in one box on rank 0, the other ranks only do
-  the collectives): this smoke validates MPI correctness, not load balancing.
-
-## AMR
-
-The same model runs on the adaptive `adc.AmrSystem` hierarchy (refinement on M00, composite
-`geometric_mg` Poisson, conservative reflux) by compiling the `.so` for the AMR facade:
-
-```python
-compiled = m.compile(so_path, include_dir, backend="production", target="amr_system")
-sim = adc.AmrSystem(n=48, L=1.0, periodic=True, regrid_every=4)
-sim.add_equation("mom", compiled,
-                 spatial=adc.FiniteVolume(limiter="none", riemann="hll"),
-                 time=adc.Explicit())        # on AMR: forward Euler + reflux (default)
-sim.set_refinement(threshold=0.5)            # tags the ring on M00
-sim.set_poisson(rhs="charge_density", solver="geometric_mg")
-sim.set_conservative_state("mom", U0)        # the 15 moments, prolonged to the fine patches
-```
-
-Note: on AMR the default `adc.Explicit()` is forward Euler + reflux, the scheme closest to the
-reference MATLAB (cf. the `time='euler'` replay in run_crossing); `ssprk3` exists only for
-native `add_block` blocks, the `.so` loader rejects it explicitly. `relaxation15` is not
-available on this path: short horizon (smoke), realizable long runs stay on the uniform
-`System`. The `run_amr.py` driver validates construction, per-level mass conservation,
-coarse/fine consistency against a uniform `System` at the fine resolution, and the clean
-rejections:
-
-```bash
-python hyqmom15/runs/run_amr.py
-```
-
-## Scale: validated CPU/GPU/MPI, and what is not
-
-What the compiled path has been measured to do:
-
-- CPU serial: full crossing Ma=20 run, `tend=4`, 3566 steps, mass exact, dt stable ~1.2e-3
-  with per-step projection (ROMEO job 654809).
-- GPU GH200: 24706 steps device-clean (dense eigenvalues / HLL / sources / multigrid Poisson)
-  on the diocotron Vlasov-Poisson path (ROMEO job 654562).
-- MPI: bit-identical np=1/2/4 on the geometric_mg Poisson and the reductions (section above),
-  single-box topology only.
-
-What is not validated at scale:
-
-- The realizability projection inside a device/MPI step. The compiled projector
-  (`build_projection`, hook `m.projection`/ADC-177) exists and reproduces `relax_field` branch by
-  branch, but it was not wired into the GPU 24706-step run, which therefore advanced without
-  per-step projection; the per-cell Python oracle (`relax_field`) keeps dt stable on host only and
-  does not run on device. Exercising the compiled projector device-resident at high Ma is the open
-  validation step.
-- Distributed multi-box Cartesian halo exchange: the MPI smoke is single-box (rank 0 only),
-  so it validates collective correctness, not halo exchange or load balancing. Distributed
-  multi-box belongs to AMR.
-- The diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
+- **Four of five** (`constant`, `fluid_wave`, `electrostatic_wave`, `magnetic_wave`) stay
+  fully realizable and conserve mass to ~1e-16. The wave cases are source-CFL-limited (dt
+  ~5e-6), so they take tens of thousands of steps at full resolution.
+- **`diocotron` loses realizability without the projector** (`projection=False`): the
+  smallest `p2p2` eigenvalue goes strongly negative, every cell becomes non-realizable, and
+  M00 hits the positivity floor. Re-running with the native projector
+  (`romeo_rie_mom2d.py --projection`) keeps it realizable, which is exactly what the
+  realizability monitoring is for.
 
 ## Limitations
 
-- The closure is exact on Gaussians, but the scheme does not preserve realizability: long
-  runs => project (realizability section).
-- The realizability projection ships both ways: a Python per-cell oracle (`relax_field`) and a
-  compiled device-safe projector (`build_projection`, `m.projection`/ADC-177) that reproduces it
-  branch by branch (realizability section, [notes/native_projector.md](notes/native_projector.md));
-  what stays unvalidated is exercising the compiled projector inside a device/MPI step at scale.
 - `crossing_state(r != 0)` raises `NotImplementedError`; the MATLAB parity exists but the gate
-  is not yet removed (ADC-274).
-- The source dt bound is ~500x laxer than `compute_dt.m` and never bites: no MATLAB dt
-  fidelity (ADC-197).
-- A generic BGK relaxation toward the local Maxwellian is wired (`build_moment_model(collision=True)`,
-  ADC-277); the full anisotropic `collision15.m` (Kn-dependent branches) is not yet fidelity-matched.
-- Transport with the native relaxation15 projector active is frozen by a code-anchored non-regression
-  golden ([run_golden_transport_relax.py](runs/run_golden_transport_relax.py), ADC-203), but a
-  MATLAB-anchored transport x relaxation cross-check is still missing (the golden pins our own
-  trajectory, not MATLAB fidelity).
-- `riemann="hllc"` unavailable: no contact wave (no `"p"` primitive) for this system.
-  `riemann="roe"` is available via the generic Roe-dissipation hook (matrix-sign of the
-  flux Jacobian, adc_cpp ADC-368); `fluid_wave` uses it (ADC-371).
-- Diocotron growth rate vs a long MATLAB golden: dedicated campaign, out of CI.
+  is not yet removed.
+- The source dt bound is laxer than `compute_dt.m` and never bites; no MATLAB dt fidelity.
+- The diocotron growth rate versus a long MATLAB golden is a dedicated campaign, out of CI.
+- GPU/MPI scale is validated separately; the Cartesian System is mono-box.
 
-## Structuring Linear issues
+## Layout
 
-- [ADC-274](https://linear.app/romain7522/issue/ADC-274) crossing `r != 0` parity with `InitializeM4_15`
-- [ADC-275](https://linear.app/romain7522/issue/ADC-275) native compiled `relaxation15` projector (replaces the Python per-cell loop)
-- [ADC-177](https://linear.app/romain7522/issue/ADC-177) generic post-step projection hook in the core (adc_cpp)
-- [ADC-197](https://linear.app/romain7522/issue/ADC-197) source dt bound vs `compute_dt.m`
-- [ADC-203](https://linear.app/romain7522/issue/ADC-203) spatial golden with relaxation active, independent Isserlis oracle, per-state rtol
-- [ADC-277](https://linear.app/romain7522/issue/ADC-277) scope and port `collision15.m` / BGK
-
-M8 (`RieMOM2D_Electrostatic_periodic` reference pivot, see [matlab_ref/REFERENCE.md](matlab_ref/REFERENCE.md)):
-
-- [ADC-348](https://linear.app/romain7522/issue/ADC-348) lock the canonical Matlab reference and the fidelity plan
-- [ADC-349](https://linear.app/romain7522/issue/ADC-349) shared `matlab_ref` layer (params, Jacobians, init, dt, L2)
-- [ADC-350](https://linear.app/romain7522/issue/ADC-350) generate goldens from `RieMOM2D_Electrostatic_periodic`
-- [ADC-351](https://linear.app/romain7522/issue/ADC-351) align the diocotron driver on the new periodic Matlab
-- [ADC-356](https://linear.app/romain7522/issue/ADC-356) audit the adc_cpp gaps before any core change
+```text
+matlab_ref/   Matlab-faithful reference layer + REFERENCE.md (the fidelity contract)
+runs/         per-case validation drivers
+diagnostics/  realizability + symmetry diagnostics
+plots/        figures and animations
+campaigns/    the ROMEO campaign, HDF5/ParaView export, the per-case report
+notes/        design notes (native projector, BGK scoping)
+```

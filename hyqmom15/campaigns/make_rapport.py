@@ -103,7 +103,7 @@ def build_rapport(campaign_dir, matlab_times=None):
     root = pathlib.Path(campaign_dir)
     figures_dir, h5_dir = root / "figures", root / "h5"
     case_dirs = sorted(d for d in root.iterdir()
-                       if d.is_dir() and d.name not in ("figures", "h5"))
+                       if d.is_dir() and d.name not in ("figures", "h5", "paraview"))
     lines = ["# hyqmom15 ROMEO campaign report", "",
              "Per-case detailed analysis (config, realizability, conservation, "
              "symmetry, figures, HDF5 export). D/Dmax is a clarified convention, "

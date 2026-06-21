@@ -72,7 +72,8 @@ def diocotron_ic(n: int, orientation: str = "standard") -> np.ndarray:
     return init_diocotron_field(periodic_case(n), orientation=orientation).M
 
 
-def build_periodic_sim(n: int, rho_bg: float, name: str = "mom") -> "adc.System":
+def build_periodic_sim(n: int, rho_bg: float, name: str = "mom",
+                       projection: bool = False) -> "adc.System":
     """System periodique fidele au nouveau Matlab : E+B sources, HLL exact, Euler.
 
     omega_c=-20 active la source magnetique (D1). exact_speeds=True donne les
@@ -93,9 +94,11 @@ def build_periodic_sim(n: int, rho_bg: float, name: str = "mom") -> "adc.System"
         rho_background=rho_bg,
         omega_p=CASE.omega_p,                 # borne dt source
         exact_speeds=True,
+        projection=projection,                # True -> projecteur natif relaxation15 (ADC-275)
     )
+    so_name = "hyqmom15_vp_periodic%s.so" % ("_proj" if projection else "")
     compiled = m.compile(
-        os.path.join(case_output_dir("hyqmom15"), "hyqmom15_vp_periodic.so"),
+        os.path.join(case_output_dir("hyqmom15"), so_name),
         adc_include(),
         backend="production",                 # requis pour Euler (cf. ADC-356)
     )

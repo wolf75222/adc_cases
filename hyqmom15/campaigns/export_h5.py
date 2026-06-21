@@ -89,7 +89,7 @@ def main(argv=None) -> int:
     out_dir = pathlib.Path(args.out) if args.out else root / "h5"
     out_dir.mkdir(parents=True, exist_ok=True)
     case_dirs = [root / args.case] if args.case else sorted(
-        d for d in root.iterdir() if d.is_dir() and d.name not in ("figures", "h5"))
+        d for d in root.iterdir() if d.is_dir() and d.name not in ("figures", "h5", "paraview"))
     n = 0
     for cd in case_dirs:
         path = export_case(cd, out_dir / ("%s.h5" % cd.name))

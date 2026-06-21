@@ -44,8 +44,9 @@ threads, wall-clock, dt range, AMR flag, commits, host), and feeds a
 runtime, status). Post-process into exploitable artefacts:
 
 ```bash
-python3 hyqmom15/campaigns/export_h5.py    out/campaign   # -> out/campaign/h5/<case>.h5
-python3 hyqmom15/campaigns/make_rapport.py out/campaign   # -> out/campaign/rapport.md
+python3 hyqmom15/campaigns/export_h5.py     out/campaign  # -> out/campaign/h5/<case>.h5
+python3 hyqmom15/campaigns/make_rapport.py  out/campaign  # -> out/campaign/rapport.md
+python3 hyqmom15/campaigns/to_paraview.py   out/campaign  # -> out/campaign/paraview/<case>.pvd
 python3 hyqmom15/plots/diagnostics_plots.py out/campaign  # -> out/campaign/figures/ (matplotlib)
 ```
 
@@ -55,6 +56,16 @@ is absent). `make_rapport.py` writes the per-case analysis report (config,
 realizability verdict, conservation, positivity, symmetry, figure list, HDF5 ref)
 plus a synthesis table and the optional speedup. Figures come from `hyqmom15/plots`
 (ADC-377/384).
+
+**ParaView** comes two ways. The run already writes the **native adc_cpp VTK output**
+(`adc.System.write(format="vtk")`): one `step_NNNNNN.vti` (ImageData, CellData
+`mom_<moment>` + `phi`) per snapshot in each case dir, opened directly by ParaView /
+VisIt -- open the `step_*.vti` series for the animation. `to_paraview.py` is an
+optional **enriched** export: from the npz it adds physics-ready cell fields (density,
+ux/uy + speed, the realizability margin `lam_min`) and a `<case>.pvd` time collection
+(real `t` values) under `paraview/`. The runs are single-rank, so each snapshot is one
+grid; parallel pieces (`.pvti`) would only apply to an MPI-distributed run. The enriched
+exporter has no VTK/pyvista dependency (hand-written VTK XML).
 
 ## Matlab speedup baseline (Octave, run where the Matlab source lives)
 
