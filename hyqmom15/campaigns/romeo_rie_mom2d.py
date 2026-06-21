@@ -85,6 +85,9 @@ def _run_and_record(sim, case, case_dir, n_snapshots, dt_fn, smoke):
     while True:
         if t >= next_snap_t - 1e-15 or t >= tmax:
             sim.write(str(case_dir / "step"), format="npz", step=snap_k)
+            # native ParaView output (adc_cpp System.write VTK): one ImageData .vti per
+            # snapshot, CellData = mom_<moment> + phi, opened directly by ParaView/VisIt.
+            sim.write(str(case_dir / "step"), format="vtk", step=snap_k)
             u = np.array(sim.get_state("mom"))
             realiz.append(summarize(*field_realizability(u)))
             try:

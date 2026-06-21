@@ -57,13 +57,15 @@ realizability verdict, conservation, positivity, symmetry, figure list, HDF5 ref
 plus a synthesis table and the optional speedup. Figures come from `hyqmom15/plots`
 (ADC-377/384).
 
-`to_paraview.py` converts each case to a **ParaView** time series on the uniform
-`[-0.5, 0.5]^2` grid: one `<case>_NNNN.vti` (ImageData, cell data: density, ux/uy +
-speed, phi, the realizability margin `lam_min`, and the 15 moments) per snapshot,
-plus a `<case>.pvd` collection -- open the `.pvd` in ParaView for the animated time
-series. The runs are single-rank, so each snapshot is one grid (a single `.vti`);
-parallel pieces (`.pvti`) would only apply to an MPI-distributed run. No VTK/pyvista
-dependency (hand-written VTK XML).
+**ParaView** comes two ways. The run already writes the **native adc_cpp VTK output**
+(`adc.System.write(format="vtk")`): one `step_NNNNNN.vti` (ImageData, CellData
+`mom_<moment>` + `phi`) per snapshot in each case dir, opened directly by ParaView /
+VisIt -- open the `step_*.vti` series for the animation. `to_paraview.py` is an
+optional **enriched** export: from the npz it adds physics-ready cell fields (density,
+ux/uy + speed, the realizability margin `lam_min`) and a `<case>.pvd` time collection
+(real `t` values) under `paraview/`. The runs are single-rank, so each snapshot is one
+grid; parallel pieces (`.pvti`) would only apply to an MPI-distributed run. The enriched
+exporter has no VTK/pyvista dependency (hand-written VTK XML).
 
 ## Matlab speedup baseline (Octave, run where the Matlab source lives)
 

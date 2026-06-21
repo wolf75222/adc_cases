@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Export a hyqmom15 campaign case to ParaView (ADC-376).
+"""Enriched ParaView export for a hyqmom15 campaign case (ADC-376).
 
-The campaign writes ``adc.System.write(format="npz")`` snapshots, which ParaView
-cannot open. This converts them to a VTK time series on the uniform Cartesian grid
-[-0.5, 0.5]^2: one ``<case>_NNNN.vti`` (ImageData, cell data) per snapshot plus a
-``<case>.pvd`` collection that ParaView opens as an animated time series. Fields:
-density (M00), velocities ux/uy + speed, the potential phi (when present), the
-realizability margin lam_min, and the 15 raw moments.
+The run already writes the native ``adc.System.write(format="vtk")`` output (one
+``.vti`` per snapshot, raw moments + phi). This is the ENRICHED complement, built
+from the npz snapshots on the uniform Cartesian grid [-0.5, 0.5]^2: one
+``<case>_NNNN.vti`` (ImageData, cell data) per snapshot plus a ``<case>.pvd``
+collection that ParaView opens as an animated time series with real ``t`` values.
+Fields: density (M00), velocities ux/uy + speed, the potential phi (when present),
+the realizability margin lam_min, and the 15 raw moments.
 
 The runs are single-rank (no MPI), so each snapshot is one grid -> a single .vti
 per step is correct; parallel pieces (.pvti) would only apply to MPI-distributed
