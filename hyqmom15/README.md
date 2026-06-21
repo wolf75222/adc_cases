@@ -184,6 +184,7 @@ python3 hyqmom15/matlab_ref/check_matlab_ref.py   # layer self-consistency (ADC-
 python3 hyqmom15/matlab_ref/check_goldens.py      # layer vs Octave goldens (ADC-350)
 python3 hyqmom15/matlab_ref/check_time_policy.py  # time_scheme Euler/RK2/RK3 mapping (ADC-379)
 python3 hyqmom15/plots/check_plots.py             # plotting-layer loader + diagnostics (ADC-377)
+python3 hyqmom15/diagnostics/check_diagnostics.py # realizability + symmetry diagnostics (ADC-383)
 python3 check_cases.py                            # manifest + README lint
 
 # native smokes (need adc on PYTHONPATH from an adc_cpp build)
