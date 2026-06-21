@@ -27,7 +27,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from model import MOMENT_NAMES, MOMENT_PQ
+# Import the moment order from the pure-NumPy matlab_ref (identical values to
+# model.MOMENT_NAMES, asserted there) so this module stays importable without an
+# adc build: the realizability primitives (m2cs4, p2p2_2d) are reused build-free
+# by hyqmom15/diagnostics (ADC-383).
+from matlab_ref import MOMENT_NAMES, MOMENT_PQ
 
 _EPS = np.finfo(float).eps  # eps MATLAB
 

@@ -254,6 +254,13 @@ needs = []
 desc = "HyQMOM15 plots : garde-fou de la couche de figures (ADC-377). Synthetise une petite campagne au format adc.System.write(npz), verifie le chargeur pur NumPy et les diagnostics (densite M00, masse, min/max, dt), et rend les figures si matplotlib est present (sinon le rendu est saute, matplotlib n'est pas une dependance CI). Pur Python, sans build."
 
 [[case]]
+path = "hyqmom15/diagnostics/check_diagnostics.py"
+category = "validation"
+ci = true
+needs = []
+desc = "HyQMOM15 diagnostics : garde-fou de la couche de realisabilite et de symetrie (ADC-383). Verifie que les cartes de realisabilite vectorisees (moments standardises, valeurs propres p2p2, H20/H02) correspondent cellule-a-cellule a l'oracle scalaire de relaxation.py, qu'un champ Maxwellien est realisable et qu'un etat non-realisable est detecte, que les residus de symetrie par cas sont ~0 pour la structure attendue, et que la politique non-fatale accepte une violation transitoire qui recupere. Pur Python, sans build."
+
+[[case]]
 path = "dsl_euler/run.py"
 category = "experimental"
 ci = false
