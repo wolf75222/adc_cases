@@ -8,7 +8,7 @@
 // pas reproduire. Il vit donc ici, dans adc_cases, et n'utilise du coeur que des briques
 // GENERIQUES (maillage, elliptique, parallele) incluses depuis adc_cpp/include via -I.
 
-#include <adc/numerics/elliptic/elliptic_solver.hpp>
+#include <adc/numerics/elliptic/interface/elliptic_solver.hpp>
 #include <adc/mesh/box_array.hpp>
 #include <adc/mesh/distribution_mapping.hpp>
 #include <adc/mesh/fab2d.hpp>
