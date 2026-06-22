@@ -14,8 +14,8 @@
 
 #include "case_export.h"  // ADC_CASE_EXPORT : dllexport portable des entry points (common/, via -I de native.py)
 
-#include <adc/numerics/elliptic/geometric_mg.hpp>
-#include <adc/mesh/for_each.hpp>  // device_fence
+#include <adc/numerics/elliptic/mg/geometric_mg.hpp>
+#include <adc/mesh/execution/for_each.hpp>  // device_fence
 
 #include <cmath>
 #include <cstddef>
