@@ -29,6 +29,13 @@ needs = []
 desc = "Composition multi-blocs heterogene + integrateur temporel ecrit en Python."
 
 [[case]]
+path = "spec3_board/run.py"
+category = "tutoriel"
+ci = true
+needs = []
+desc = "Spec 3 : ecrire un modele au tableau (adc.physics.Model) et montrer qu'il s'abaisse vers le noyau operator-first (Module + Program IR identique)."
+
+[[case]]
 path = "euler_poisson/run.py"
 category = "validation"
 ci = true
